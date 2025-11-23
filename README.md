@@ -113,15 +113,170 @@ Drip offers **programmable, real-time payment streams** and **recurring subscrip
 
 Drip is currently in active development. See [MILESTONES.md](./MILESTONES.md) for detailed progress tracking.
 
-**8 Milestones Planned:**
-1. ✅ Project Foundation & Smart Contract Architecture
-2. ⏳ Core Payment Streaming Contract
-3. ⏳ Recurring Subscription Contract
-4. ⏳ Frontend Foundation & Wallet Integration
-5. ⏳ Payment Streaming User Interface
-6. ⏳ Subscription Management Interface
-7. ⏳ Treasury Management Dashboard
-8. ⏳ Advanced Features, Security & Polish
+**5 Milestones Planned:**
+1. ⏳ Project Foundation & Smart Contract Architecture
+2. ⏳ Core Smart Contracts (Streaming & Subscriptions)
+3. ⏳ Frontend Foundation & Wallet Integration
+4. ⏳ User Interfaces (Streaming & Subscriptions)
+5. ⏳ Treasury Management, Advanced Features & Production Readiness
+
+---
+
+## 💼 Business Model
+
+### Revenue Streams
+
+#### 1. **Platform Fee (Primary Revenue)**
+- **Transaction Fee**: 0.5% - 2% fee on all stream and subscription transactions
+- **Fee Structure**:
+  - **Free Tier**: 2% fee (up to $1,000/month in transaction volume)
+  - **Pro Tier**: 1% fee ($1,000 - $10,000/month)
+  - **Enterprise Tier**: 0.5% fee ($10,000+/month)
+- **Collection**: Fees are automatically deducted from stream/subscription amounts
+- **Rationale**: Aligns incentives - we only earn when users transact, ensuring value delivery
+
+#### 2. **Subscription Plans (Recurring Revenue)**
+- **Free Plan**: Basic features, 2% platform fee
+  - Up to 10 active streams/subscriptions
+  - Basic analytics
+  - Community support
+  
+- **Pro Plan**: $29/month or $290/year (17% discount)
+  - Unlimited streams/subscriptions
+  - 1% platform fee
+  - Advanced analytics & reporting
+  - Priority support
+  - Bulk operations
+  - API access (limited)
+  
+- **Enterprise Plan**: Custom pricing
+  - 0.5% platform fee
+  - White-label options
+  - Dedicated support
+  - Custom integrations
+  - Advanced security features
+  - SLA guarantees
+  - Multi-signature treasury controls
+
+#### 3. **API Access & Developer Tools**
+- **API Access**: Tiered pricing for programmatic access
+  - Developer: $99/month (10,000 API calls)
+  - Business: $299/month (100,000 API calls)
+  - Enterprise: Custom pricing (unlimited)
+- **SDK & Integration Tools**: Revenue share or licensing fees
+- **Webhook Services**: Premium webhook delivery with guaranteed delivery
+
+#### 4. **Premium Features & Add-ons**
+- **Advanced Analytics**: $19/month add-on for Pro users
+- **Custom Branding**: White-label solution for Enterprise
+- **Payment Notifications**: Email/SMS notifications ($9/month)
+- **Multi-currency Support**: Additional token support beyond stablecoins
+- **Automated Reconciliation**: AI-powered reconciliation tools ($49/month)
+
+#### 5. **Treasury Management Services**
+- **Treasury Consulting**: Custom implementation and optimization services
+- **Training & Onboarding**: Paid workshops and training programs
+- **Compliance Tools**: KYC/AML integration services for Enterprise clients
+
+### Target Market Segments
+
+#### Primary Segments
+
+1. **DAOs & Decentralized Collectives**
+   - **Pain Point**: Manual contributor payouts, treasury management overhead
+   - **Value Prop**: Automate recurring grants and contributor payments
+   - **Market Size**: 10,000+ active DAOs globally
+   - **Pricing**: Enterprise plans, volume discounts
+
+2. **Content Creators & Creator Economy**
+   - **Pain Point**: Delayed payments, cash flow issues, manual reconciliation
+   - **Value Prop**: Real-time streaming payments to collaborators
+   - **Market Size**: $104B+ creator economy market
+   - **Pricing**: Pro plans, transaction-based fees
+
+3. **SaaS & Service Platforms**
+   - **Pain Point**: Usage-based billing complexity, subscription management
+   - **Value Prop**: Programmable recurring subscriptions with on-chain proof
+   - **Market Size**: $200B+ SaaS market
+   - **Pricing**: Enterprise plans, API access fees
+
+4. **Web3 Projects & Protocols**
+   - **Pain Point**: Treasury management, multi-recipient payments
+   - **Value Prop**: Automated treasury distribution, multi-token support
+   - **Market Size**: 5,000+ active Web3 projects
+   - **Pricing**: Enterprise plans, custom integrations
+
+5. **Traditional Businesses (Cross-border)**
+   - **Pain Point**: High fees, slow settlements, lack of transparency
+   - **Value Prop**: Low-cost, fast, transparent cross-border payments
+   - **Market Size**: $150T+ global payments market
+   - **Pricing**: Enterprise plans, volume-based discounts
+
+### Pricing Strategy
+
+#### Freemium Model
+- **Free tier** to drive adoption and network effects
+- **Low barrier to entry** encourages experimentation
+- **Upgrade path** based on usage and feature needs
+
+#### Value-Based Pricing
+- Fees scale with transaction volume (lower fees for higher volume)
+- Aligns platform success with customer success
+- Enterprise pricing based on value delivered, not just usage
+
+#### Competitive Positioning
+- **vs. Traditional Payment Processors**: 50-80% lower fees
+- **vs. Other Streaming Platforms**: Lower fees, better UX, Celo-native
+- **vs. Manual Processes**: Time savings worth 10x the platform cost
+
+### Unit Economics
+
+#### Customer Acquisition
+- **CAC (Customer Acquisition Cost)**: $50-200 depending on segment
+- **Channels**: Content marketing, partnerships, developer community, DAO integrations
+
+#### Customer Lifetime Value (LTV)
+- **Free Users**: $0-50 (conversion to paid)
+- **Pro Users**: $348/year average (29% annual retention)
+- **Enterprise Users**: $5,000-50,000/year (90% retention)
+
+#### LTV:CAC Ratio
+- **Target**: 3:1 minimum, 5:1+ for sustainable growth
+- **Pro Users**: ~7:1 LTV:CAC
+- **Enterprise**: 10:1+ LTV:CAC
+
+### Growth Strategy
+
+#### Phase 1: Product-Market Fit (Months 1-6)
+- **Focus**: Free tier adoption, community building
+- **Goal**: 1,000+ active users, 10,000+ transactions/month
+- **Revenue**: Minimal (primarily platform fees from free tier)
+
+#### Phase 2: Monetization (Months 6-12)
+- **Focus**: Convert free users to Pro, acquire Enterprise clients
+- **Goal**: 100+ Pro subscribers, 10+ Enterprise clients
+- **Revenue**: $10K-50K MRR
+
+#### Phase 3: Scale (Months 12-24)
+- **Focus**: API access, partnerships, international expansion
+- **Goal**: 1,000+ Pro subscribers, 100+ Enterprise clients
+- **Revenue**: $100K-500K MRR
+
+### Competitive Advantages
+
+1. **Celo-Native**: Built specifically for Celo's low-cost, mobile-first ecosystem
+2. **Smart Contract Automation**: True autonomous execution vs. manual processes
+3. **Multi-Token Support**: Native support for cUSD, USDC, USDT, CELO
+4. **Developer-Friendly**: Open APIs, SDKs, comprehensive documentation
+5. **Transparency**: All transactions on-chain, full auditability
+6. **Cost Efficiency**: Lower fees than traditional payment processors
+
+### Risk Mitigation
+
+- **Regulatory Compliance**: Working with legal advisors, KYC/AML options for Enterprise
+- **Smart Contract Security**: Multiple audits, bug bounty program, insurance
+- **Market Competition**: Focus on Celo ecosystem, superior UX, network effects
+- **Adoption Risk**: Freemium model, strong developer relations, DAO partnerships
 
 ---
 

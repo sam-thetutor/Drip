@@ -38,29 +38,42 @@ Drip is a programmable payment streaming and recurring subscription platform bui
 
 ---
 
-## Milestone 2: Core Payment Streaming Contract
+## Milestone 2: Core Smart Contracts (Streaming & Subscriptions)
 **Status:** 🟡 Pending  
-**Estimated Time:** 5-7 days
+**Estimated Time:** 10-14 days
 
 ### Objectives
 - Implement per-second payment streaming logic
-- Enable real-time balance accrual
-- Support stream creation, modification, and cancellation
+- Implement subscription-based recurring payments
+- Enable real-time balance accrual and automatic payments
+- Support creation, modification, and cancellation for both streams and subscriptions
 - Implement withdrawal functionality for recipients
 
 ### Deliverables
 - [ ] `DripCore.sol` - Main streaming contract
-- [ ] Stream creation with per-second rate calculation
-- [ ] Real-time balance accrual (on-chain calculation)
-- [ ] Stream pause/resume functionality
-- [ ] Stream cancellation with proper fund distribution
-- [ ] Instant withdrawal for recipients
-- [ ] Stream query functions (balance, rate, status)
+  - [ ] Stream creation with per-second rate calculation
+  - [ ] Real-time balance accrual (on-chain calculation)
+  - [ ] Stream pause/resume functionality
+  - [ ] Stream cancellation with proper fund distribution
+  - [ ] Instant withdrawal for recipients
+  - [ ] Stream query functions (balance, rate, status)
+- [ ] `SubscriptionManager.sol` - Subscription contract
+  - [ ] Subscription creation with cadence selection
+  - [ ] Automatic recurring payment execution
+  - [ ] Subscription modification (amount, cadence)
+  - [ ] Subscription cancellation
+  - [ ] Payment history tracking
+  - [ ] Subscription status queries
+- [ ] Integration between DripCore and SubscriptionManager
 - [ ] Comprehensive test coverage (>80%)
+- [ ] Gas optimization for frequent operations
 
 ### Technical Requirements
 - Per-second rate: `ratePerSecond = totalAmount / durationInSeconds`
 - Balance calculation: `accruedBalance = ratePerSecond * elapsedSeconds`
+- Support cadences: daily, weekly, monthly, custom intervals
+- Time-based execution using block timestamps
+- Batch payment support for multiple recipients
 - Gas-optimized balance queries
 - Event emissions for all state changes
 
@@ -68,48 +81,16 @@ Drip is a programmable payment streaming and recurring subscription platform bui
 - Streams accrue balance correctly per second
 - Recipients can withdraw accrued balances instantly
 - Stream creators can pause/resume/cancel streams
-- All edge cases handled (zero balance, expired streams, etc.)
-- Gas costs optimized for frequent operations
-
----
-
-## Milestone 3: Recurring Subscription Contract
-**Status:** 🟡 Pending  
-**Estimated Time:** 5-7 days
-
-### Objectives
-- Implement subscription-based recurring payments
-- Support multiple cadences (daily, weekly, monthly, custom)
-- Automatic payment execution
-- Subscription management (create, update, cancel)
-
-### Deliverables
-- [ ] `SubscriptionManager.sol` - Subscription contract
-- [ ] Subscription creation with cadence selection
-- [ ] Automatic recurring payment execution
-- [ ] Subscription modification (amount, cadence)
-- [ ] Subscription cancellation
-- [ ] Payment history tracking
-- [ ] Subscription status queries
-- [ ] Integration with DripCore for payment delivery
-- [ ] Test coverage for all subscription scenarios
-
-### Technical Requirements
-- Support cadences: daily, weekly, monthly, custom intervals
-- Time-based execution using block timestamps
-- Batch payment support for multiple recipients
-- Subscription state machine (active, paused, cancelled)
-
-### Acceptance Criteria
 - Subscriptions execute payments automatically at specified intervals
 - Multiple cadences work correctly
 - Subscribers can modify or cancel subscriptions
 - Payment history is accurately tracked
-- Failed payments are handled gracefully
+- All edge cases handled (zero balance, expired streams, failed payments, etc.)
+- Gas costs optimized for frequent operations
 
 ---
 
-## Milestone 4: Frontend Foundation & Wallet Integration
+## Milestone 3: Frontend Foundation & Wallet Integration
 **Status:** 🟡 Pending  
 **Estimated Time:** 4-5 days
 
@@ -144,101 +125,108 @@ Drip is a programmable payment streaming and recurring subscription platform bui
 
 ---
 
-## Milestone 5: Payment Streaming User Interface
+## Milestone 4: User Interfaces (Streaming & Subscriptions)
 **Status:** 🟡 Pending  
-**Estimated Time:** 6-8 days
+**Estimated Time:** 12-16 days
 
 ### Objectives
 - Build complete UI for creating and managing payment streams
-- Real-time balance display
-- Stream management dashboard
-- Withdrawal interface
+- Build subscription creation and management UI
+- Real-time balance display and payment tracking
+- Stream and subscription management dashboards
+- Withdrawal and payment interfaces
 
 ### Deliverables
-- [ ] Stream creation form (recipient, amount, duration, token)
-- [ ] Active streams dashboard with real-time balance updates
-- [ ] Stream details page (rate, elapsed time, accrued balance)
-- [ ] Stream controls (pause, resume, cancel)
-- [ ] Withdrawal interface for recipients
-- [ ] Stream history and analytics
-- [ ] Real-time balance updates (polling or event listening)
-- [ ] Mobile-responsive stream management
+- [ ] **Payment Streaming UI**
+  - [ ] Stream creation form (recipient, amount, duration, token)
+  - [ ] Active streams dashboard with real-time balance updates
+  - [ ] Stream details page (rate, elapsed time, accrued balance)
+  - [ ] Stream controls (pause, resume, cancel)
+  - [ ] Withdrawal interface for recipients
+  - [ ] Stream history and analytics
+  - [ ] Real-time balance updates (polling or event listening)
+- [ ] **Subscription Management UI**
+  - [ ] Subscription creation form (recipient, amount, cadence, token)
+  - [ ] Active subscriptions dashboard
+  - [ ] Subscription details page with payment history
+  - [ ] Subscription modification interface
+  - [ ] Payment schedule calendar view
+  - [ ] Subscription cancellation flow
+  - [ ] Payment notifications/alerts
+  - [ ] Subscription analytics (total paid, next payment, etc.)
+- [ ] Mobile-responsive design for all interfaces
+- [ ] Form validation for all inputs
+- [ ] Transaction status tracking
+- [ ] Toast notifications for user actions
 
 ### Technical Requirements
 - Real-time updates using wagmi's `watchContractEvent` or polling
-- Form validation for stream parameters
-- Transaction status tracking
-- Toast notifications for user actions
-
-### Acceptance Criteria
-- Users can create streams with intuitive UI
-- Real-time balance updates work accurately
-- Stream management actions are clear and functional
-- Recipients can easily withdraw accrued balances
-- Mobile experience is smooth
-
----
-
-## Milestone 6: Subscription Management Interface
-**Status:** 🟡 Pending  
-**Estimated Time:** 6-8 days
-
-### Objectives
-- Build subscription creation and management UI
-- Display subscription status and payment history
-- Enable subscription modifications
-- Show upcoming payments and schedules
-
-### Deliverables
-- [ ] Subscription creation form (recipient, amount, cadence, token)
-- [ ] Active subscriptions dashboard
-- [ ] Subscription details page with payment history
-- [ ] Subscription modification interface
-- [ ] Payment schedule calendar view
-- [ ] Subscription cancellation flow
-- [ ] Payment notifications/alerts
-- [ ] Subscription analytics (total paid, next payment, etc.)
-
-### Technical Requirements
 - Calendar component for payment schedules
 - Payment history pagination
 - Subscription status indicators
 - Automated payment execution monitoring
 
 ### Acceptance Criteria
+- Users can create streams with intuitive UI
+- Real-time balance updates work accurately
+- Stream management actions are clear and functional
+- Recipients can easily withdraw accrued balances
 - Users can create subscriptions with various cadences
 - Payment history is accurate and easy to view
 - Subscriptions can be modified or cancelled
 - Upcoming payments are clearly displayed
 - Payment execution is visible in real-time
+- Mobile experience is smooth
 
 ---
 
-## Milestone 7: Treasury Management Dashboard
+## Milestone 5: Treasury Management, Advanced Features & Production Readiness
 **Status:** 🟡 Pending  
-**Estimated Time:** 5-7 days
+**Estimated Time:** 12-17 days
 
 ### Objectives
 - Build comprehensive treasury management interface
-- Enable bulk operations and batch payments
-- Provide financial analytics and reporting
-- Support multi-token treasury management
+- Implement advanced features and optimizations
+- Security audit and improvements
+- Performance optimization
+- Documentation and deployment preparation
 
 ### Deliverables
-- [ ] Treasury overview dashboard (total streams, subscriptions, balances)
-- [ ] Multi-token balance display (cUSD, USDC, USDT, CELO)
-- [ ] Bulk stream creation interface
-- [ ] Batch subscription management
-- [ ] Financial analytics (total outflow, active payments, etc.)
-- [ ] Export functionality (CSV/JSON for reconciliation)
-- [ ] Treasury activity log
-- [ ] Spending limits and budget controls
+- [ ] **Treasury Management Dashboard**
+  - [ ] Treasury overview dashboard (total streams, subscriptions, balances)
+  - [ ] Multi-token balance display (cUSD, USDC, USDT, CELO)
+  - [ ] Bulk stream creation interface
+  - [ ] Batch subscription management
+  - [ ] Financial analytics (total outflow, active payments, etc.)
+  - [ ] Export functionality (CSV/JSON for reconciliation)
+  - [ ] Treasury activity log
+  - [ ] Spending limits and budget controls
+- [ ] **Advanced Features**
+  - [ ] Access control and role-based permissions
+  - [ ] Stream templates and presets
+  - [ ] Payment notifications (optional: email/push)
+  - [ ] Gas optimization improvements
+- [ ] **Security & Quality**
+  - [ ] Security audit fixes
+  - [ ] Comprehensive test coverage (>90%)
+  - [ ] Production-ready error handling
+  - [ ] Performance monitoring setup
+- [ ] **Documentation & Deployment**
+  - [ ] User documentation and guides
+  - [ ] Admin documentation
+  - [ ] API documentation
+  - [ ] Mainnet deployment scripts
+  - [ ] Deployment verification
 
 ### Technical Requirements
 - Aggregate data from multiple contracts
 - Efficient data fetching and caching
 - CSV/JSON export functionality
 - Chart/graph components for analytics
+- Access control using OpenZeppelin's AccessControl
+- Gas optimization techniques
+- Comprehensive error handling
+- Production deployment configuration
 
 ### Acceptance Criteria
 - Treasury managers can view all active streams/subscriptions
@@ -246,39 +234,6 @@ Drip is a programmable payment streaming and recurring subscription platform bui
 - Analytics provide actionable insights
 - Export functionality works for reconciliation
 - Multi-token management is seamless
-
----
-
-## Milestone 8: Advanced Features, Security & Polish
-**Status:** 🟡 Pending  
-**Estimated Time:** 7-10 days
-
-### Objectives
-- Implement advanced features and optimizations
-- Security audit and improvements
-- Performance optimization
-- Documentation and deployment preparation
-
-### Deliverables
-- [ ] Access control and role-based permissions
-- [ ] Stream templates and presets
-- [ ] Payment notifications (optional: email/push)
-- [ ] Gas optimization improvements
-- [ ] Security audit fixes
-- [ ] Comprehensive test coverage (>90%)
-- [ ] User documentation and guides
-- [ ] Admin documentation
-- [ ] Mainnet deployment scripts
-- [ ] Production-ready error handling
-- [ ] Performance monitoring setup
-
-### Technical Requirements
-- Access control using OpenZeppelin's AccessControl
-- Gas optimization techniques
-- Comprehensive error handling
-- Production deployment configuration
-
-### Acceptance Criteria
 - All security vulnerabilities addressed
 - Gas costs are optimized
 - Test coverage meets standards
@@ -293,13 +248,10 @@ Drip is a programmable payment streaming and recurring subscription platform bui
 | Milestone | Duration | Dependencies |
 |-----------|----------|--------------|
 | 1. Foundation | 3-5 days | None |
-| 2. Streaming Contract | 5-7 days | Milestone 1 |
-| 3. Subscription Contract | 5-7 days | Milestone 1, 2 |
-| 4. Frontend Foundation | 4-5 days | Milestone 1, 2, 3 |
-| 5. Streaming UI | 6-8 days | Milestone 4 |
-| 6. Subscription UI | 6-8 days | Milestone 4 |
-| 7. Treasury Dashboard | 5-7 days | Milestone 4, 5, 6 |
-| 8. Advanced Features | 7-10 days | All previous |
+| 2. Core Smart Contracts | 10-14 days | Milestone 1 |
+| 3. Frontend Foundation | 4-5 days | Milestone 1, 2 |
+| 4. User Interfaces | 12-16 days | Milestone 3 |
+| 5. Treasury & Production | 12-17 days | Milestone 4 |
 
 **Total Estimated Duration:** 41-57 days (~6-8 weeks)
 

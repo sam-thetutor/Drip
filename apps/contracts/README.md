@@ -1,99 +1,161 @@
-# my-celo-app - Smart Contracts
+# Drip Smart Contracts
 
-This directory contains the smart contracts for my-celo-app, built with Hardhat and optimized for the Celo blockchain.
+Smart contracts for the Drip payment streaming and subscription platform on Celo.
 
-## 🚀 Quick Start
+## Overview
+
+Drip enables programmable, real-time payment streams and recurring subscriptions for stablecoins on the Celo network. The contracts are built with Solidity ^0.8.20 and follow security best practices.
+
+## Project Structure
+
+```
+contracts/
+├── interfaces/
+│   ├── IDrip.sol              # Core streaming interface
+│   ├── ISubscription.sol      # Subscription management interface
+│   └── IERC20.sol             # ERC20 token interface
+├── libraries/
+│   └── DripTypes.sol          # Shared data structures and types
+├── utils/
+│   └── TokenHelper.sol        # Token transfer utilities (native & ERC20)
+└── Lock.sol                   # Example contract (to be removed)
+
+test/
+├── Drip.test.ts               # Main test suite
+├── fixtures/
+│   └── DripFixture.ts         # Test deployment fixtures
+└── helpers/
+    └── TestHelpers.ts          # Test utility functions
+
+ignition/
+└── modules/
+    └── Drip.ts                 # Deployment module
+```
+
+## Contracts
+
+### Interfaces
+
+- **IDrip**: Defines the interface for payment streaming functionality
+  - Stream creation, management, and withdrawal
+  - Per-second rate calculation
+  - Stream status management (active, paused, cancelled)
+
+- **ISubscription**: Defines the interface for recurring subscription payments
+  - Subscription creation with flexible cadences
+  - Automatic payment execution
+  - Payment history tracking
+
+- **IERC20**: Minimal ERC20 interface for token interactions
+
+### Libraries
+
+- **DripTypes**: Shared data structures including:
+  - PaymentSchedule
+  - TreasuryConfig
+  - Error codes
+
+- **TokenHelper**: Utility library for handling both native CELO and ERC20 tokens
+  - Safe transfer functions
+  - Balance queries
+  - Token validation
+
+## Supported Tokens
+
+- **Native CELO**: Native blockchain currency
+- **cUSD**: Celo Dollar stablecoin
+- **USDC**: USD Coin on Celo
+- **USDT**: Tether on Celo
+
+## Development
+
+### Prerequisites
+
+- Node.js >= 18.0.0
+- pnpm >= 8.0.0
+
+### Installation
 
 ```bash
-# Install dependencies
 pnpm install
+```
 
-# Compile contracts
+### Compile Contracts
+
+```bash
 pnpm compile
+```
 
-# Run tests
+### Run Tests
+
+```bash
 pnpm test
+```
 
-# Deploy to Alfajores testnet
+### Deploy Contracts
+
+#### Local Network
+```bash
+pnpm deploy
+```
+
+#### Celo Alfajores Testnet
+```bash
 pnpm deploy:alfajores
+```
 
-# Deploy to Sepolia testnet
+#### Celo Sepolia Testnet
+```bash
 pnpm deploy:sepolia
+```
 
-# Deploy to Celo mainnet
+#### Celo Mainnet
+```bash
 pnpm deploy:celo
 ```
 
-## 📜 Available Scripts
+### Environment Variables
 
-- `pnpm compile` - Compile smart contracts
-- `pnpm test` - Run contract tests
-- `pnpm deploy` - Deploy to local network
-- `pnpm deploy:alfajores` - Deploy to Celo Alfajores testnet
-- `pnpm deploy:sepolia` - Deploy to Celo Sepolia testnet
-- `pnpm deploy:celo` - Deploy to Celo mainnet
-- `pnpm verify` - Verify contracts on Celoscan
-- `pnpm clean` - Clean artifacts and cache
+Create a `.env` file in the contracts directory:
 
-## 🌐 Networks
-
-### Celo Mainnet
-- **Chain ID**: 42220
-- **RPC URL**: https://forno.celo.org
-- **Explorer**: https://celoscan.io
-
-### Alfajores Testnet
-- **Chain ID**: 44787
-- **RPC URL**: https://alfajores-forno.celo-testnet.org
-- **Explorer**: https://alfajores.celoscan.io
-- **Faucet**: https://faucet.celo.org
-
-### Sepolia Testnet
-- **Chain ID**: 11142220
-- **RPC URL**: https://forno.celo-sepolia.celo-testnet.org
-- **Explorer**: https://celo-sepolia.blockscout.com
-- **Faucet**: https://faucet.celo.org/celo-sepolia
-
-## 🔧 Environment Setup
-
-1. Copy the environment template:
-   ```bash
-   cp .env.example .env
-   ```
-
-2. Fill in your private key and API keys:
-   ```env
-   PRIVATE_KEY=your_private_key_without_0x_prefix
-   CELOSCAN_API_KEY=your_celoscan_api_key
-   ```
-
-## 📁 Project Structure
-
-```
-contracts/          # Smart contract source files
-├── Lock.sol        # Sample timelock contract
-
-test/              # Contract tests
-├── Lock.ts        # Tests for Lock contract
-
-ignition/          # Deployment scripts
-└── modules/
-    └── Lock.ts    # Lock contract deployment
-
-hardhat.config.ts  # Hardhat configuration
-tsconfig.json      # TypeScript configuration
+```env
+PRIVATE_KEY=your_private_key_here
+CELOSCAN_API_KEY=your_celoscan_api_key_here
 ```
 
-## 🔐 Security Notes
+## Network Configuration
 
-- Never commit your `.env` file with real private keys
-- Use a dedicated wallet for development/testing
-- Test thoroughly on Alfajores before mainnet deployment
-- Consider using a hardware wallet for mainnet deployments
+The project is configured for the following Celo networks:
 
-## 📚 Learn More
+- **Celo Mainnet**: Chain ID 42220
+- **Celo Alfajores Testnet**: Chain ID 44787
+- **Celo Sepolia Testnet**: Chain ID 11142220
+- **Localhost**: Chain ID 31337
 
-- [Hardhat Documentation](https://hardhat.org/docs)
-- [Celo Developer Documentation](https://docs.celo.org)
-- [Celo Smart Contract Best Practices](https://docs.celo.org/developer/contractkit)
-- [Viem Documentation](https://viem.sh) (Ethereum library used by Hardhat)
+## Security
+
+- Contracts use OpenZeppelin libraries for security patterns
+- Solidity version ^0.8.20 with compiler optimizations enabled
+- Comprehensive test coverage (target: >90%)
+- Security audits planned before mainnet deployment
+
+## Documentation
+
+All contracts include NatSpec documentation. Generate documentation:
+
+```bash
+# Documentation is embedded in contract source files
+# View in your IDE or generate with solc --userdoc/--devdoc
+```
+
+## Milestones
+
+- ✅ **Milestone 1**: Project Foundation & Smart Contract Architecture (Current)
+- ⏳ **Milestone 2**: Core Smart Contracts (Streaming & Subscriptions)
+- ⏳ **Milestone 3**: Frontend Foundation & Wallet Integration
+- ⏳ **Milestone 4**: User Interfaces (Streaming & Subscriptions)
+- ⏳ **Milestone 5**: Treasury Management, Advanced Features & Production Readiness
+
+## License
+
+MIT
