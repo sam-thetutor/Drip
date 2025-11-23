@@ -4,6 +4,23 @@
 
 ---
 
+## 🎯 Mission Summary
+
+**Our Mission:** To democratize programmable payments by enabling autonomous, transparent, and cost-effective payment streams and subscriptions on the Celo blockchain.
+
+**Vision:** A world where creators, collectives, and service platforms can automate continuous payouts and usage-based billing without the friction, costs, and delays of traditional payment systems.
+
+**Core Values:**
+- **Autonomy** - Smart contracts execute payments automatically, eliminating manual intervention
+- **Transparency** - All transactions are on-chain, providing full auditability and trust
+- **Accessibility** - Low gas costs and mobile-first design make programmable payments available to everyone
+- **Efficiency** - Real-time streaming and automated subscriptions save time and reduce operational overhead
+- **Innovation** - Leveraging blockchain technology to solve real-world payment challenges
+
+**Impact:** Drip empowers treasury managers to automate payment distribution, enables creators to receive real-time payments, and provides service platforms with programmable billing infrastructure—all while maintaining complete transparency and reducing costs compared to legacy systems.
+
+---
+
 ## 🎯 Pitch Deck
 
 ### The Problem
