@@ -20,25 +20,36 @@ interface IDrip {
     struct Stream {
         uint256 streamId;           // Unique identifier for the stream
         address sender;             // Address that created the stream
-        address recipient;          // Address receiving the stream
+        address[] recipients;       // Addresses receiving the stream (multiple recipients)
         address token;              // ERC20 token address (address(0) for native CELO)
-        uint256 totalAmount;        // Total amount to be streamed
+        uint256 deposit;            // Total amount deposited (remaining is derived)
         uint256 startTime;          // Timestamp when stream starts
-        uint256 endTime;            // Timestamp when stream ends
-        uint256 ratePerSecond;      // Amount per second being streamed
-        uint256 withdrawnAmount;    // Total amount withdrawn by recipient
+        uint256 endTime;            // Timestamp when stream ends (calculated from duration)
         StreamStatus status;         // Current status of the stream
+        string title;               // Optional title (max 120 chars)
+        string description;         // Optional description (max 1024 chars)
+    }
+
+    /// @notice Recipient information structure
+    struct RecipientInfo {
+        address recipient;          // Recipient address
+        uint256 ratePerSecond;      // Rate per second for this recipient
+        uint256 totalWithdrawn;      // Total amount withdrawn by this recipient
+        uint256 lastWithdrawTime;   // Last withdrawal timestamp
+        uint256 currentAccrued;     // Current accrued amount (not yet withdrawn)
     }
 
     /// @notice Emitted when a new stream is created
     event StreamCreated(
         uint256 indexed streamId,
         address indexed sender,
-        address indexed recipient,
+        address[] recipients,
         address token,
-        uint256 totalAmount,
+        uint256 deposit,
         uint256 startTime,
-        uint256 endTime
+        uint256 endTime,
+        string title,
+        string description
     );
 
     /// @notice Emitted when a stream is paused
@@ -65,34 +76,57 @@ interface IDrip {
     event StreamCompleted(uint256 indexed streamId);
 
     /**
-     * @notice Create a new payment stream
-     * @param recipient Address that will receive the streamed payments
+     * @notice Create a new payment stream with multiple recipients
+     * @param recipients Array of addresses that will receive the streamed payments
      * @param token ERC20 token address (address(0) for native CELO)
-     * @param totalAmount Total amount to be streamed
-     * @param duration Duration of the stream in seconds
+     * @param amountsPerPeriod Array of amounts per period for each recipient (parallel to recipients)
+     * @param periodSeconds Duration of the period in seconds (e.g., 30 days)
+     * @param deposit Total amount to deposit (must cover all recipients)
+     * @param title Optional title for the stream (max 120 chars)
+     * @param description Optional description (max 1024 chars)
      * @return streamId Unique identifier for the created stream
      */
     function createStream(
-        address recipient,
+        address[] calldata recipients,
         address token,
-        uint256 totalAmount,
-        uint256 duration
+        uint256[] calldata amountsPerPeriod,
+        uint256 periodSeconds,
+        uint256 deposit,
+        string calldata title,
+        string calldata description
     ) external payable returns (uint256 streamId);
 
     /**
-     * @notice Get the current balance available for withdrawal
+     * @notice Get the current balance available for withdrawal for a specific recipient
      * @param streamId The stream identifier
+     * @param recipient The recipient address
      * @return balance The amount available for withdrawal
      */
-    function getStreamBalance(uint256 streamId) external view returns (uint256 balance);
+    function getRecipientBalance(uint256 streamId, address recipient) external view returns (uint256 balance);
 
     /**
-     * @notice Withdraw available balance from a stream
+     * @notice Withdraw available balance from a stream (for a specific recipient)
      * @param streamId The stream identifier
+     * @param recipient The recipient address withdrawing
      * @param amount The amount to withdraw (0 for maximum available)
      * @return withdrawn The amount actually withdrawn
      */
-    function withdrawFromStream(uint256 streamId, uint256 amount) external returns (uint256 withdrawn);
+    function withdrawFromStream(uint256 streamId, address recipient, uint256 amount) external returns (uint256 withdrawn);
+
+    /**
+     * @notice Get detailed information about a specific recipient in a stream
+     * @param streamId The stream identifier
+     * @param recipient The recipient address
+     * @return info Recipient information structure
+     */
+    function getRecipientInfo(uint256 streamId, address recipient) external view returns (RecipientInfo memory info);
+
+    /**
+     * @notice Get information about all recipients in a stream
+     * @param streamId The stream identifier
+     * @return recipients Array of recipient information
+     */
+    function getAllRecipientsInfo(uint256 streamId) external view returns (RecipientInfo[] memory recipients);
 
     /**
      * @notice Pause an active stream

@@ -35,7 +35,10 @@ interface ISubscription {
         uint256 lastPaymentTime;     // Timestamp of last payment
         uint256 totalPaid;           // Total amount paid so far
         uint256 paymentCount;        // Number of payments made
+        uint256 balance;             // Escrowed balance for this subscription (isolated)
         SubscriptionStatus status;   // Current status of the subscription
+        string title;                // Optional title (max 120 chars)
+        string description;          // Optional description (max 1024 chars)
     }
 
     /// @notice Payment record structure
@@ -55,7 +58,17 @@ interface ISubscription {
         address token,
         uint256 amount,
         Cadence cadence,
-        uint256 nextPaymentTime
+        uint256 nextPaymentTime,
+        string title,
+        string description
+    );
+
+    /// @notice Emitted when funds are deposited to a subscription
+    event SubscriptionDeposited(
+        uint256 indexed subscriptionId,
+        address indexed subscriber,
+        uint256 amount,
+        uint256 newBalance
     );
 
     /// @notice Emitted when a subscription payment is executed
@@ -91,6 +104,9 @@ interface ISubscription {
      * @param amount Amount per payment
      * @param cadence Payment cadence (Daily, Weekly, Monthly, or Custom)
      * @param customInterval Custom interval in seconds (only used if cadence is Custom)
+     * @param firstPaymentTime Timestamp for first payment (0 for now + interval)
+     * @param title Optional title (max 120 chars)
+     * @param description Optional description (max 1024 chars)
      * @return subscriptionId Unique identifier for the created subscription
      */
     function createSubscription(
@@ -98,16 +114,27 @@ interface ISubscription {
         address token,
         uint256 amount,
         Cadence cadence,
-        uint256 customInterval
+        uint256 customInterval,
+        uint256 firstPaymentTime,
+        string calldata title,
+        string calldata description
     ) external payable returns (uint256 subscriptionId);
 
     /**
-     * @notice Execute a subscription payment
+     * @notice Deposit funds to a subscription (escrow model)
+     * @param subscriptionId The subscription identifier
+     * @param amount Amount to deposit
+     */
+    function depositToSubscription(uint256 subscriptionId, uint256 amount) external payable;
+
+    /**
+     * @notice Execute a subscription payment (handles backlog automatically)
      * @param subscriptionId The subscription identifier
      * @return success Whether the payment was successful
      * @return paymentId The payment record identifier
+     * @return intervalsPaid Number of intervals paid (handles backlog)
      */
-    function executePayment(uint256 subscriptionId) external returns (bool success, uint256 paymentId);
+    function executePayment(uint256 subscriptionId) external returns (bool success, uint256 paymentId, uint256 intervalsPaid);
 
     /**
      * @notice Execute multiple subscription payments in batch
