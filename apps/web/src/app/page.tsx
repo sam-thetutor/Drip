@@ -22,15 +22,21 @@ export default function Home() {
         <h1
           className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-6"
         >
-          Welcome to{" "}
-          <span className="text-primary">my-celo-app</span>
+          <span className="text-primary">Drip</span>
         </h1>
+
+        {/* Tagline */}
+        <p
+          className="text-2xl md:text-3xl font-semibold mb-4 text-foreground"
+        >
+          Programmable Payments, Autonomous Execution
+        </p>
 
         {/* Subtitle */}
         <p
           className="text-lg md:text-xl text-muted-foreground mb-8 max-w-2xl mx-auto leading-relaxed"
         >
-          Start building your decentralized application on Celo. Fast and secure blockchain for everyone.
+          Real-time payment streaming and recurring subscriptions on Celo. Automate continuous payouts with smart contracts.
         </p>
 
         {/* User Balance Display */}

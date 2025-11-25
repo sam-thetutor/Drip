@@ -7,7 +7,31 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { WagmiProvider, createConfig, http, useConnect } from "wagmi";
 import { celo, celoAlfajores } from "wagmi/chains";
+import { defineChain } from "viem";
 import { ConnectButton } from "./connect-button";
+
+// Define Celo Sepolia manually if not exported from wagmi/chains
+const celoSepolia = defineChain({
+  id: 11142220,
+  name: "Celo Sepolia",
+  nativeCurrency: {
+    decimals: 18,
+    name: "CELO",
+    symbol: "CELO",
+  },
+  rpcUrls: {
+    default: {
+      http: ["https://forno.celo-sepolia.celo-testnet.org"],
+    },
+  },
+  blockExplorers: {
+    default: {
+      name: "Celo Sepolia Explorer",
+      url: "https://celo-sepolia.blockscout.com",
+    },
+  },
+  testnet: true,
+});
 
 const connectors = connectorsForWallets(
   [
@@ -23,11 +47,12 @@ const connectors = connectorsForWallets(
 );
 
 const wagmiConfig = createConfig({
-  chains: [celo, celoAlfajores],
+  chains: [celo, celoAlfajores, celoSepolia],
   connectors,
   transports: {
     [celo.id]: http(),
     [celoAlfajores.id]: http(),
+    [celoSepolia.id]: http(),
   },
   ssr: true,
 });
