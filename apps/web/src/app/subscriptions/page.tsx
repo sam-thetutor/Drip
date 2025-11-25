@@ -5,7 +5,7 @@ import { Plus } from "lucide-react";
 export default function SubscriptionsPage() {
   return (
     <main className="flex-1">
-      <div className="container px-4 mx-auto max-w-7xl py-8">
+      <div className="container px-4 mx-auto max-w-[1280px] py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>

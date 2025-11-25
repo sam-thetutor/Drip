@@ -14,7 +14,7 @@ export default function StreamDetailsPage() {
   if (!streamId) {
     return (
       <main className="flex-1">
-        <div className="container px-4 mx-auto max-w-7xl py-8">
+        <div className="container px-4 mx-auto max-w-[1280px] py-8">
           <div className="text-center py-12">
             <p className="text-muted-foreground">Invalid stream ID</p>
             <Button asChild variant="outline" className="mt-4">

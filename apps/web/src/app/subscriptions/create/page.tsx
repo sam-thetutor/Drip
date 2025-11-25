@@ -5,7 +5,7 @@ import { ArrowLeft } from "lucide-react";
 export default function CreateSubscriptionPage() {
   return (
     <main className="flex-1">
-      <div className="container px-4 mx-auto max-w-3xl py-8">
+      <div className="container px-4 mx-auto max-w-[1280px] py-8">
         {/* Header */}
         <div className="mb-8">
           <Button asChild variant="ghost" className="mb-4">

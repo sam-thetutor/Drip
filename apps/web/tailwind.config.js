@@ -52,21 +52,21 @@ const config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        // Minimalist Futurism Colors
-        indigo: {
-          DEFAULT: "#6366F1",
-          light: "#818CF8",
-          dark: "#4F46E5",
+        // DeFi Green Colors
+        green: {
+          DEFAULT: "#10B981",
+          light: "#34D399",
+          dark: "#059669",
         },
-        purple: {
-          DEFAULT: "#8B5CF6",
-          light: "#A78BFA",
-          dark: "#7C3AED",
+        orange: {
+          DEFAULT: "#F59E0B",
+          light: "#FBBF24",
+          dark: "#D97706",
         },
       },
       boxShadow: {
-        "glow-indigo": "0 0 12px rgba(99, 102, 241, 0.3)",
-        "glow-purple": "0 0 12px rgba(139, 92, 246, 0.3)",
+        "card": "0 2px 8px rgba(0, 0, 0, 0.1)",
+        "card-hover": "0 4px 12px rgba(16, 185, 129, 0.15)",
       },
       borderRadius: {
         lg: "var(--radius)",

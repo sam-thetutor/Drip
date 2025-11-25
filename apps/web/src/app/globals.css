@@ -4,42 +4,42 @@
 
 @layer base {
   :root {
-    /* Minimalist Futurism Theme - Dark Mode by Default */
-    --background: 240 30% 12%; /* #0F0F1E */
-    --foreground: 210 40% 98%;
+    /* DeFi Pool Theme - Dark with Green Accents */
+    --background: 0 0% 8%; /* #141414 - Deep black */
+    --foreground: 0 0% 98%;
 
-    --card: 240 25% 18%; /* #1A1A2A */
-    --card-foreground: 210 40% 98%;
+    --card: 0 0% 12%; /* #1F1F1F - Dark gray */
+    --card-foreground: 0 0% 98%;
 
-    --popover: 240 25% 18%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 0 0% 12%;
+    --popover-foreground: 0 0% 98%;
 
-    --primary: 239 84% 67%; /* #6366F1 - Indigo */
-    --primary-foreground: 210 40% 98%;
+    --primary: 142 71% 45%; /* #10B981 - Emerald Green (DeFi standard) */
+    --primary-foreground: 0 0% 98%;
 
-    --secondary: 258 90% 66%; /* #8B5CF6 - Purple */
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 0 0% 20%; /* #333333 */
+    --secondary-foreground: 0 0% 98%;
 
-    --muted: 240 25% 18%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 65%;
 
-    --accent: 258 90% 66%; /* #8B5CF6 */
-    --accent-foreground: 210 40% 98%;
+    --accent: 142 71% 45%; /* Green */
+    --accent-foreground: 0 0% 98%;
 
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive-foreground: 0 0% 98%;
 
-    --border: 240 20% 30%; /* #252538 */
-    --input: 240 20% 30%;
-    --ring: 239 84% 67%;
+    --border: 0 0% 20%; /* #333333 */
+    --input: 0 0% 20%;
+    --ring: 142 71% 45%;
 
     --radius: 0.75rem;
 
     /* Custom Colors */
-    --indigo: 239 84% 67%;
-    --purple: 258 90% 66%;
-    --emerald: 160 84% 39%;
-    --amber: 43 96% 56%;
+    --green: 142 71% 45%; /* #10B981 */
+    --green-light: 142 71% 55%;
+    --green-dark: 142 71% 35%;
+    --orange: 25 95% 53%; /* #F59E0B */
   }
 }
 
@@ -49,58 +49,49 @@
   }
   body {
     @apply bg-background text-foreground;
-    background-image: 
-      linear-gradient(180deg, hsl(240, 30%, 12%) 0%, hsl(240, 25%, 18%) 100%);
-    background-attachment: fixed;
+    background: hsl(var(--background));
     min-height: 100vh;
   }
 }
 
 @layer utilities {
-  /* Minimalist Card */
+  /* DeFi Style Card */
   .glass-card {
     background: hsl(var(--card));
     border: 1px solid hsl(var(--border));
-    box-shadow: 
-      0 4px 16px rgba(0, 0, 0, 0.2),
-      0 0 0 1px rgba(99, 102, 241, 0.05) inset;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   }
 
-  /* Subtle Glow Effects */
-  .glow-indigo {
-    box-shadow: 0 0 12px rgba(99, 102, 241, 0.3);
+  .card-hover {
+    transition: all 0.2s ease;
   }
 
-  .glow-purple {
-    box-shadow: 0 0 12px rgba(139, 92, 246, 0.3);
+  .card-hover:hover {
+    border-color: hsl(var(--primary));
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
   }
 
-  /* Clean Text Styles */
-  .text-indigo {
-    color: #6366F1;
+  /* Green Accent Styles */
+  .text-green {
+    color: #10B981;
   }
 
-  .text-purple {
-    color: #8B5CF6;
+  .bg-green {
+    background-color: #10B981;
   }
 
-  /* Solid Background */
-  .bg-indigo {
-    background-color: #6366F1;
+  .border-green {
+    border-color: #10B981;
   }
 
-  .bg-purple {
-    background-color: #8B5CF6;
-  }
-
-  /* Subtle Hover Effects */
+  /* Clean Hover Effects */
   .hover-lift {
     transition: transform 0.2s ease, box-shadow 0.2s ease;
   }
 
   .hover-lift:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
   }
 
   /* Smooth Fade Animation */
@@ -117,5 +108,24 @@
       opacity: 1;
       transform: translateY(0);
     }
+  }
+
+  /* Glow Effect for Green Text */
+  .text-green-glow {
+    color: #10B981;
+    text-shadow: 0 0 20px rgba(16, 185, 129, 0.5), 0 0 40px rgba(16, 185, 129, 0.3);
+  }
+
+  /* Pulse Animation Delay Utilities */
+  .delay-500 {
+    animation-delay: 0.5s;
+  }
+
+  .delay-700 {
+    animation-delay: 0.7s;
+  }
+
+  .delay-1000 {
+    animation-delay: 1s;
   }
 }

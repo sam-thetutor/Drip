@@ -108,36 +108,36 @@ export function StreamsDashboard() {
 
   return (
     <div className="space-y-8">
-      {/* Summary Stats */}
+      {/* Summary Stats - DeFi Style */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
+        <Card className="glass-card card-hover">
           <CardContent className="pt-6">
-            <div className="text-2xl font-bold">{totalStreams}</div>
-            <div className="text-sm text-muted-foreground">Total Streams</div>
+            <div className="text-2xl font-bold text-foreground">{totalStreams}</div>
+            <div className="text-sm text-muted-foreground mt-1">Total Streams</div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="glass-card card-hover">
           <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-green-600">
+            <div className="text-2xl font-bold text-green">
               {groupedStreams.active.length}
             </div>
-            <div className="text-sm text-muted-foreground">Active</div>
+            <div className="text-sm text-muted-foreground mt-1">Active</div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="glass-card card-hover">
           <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-yellow-600">
+            <div className="text-2xl font-bold text-orange">
               {groupedStreams.paused.length}
             </div>
-            <div className="text-sm text-muted-foreground">Paused</div>
+            <div className="text-sm text-muted-foreground mt-1">Paused</div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="glass-card card-hover">
           <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-gray-600">
+            <div className="text-2xl font-bold text-muted-foreground">
               {groupedStreams.completed.length + groupedStreams.cancelled.length}
             </div>
-            <div className="text-sm text-muted-foreground">Completed</div>
+            <div className="text-sm text-muted-foreground mt-1">Completed</div>
           </CardContent>
         </Card>
       </div>
@@ -145,13 +145,19 @@ export function StreamsDashboard() {
       {/* Active Streams */}
       {groupedStreams.active.length > 0 && (
         <div>
-          <h2 className="text-xl font-semibold mb-4">Active Streams</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-foreground">Active Streams</h2>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span className="text-green">●</span>
+              <span>{groupedStreams.active.length} Active</span>
+            </div>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {groupedStreams.active.map((stream: any) => (
               <Link
                 key={Number(stream.streamId)}
                 href={`/streams/${stream.streamId.toString()}`}
-                className="block"
+                className="block w-full"
               >
                 <StreamCardEnhanced
                   streamId={stream.streamId}
@@ -173,7 +179,13 @@ export function StreamsDashboard() {
       {/* Paused Streams */}
       {groupedStreams.paused.length > 0 && (
         <div>
-          <h2 className="text-xl font-semibold mb-4">Paused Streams</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-foreground">Paused Streams</h2>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span className="text-orange">●</span>
+              <span>{groupedStreams.paused.length} Paused</span>
+            </div>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {groupedStreams.paused.map((stream: any) => (
               <Link
@@ -201,13 +213,19 @@ export function StreamsDashboard() {
       {/* Completed/Cancelled Streams */}
       {(groupedStreams.completed.length > 0 || groupedStreams.cancelled.length > 0) && (
         <div>
-          <h2 className="text-xl font-semibold mb-4">Completed Streams</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-foreground">Completed Streams</h2>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span>●</span>
+              <span>{groupedStreams.completed.length + groupedStreams.cancelled.length} Completed</span>
+            </div>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {[...groupedStreams.completed, ...groupedStreams.cancelled].map((stream: any) => (
               <Link
                 key={Number(stream.streamId)}
                 href={`/streams/${stream.streamId.toString()}`}
-                className="block"
+                className="block w-full"
               >
                 <StreamCardEnhanced
                   streamId={stream.streamId}
