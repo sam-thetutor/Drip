@@ -75,6 +75,29 @@ interface IDrip {
     /// @notice Emitted when a stream completes naturally
     event StreamCompleted(uint256 indexed streamId);
 
+    /// @notice Emitted when a recipient is added to a stream
+    event RecipientAdded(
+        uint256 indexed streamId,
+        address indexed recipient,
+        uint256 amountPerPeriod,
+        uint256 ratePerSecond
+    );
+
+    /// @notice Emitted when a recipient is removed from a stream
+    event RecipientRemoved(
+        uint256 indexed streamId,
+        address indexed recipient,
+        uint256 refundAmount
+    );
+
+    /// @notice Emitted when a recipient's rate is updated
+    event RecipientRateUpdated(
+        uint256 indexed streamId,
+        address indexed recipient,
+        uint256 oldRatePerSecond,
+        uint256 newRatePerSecond
+    );
+
     /**
      * @notice Create a new payment stream with multiple recipients
      * @param recipients Array of addresses that will receive the streamed payments
@@ -145,6 +168,42 @@ interface IDrip {
      * @param streamId The stream identifier
      */
     function cancelStream(uint256 streamId) external;
+
+    /**
+     * @notice Add a new recipient to an existing stream
+     * @param streamId The stream identifier
+     * @param recipient The new recipient address
+     * @param amountPerPeriod The amount per period for the new recipient
+     * @param additionalDeposit Additional deposit required to cover the new recipient
+     */
+    function addRecipient(
+        uint256 streamId,
+        address recipient,
+        uint256 amountPerPeriod,
+        uint256 additionalDeposit
+    ) external payable;
+
+    /**
+     * @notice Remove a recipient from an existing stream
+     * @param streamId The stream identifier
+     * @param recipient The recipient address to remove
+     * @dev Refunds any unaccrued deposit allocated to this recipient
+     */
+    function removeRecipient(uint256 streamId, address recipient) external;
+
+    /**
+     * @notice Update a recipient's rate in an existing stream
+     * @param streamId The stream identifier
+     * @param recipient The recipient address
+     * @param newAmountPerPeriod The new amount per period
+     * @param additionalDeposit Additional deposit if increasing rate, or refund if decreasing
+     */
+    function updateRecipientRate(
+        uint256 streamId,
+        address recipient,
+        uint256 newAmountPerPeriod,
+        uint256 additionalDeposit
+    ) external payable;
 
     /**
      * @notice Get stream details

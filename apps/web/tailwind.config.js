@@ -25,12 +25,12 @@ const config = {
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
         primary: {
-          DEFAULT: "#07955F",
-          foreground: "#FFFFFF",
+          DEFAULT: "hsl(var(--primary))",
+          foreground: "hsl(var(--primary-foreground))",
         },
         secondary: {
-          DEFAULT: "#2A2C34",
-          foreground: "#FFFFFF",
+          DEFAULT: "hsl(var(--secondary))",
+          foreground: "hsl(var(--secondary-foreground))",
         },
         destructive: {
           DEFAULT: "hsl(var(--destructive))",
@@ -52,6 +52,21 @@ const config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // Minimalist Futurism Colors
+        indigo: {
+          DEFAULT: "#6366F1",
+          light: "#818CF8",
+          dark: "#4F46E5",
+        },
+        purple: {
+          DEFAULT: "#8B5CF6",
+          light: "#A78BFA",
+          dark: "#7C3AED",
+        },
+      },
+      boxShadow: {
+        "glow-indigo": "0 0 12px rgba(99, 102, 241, 0.3)",
+        "glow-purple": "0 0 12px rgba(139, 92, 246, 0.3)",
       },
       borderRadius: {
         lg: "var(--radius)",

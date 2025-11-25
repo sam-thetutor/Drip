@@ -1,15 +1,15 @@
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import './globals.css';
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
+import { WalletProvider } from "@/components/wallet-provider";
+import { Navbar } from "@/components/navbar";
+import { Toaster } from "sonner";
 
-import { Navbar } from '@/components/navbar';
-import { WalletProvider } from "@/components/wallet-provider"
-
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'my-celo-app',
-  description: 'A new Celo blockchain project',
+  title: "Drip - Programmable Payments on Celo",
+  description: "Real-time payment streaming and recurring subscriptions on Celo",
 };
 
 export default function RootLayout({
@@ -18,17 +18,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className="dark">
       <body className={inter.className}>
-        {/* Navbar is included on all pages */}
-        <div className="relative flex min-h-screen flex-col">
-          <WalletProvider>
-            <Navbar />
-            <main className="flex-1">
-              {children}
-            </main>
-          </WalletProvider>
-        </div>
+        <WalletProvider>
+          <Navbar />
+          <main className="flex-1">
+            {children}
+          </main>
+          <Toaster position="top-right" />
+        </WalletProvider>
       </body>
     </html>
   );

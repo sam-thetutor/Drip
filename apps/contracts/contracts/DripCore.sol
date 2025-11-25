@@ -424,6 +424,250 @@ contract DripCore is IDrip, ReentrancyGuard, Ownable {
     }
 
     /**
+     * @notice Add a new recipient to an existing stream
+     * @param streamId The stream identifier
+     * @param recipient The new recipient address
+     * @param amountPerPeriod The amount per period for the new recipient
+     * @param additionalDeposit Additional deposit required to cover the new recipient
+     */
+    function addRecipient(
+        uint256 streamId,
+        address recipient,
+        uint256 amountPerPeriod,
+        uint256 additionalDeposit
+    ) external payable nonReentrant {
+        Stream storage stream = _streams[streamId];
+        require(stream.streamId != 0, "DripCore: Stream does not exist");
+        require(
+            stream.status == StreamStatus.Active || stream.status == StreamStatus.Paused,
+            "DripCore: Stream not active or paused"
+        );
+        require(msg.sender == stream.sender, "DripCore: Only sender can modify recipients");
+        require(recipient != address(0), "DripCore: Invalid recipient");
+        require(recipient != msg.sender, "DripCore: Cannot stream to self");
+        require(amountPerPeriod > 0, "DripCore: Invalid amount");
+        require(!_isRecipient(stream, recipient), "DripCore: Recipient already exists");
+
+        // Calculate rate per second
+        uint256 periodSeconds = stream.endTime - stream.startTime;
+        uint256 ratePerSecond = amountPerPeriod / periodSeconds;
+        require(ratePerSecond > 0, "DripCore: Rate too small");
+
+        // Calculate required additional deposit
+        uint256 requiredDeposit = additionalDeposit;
+        if (requiredDeposit > 0) {
+            // Calculate platform fee
+            uint256 fee = (requiredDeposit * platformFeeBps) / 10000;
+            uint256 netDeposit = requiredDeposit - fee;
+
+            // Handle payment
+            if (stream.token == TokenHelper.NATIVE_TOKEN) {
+                require(msg.value == requiredDeposit, "DripCore: Incorrect native amount");
+                // Transfer fee to platform
+                if (fee > 0) {
+                    (bool success, ) = platformFeeRecipient.call{value: fee}("");
+                    require(success, "DripCore: Fee transfer failed");
+                }
+            } else {
+                require(msg.value == 0, "DripCore: Native token not expected");
+                // Transfer tokens from sender
+                require(
+                    TokenHelper.safeTransferFrom(stream.token, msg.sender, address(this), netDeposit),
+                    "DripCore: Token transfer failed"
+                );
+                // Transfer fee to platform
+                if (fee > 0) {
+                    require(
+                        TokenHelper.safeTransferFrom(stream.token, msg.sender, platformFeeRecipient, fee),
+                        "DripCore: Fee transfer failed"
+                    );
+                }
+            }
+
+            // Update stream deposit
+            stream.deposit += netDeposit;
+        }
+
+        // Add recipient to array (need to create new array)
+        address[] memory newRecipients = new address[](stream.recipients.length + 1);
+        for (uint256 i = 0; i < stream.recipients.length; i++) {
+            newRecipients[i] = stream.recipients[i];
+        }
+        newRecipients[stream.recipients.length] = recipient;
+        stream.recipients = newRecipients;
+
+        // Store recipient rate and initialize tracking
+        _recipientRates[streamId][recipient] = ratePerSecond;
+        _recipientLastWithdraw[streamId][recipient] = stream.startTime;
+        _recipientTotalWithdrawn[streamId][recipient] = 0;
+
+        // Update recipient streams mapping
+        _recipientStreams[recipient].push(streamId);
+
+        emit RecipientAdded(streamId, recipient, amountPerPeriod, ratePerSecond);
+    }
+
+    /**
+     * @notice Remove a recipient from an existing stream
+     * @param streamId The stream identifier
+     * @param recipient The recipient address to remove
+     */
+    function removeRecipient(uint256 streamId, address recipient) external nonReentrant {
+        Stream storage stream = _streams[streamId];
+        require(stream.streamId != 0, "DripCore: Stream does not exist");
+        require(
+            stream.status == StreamStatus.Active || stream.status == StreamStatus.Paused,
+            "DripCore: Stream not active or paused"
+        );
+        require(msg.sender == stream.sender, "DripCore: Only sender can modify recipients");
+        require(_isRecipient(stream, recipient), "DripCore: Recipient does not exist");
+
+        // Calculate unaccrued deposit for this recipient
+        uint256 ratePerSecond = _recipientRates[streamId][recipient];
+        uint256 currentTime = block.timestamp;
+        uint256 elapsedTime = currentTime > stream.startTime ? currentTime - stream.startTime : 0;
+        
+        // Account for paused time
+        uint256 totalPausedTime = _pausedTime[streamId];
+        if (stream.status == StreamStatus.Paused && _pauseStartTime[streamId] > 0) {
+            totalPausedTime += (currentTime - _pauseStartTime[streamId]);
+        }
+        if (elapsedTime > totalPausedTime) {
+            elapsedTime -= totalPausedTime;
+        } else {
+            elapsedTime = 0;
+        }
+
+        uint256 totalAccrued = ratePerSecond * elapsedTime;
+        uint256 periodSeconds = stream.endTime - stream.startTime;
+        uint256 totalAllocated = (ratePerSecond * periodSeconds);
+        uint256 unaccruedDeposit = totalAllocated > totalAccrued ? totalAllocated - totalAccrued : 0;
+
+        // Refund unaccrued deposit to sender
+        if (unaccruedDeposit > 0 && stream.deposit >= unaccruedDeposit) {
+            stream.deposit -= unaccruedDeposit;
+            require(
+                TokenHelper.safeTransfer(stream.token, stream.sender, unaccruedDeposit),
+                "DripCore: Refund failed"
+            );
+        }
+
+        // Remove recipient from array
+        address[] memory newRecipients = new address[](stream.recipients.length - 1);
+        uint256 newIndex = 0;
+        for (uint256 i = 0; i < stream.recipients.length; i++) {
+            if (stream.recipients[i] != recipient) {
+                newRecipients[newIndex] = stream.recipients[i];
+                newIndex++;
+            }
+        }
+        stream.recipients = newRecipients;
+
+        // Clear recipient data
+        delete _recipientRates[streamId][recipient];
+        delete _recipientLastWithdraw[streamId][recipient];
+        delete _recipientTotalWithdrawn[streamId][recipient];
+
+        // Remove from recipient streams mapping (find and remove)
+        uint256[] storage recipientStreams = _recipientStreams[recipient];
+        for (uint256 i = 0; i < recipientStreams.length; i++) {
+            if (recipientStreams[i] == streamId) {
+                recipientStreams[i] = recipientStreams[recipientStreams.length - 1];
+                recipientStreams.pop();
+                break;
+            }
+        }
+
+        emit RecipientRemoved(streamId, recipient, unaccruedDeposit);
+    }
+
+    /**
+     * @notice Update a recipient's rate in an existing stream
+     * @param streamId The stream identifier
+     * @param recipient The recipient address
+     * @param newAmountPerPeriod The new amount per period
+     * @param additionalDeposit Additional deposit if increasing rate (0 if decreasing)
+     */
+    function updateRecipientRate(
+        uint256 streamId,
+        address recipient,
+        uint256 newAmountPerPeriod,
+        uint256 additionalDeposit
+    ) external payable nonReentrant {
+        Stream storage stream = _streams[streamId];
+        require(stream.streamId != 0, "DripCore: Stream does not exist");
+        require(
+            stream.status == StreamStatus.Active || stream.status == StreamStatus.Paused,
+            "DripCore: Stream not active or paused"
+        );
+        require(msg.sender == stream.sender, "DripCore: Only sender can modify recipients");
+        require(_isRecipient(stream, recipient), "DripCore: Recipient does not exist");
+        require(newAmountPerPeriod > 0, "DripCore: Invalid amount");
+
+        uint256 oldRatePerSecond = _recipientRates[streamId][recipient];
+        uint256 periodSeconds = stream.endTime - stream.startTime;
+        uint256 newRatePerSecond = newAmountPerPeriod / periodSeconds;
+        require(newRatePerSecond > 0, "DripCore: Rate too small");
+
+        // Calculate difference in total allocation
+        uint256 oldTotalAllocation = oldRatePerSecond * periodSeconds;
+        uint256 newTotalAllocation = newRatePerSecond * periodSeconds;
+
+        if (newTotalAllocation > oldTotalAllocation) {
+            // Rate increased - need additional deposit
+            uint256 requiredDeposit = newTotalAllocation - oldTotalAllocation;
+            require(additionalDeposit >= requiredDeposit, "DripCore: Insufficient additional deposit");
+
+            if (requiredDeposit > 0) {
+                // Calculate platform fee
+                uint256 fee = (requiredDeposit * platformFeeBps) / 10000;
+                uint256 netDeposit = requiredDeposit - fee;
+
+                // Handle payment
+                if (stream.token == TokenHelper.NATIVE_TOKEN) {
+                    require(msg.value == requiredDeposit, "DripCore: Incorrect native amount");
+                    // Transfer fee to platform
+                    if (fee > 0) {
+                        (bool success, ) = platformFeeRecipient.call{value: fee}("");
+                        require(success, "DripCore: Fee transfer failed");
+                    }
+                } else {
+                    require(msg.value == 0, "DripCore: Native token not expected");
+                    // Transfer tokens from sender
+                    require(
+                        TokenHelper.safeTransferFrom(stream.token, msg.sender, address(this), netDeposit),
+                        "DripCore: Token transfer failed"
+                    );
+                    // Transfer fee to platform
+                    if (fee > 0) {
+                        require(
+                            TokenHelper.safeTransferFrom(stream.token, msg.sender, platformFeeRecipient, fee),
+                            "DripCore: Fee transfer failed"
+                        );
+                    }
+                }
+
+                stream.deposit += netDeposit;
+            }
+        } else {
+            // Rate decreased - refund difference
+            uint256 refundAmount = oldTotalAllocation - newTotalAllocation;
+            if (refundAmount > 0 && stream.deposit >= refundAmount) {
+                stream.deposit -= refundAmount;
+                require(
+                    TokenHelper.safeTransfer(stream.token, stream.sender, refundAmount),
+                    "DripCore: Refund failed"
+                );
+            }
+        }
+
+        // Update recipient rate
+        _recipientRates[streamId][recipient] = newRatePerSecond;
+
+        emit RecipientRateUpdated(streamId, recipient, oldRatePerSecond, newRatePerSecond);
+    }
+
+    /**
      * @notice Get stream details
      * @param streamId The stream identifier
      * @return stream The stream structure
