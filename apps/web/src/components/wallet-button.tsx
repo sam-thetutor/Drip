@@ -10,14 +10,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { celo, celoAlfajores } from "wagmi/chains";
+import { celo } from "wagmi/chains";
 import { celoSepolia } from "@/lib/contracts/config";
 import { formatEther } from "viem";
 import { ChevronDown, LogOut } from "lucide-react";
 
+// Only support Sepolia testnet and Celo Mainnet
 const CHAINS = [
   { id: celo.id, name: "Celo Mainnet" },
-  { id: celoAlfajores.id, name: "Celo Alfajores" },
   { id: celoSepolia.id, name: "Celo Sepolia" },
 ];
 

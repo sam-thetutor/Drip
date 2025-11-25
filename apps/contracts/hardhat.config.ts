@@ -2,6 +2,13 @@ import type { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox-viem";
 import "@nomicfoundation/hardhat-ethers";
 
+// Load environment variables from .env file if it exists
+try {
+  require("dotenv").config();
+} catch (e) {
+  // dotenv not installed, continue without it
+}
+
 const config: HardhatUserConfig = {
   solidity: {
     version: "0.8.20",

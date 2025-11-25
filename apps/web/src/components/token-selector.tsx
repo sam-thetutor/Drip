@@ -8,7 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CELO_MAINNET_ID, CELO_ALFAJORES_ID, CELO_SEPOLIA_ID } from "@/lib/contracts/config";
+import { CELO_MAINNET_ID, CELO_SEPOLIA_ID } from "@/lib/contracts/config";
 
 export interface Token {
   symbol: string;
@@ -17,15 +17,9 @@ export interface Token {
   name: string;
 }
 
-// Token addresses by network
+// Token addresses by network - Supporting only Sepolia testnet and Mainnet
 const TOKENS_BY_NETWORK: Record<number, Token[]> = {
   [CELO_MAINNET_ID]: [
-    { symbol: "CELO", address: "0x0000000000000000000000000000000000000000", decimals: 18, name: "Celo" },
-    { symbol: "cUSD", address: "0x765de816845861e75a25fca122bb6898b8b1282a", decimals: 18, name: "Celo Dollar" },
-    { symbol: "USDC", address: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", decimals: 6, name: "USD Coin" },
-    { symbol: "USDT", address: "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", decimals: 6, name: "Tether" },
-  ],
-  [CELO_ALFAJORES_ID]: [
     { symbol: "CELO", address: "0x0000000000000000000000000000000000000000", decimals: 18, name: "Celo" },
     { symbol: "cUSD", address: "0x765de816845861e75a25fca122bb6898b8b1282a", decimals: 18, name: "Celo Dollar" },
     { symbol: "USDC", address: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", decimals: 6, name: "USD Coin" },
