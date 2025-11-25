@@ -8,7 +8,7 @@ const SubscriptionManagerABI = SubscriptionManagerABIJson as { abi: readonly unk
 
 export { DripCoreABI, SubscriptionManagerABI };
 
-// Export ABIs as const for better type inference
-export const DRIP_CORE_ABI = DripCoreABI.abi as const;
-export const SUBSCRIPTION_MANAGER_ABI = SubscriptionManagerABI.abi as const;
+// Export ABIs for use in contracts
+export const DRIP_CORE_ABI = DripCoreABI.abi;
+export const SUBSCRIPTION_MANAGER_ABI = SubscriptionManagerABI.abi;
 

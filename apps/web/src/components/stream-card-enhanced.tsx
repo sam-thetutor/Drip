@@ -146,11 +146,11 @@ export function StreamCardEnhanced({
   const isUserSender = address && sender.toLowerCase() === address.toLowerCase();
 
   return (
-    <Card className="hover:shadow-lg transition-shadow cursor-pointer">
+    <Card className="glass-card card-hover cursor-pointer w-full">
       <CardHeader>
         <div className="flex items-center justify-between">
           <div className="flex-1">
-            <CardTitle className="text-lg">
+            <CardTitle className="text-lg text-foreground">
               {title || `Stream #${streamId.toString()}`}
             </CardTitle>
             <p className="text-xs text-muted-foreground mt-1">
@@ -159,22 +159,22 @@ export function StreamCardEnhanced({
           </div>
           <div className="flex items-center gap-2">
             {isActive && !isPaused && (
-              <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
+              <span className="px-2 py-1 text-xs font-medium bg-green/20 text-green rounded-full border border-green/30">
                 Active
               </span>
             )}
             {isPaused && (
-              <span className="px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
+              <span className="px-2 py-1 text-xs font-medium bg-orange/20 text-orange rounded-full border border-orange/30">
                 Paused
               </span>
             )}
             {isCompleted && (
-              <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+              <span className="px-2 py-1 text-xs font-medium bg-muted text-muted-foreground rounded-full border border-border">
                 Completed
               </span>
             )}
             {isCancelled && (
-              <span className="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded-full">
+              <span className="px-2 py-1 text-xs font-medium bg-destructive/20 text-destructive rounded-full border border-destructive/30">
                 Cancelled
               </span>
             )}
@@ -201,18 +201,18 @@ export function StreamCardEnhanced({
               <span>{getTimeRemaining()}</span>
             </div>
           )}
-          {isUserRecipient && userBalance !== undefined && (
-            <div className="flex justify-between pt-2 border-t">
+          {isUserRecipient && userBalance !== undefined && userBalance !== null && (
+            <div className="flex justify-between pt-2 border-t border-border">
               <span className="text-muted-foreground">Your Balance:</span>
-              <span className="font-semibold text-green-600">
-                {formatTokenAmount(userBalance, decimals)} {symbol}
+              <span className="font-semibold text-green">
+                {formatTokenAmount((userBalance ?? 0n) as bigint, decimals)} {symbol}
               </span>
             </div>
           )}
         </div>
 
         {/* Action Buttons */}
-        <div className="flex gap-2 pt-2 border-t">
+        <div className="flex gap-2 pt-2 border-t border-border">
           {isUserSender && (isActive || isPaused) && (
             <>
               {!isPaused ? (
@@ -250,7 +250,7 @@ export function StreamCardEnhanced({
               </Button>
             </>
           )}
-          {isUserRecipient && userBalance !== undefined && userBalance > 0n && (
+          {isUserRecipient && userBalance !== undefined && userBalance !== null && typeof userBalance === 'bigint' && userBalance > 0n && (
             <Button
               variant="default"
               size="sm"

@@ -40,7 +40,7 @@ export function WithdrawModal({ streamId, recipient, token, onClose }: WithdrawM
   // Get token info for formatting
   const tokenInfo = getTokenByAddress(token, chainId) || { decimals: 18, symbol: "CELO" };
 
-  const maxAmount = balance || 0n;
+  const maxAmount = (typeof balance === 'bigint' ? balance : 0n);
   const formattedMax = formatTokenAmount(maxAmount, tokenInfo.decimals);
 
   const handleWithdraw = async () => {

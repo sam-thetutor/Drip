@@ -59,12 +59,12 @@ export function useSubscription() {
     const amountInWei = parseEther(amount); // Assuming 18 decimals - should be dynamic
 
     // For native CELO, send the amount as value (optional initial deposit)
-    const value = token === "0x0000000000000000000000000000000000000000" ? amountInWei : 0n;
+    const isNativeToken = token === "0x0000000000000000000000000000000000000000";
 
-    return writeContract({
+    const baseContract = {
       address: contractAddress,
       abi: SUBSCRIPTION_MANAGER_ABI,
-      functionName: "createSubscription",
+      functionName: "createSubscription" as const,
       args: [
         recipient,
         token,
@@ -75,8 +75,11 @@ export function useSubscription() {
         title,
         description,
       ],
-      value,
-    });
+    };
+
+    return writeContract(
+      (isNativeToken ? { ...baseContract, value: amountInWei } : baseContract) as any
+    );
   };
 
   /**
@@ -93,15 +96,18 @@ export function useSubscription() {
 
     const amountInWei = parseEther(amount); // Assuming 18 decimals - should be dynamic
 
-    const value = token === "0x0000000000000000000000000000000000000000" ? amountInWei : 0n;
+    const isNativeToken = token === "0x0000000000000000000000000000000000000000";
 
-    return writeContract({
+    const baseContract = {
       address: contractAddress,
       abi: SUBSCRIPTION_MANAGER_ABI,
-      functionName: "depositToSubscription",
+      functionName: "depositToSubscription" as const,
       args: [subscriptionId, amountInWei, token],
-      value,
-    });
+    };
+
+    return writeContract(
+      (isNativeToken ? { ...baseContract, value: amountInWei } : baseContract) as any
+    );
   };
 
   /**

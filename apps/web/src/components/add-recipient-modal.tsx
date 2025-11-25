@@ -79,7 +79,7 @@ export function AddRecipientModal({
   useEffect(() => {
     if (error) {
       console.error("Transaction error:", error);
-      const errorMessage = error?.message || error?.reason || "Failed to add recipient";
+      const errorMessage = error?.message || "Failed to add recipient";
       toast.error(errorMessage, { id: "add-recipient", duration: 5000 });
     }
   }, [error]);

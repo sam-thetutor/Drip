@@ -95,8 +95,8 @@ export function useAllUserStreams(userAddress: `0x${string}` | undefined) {
       return undefined;
     }
     
-    const sent = sentStreams.streams || [];
-    const received = receivedStreams.streams || [];
+    const sent = (sentStreams.streams || []) as any[];
+    const received = (receivedStreams.streams || []) as any[];
     
     // If both are empty arrays, return empty array
     if (sent.length === 0 && received.length === 0) {

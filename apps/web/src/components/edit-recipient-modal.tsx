@@ -48,7 +48,7 @@ export function EditRecipientModal({
 
   // Calculate current amount per period from rate
   useEffect(() => {
-    const currentAmount = (Number(currentRate) * periodSeconds) / 10n ** BigInt(tokenInfo.decimals);
+    const currentAmount = (Number(currentRate) * periodSeconds) / Number(10n ** BigInt(tokenInfo.decimals));
     setNewAmountPerPeriod(currentAmount.toFixed(6));
   }, [currentRate, periodSeconds, tokenInfo.decimals]);
 
@@ -60,7 +60,7 @@ export function EditRecipientModal({
     }
 
     try {
-      const currentAmount = (Number(currentRate) * periodSeconds) / 10n ** BigInt(tokenInfo.decimals);
+      const currentAmount = (Number(currentRate) * periodSeconds) / Number(10n ** BigInt(tokenInfo.decimals));
       const newAmount = parseFloat(newAmountPerPeriod);
       const difference = newAmount - currentAmount;
       setAdditionalDeposit(difference > 0 ? difference.toFixed(6) : "0.000000");
@@ -92,7 +92,7 @@ export function EditRecipientModal({
     }
   };
 
-  const currentAmountPerPeriod = (Number(currentRate) * periodSeconds) / 10n ** BigInt(tokenInfo.decimals);
+  const currentAmountPerPeriod = (Number(currentRate) * periodSeconds) / Number(10n ** BigInt(tokenInfo.decimals));
 
   return (
     <Dialog open={true} onOpenChange={onClose}>

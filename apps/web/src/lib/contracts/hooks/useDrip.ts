@@ -50,15 +50,18 @@ export function useDrip() {
     const depositInWei = parseEther(deposit);
 
     // For native CELO, send the deposit as value
-    const value = token === "0x0000000000000000000000000000000000000000" ? depositInWei : 0n;
-
-    return writeContract({
+    const isNativeToken = token === "0x0000000000000000000000000000000000000000";
+    
+    const baseContract = {
       address: contractAddress,
       abi: DRIP_CORE_ABI,
-      functionName: "createStream",
+      functionName: "createStream" as const,
       args: [recipients, token, amountsInWei, BigInt(periodSeconds), depositInWei, title, description],
-      value,
-    });
+    };
+    
+    return writeContract(
+      (isNativeToken ? { ...baseContract, value: depositInWei } : baseContract) as any
+    );
   };
 
   /**
@@ -154,15 +157,18 @@ export function useDrip() {
     const amountPerPeriodInWei = parseUnits(amountPerPeriod, decimals);
     const depositInWei = parseUnits(additionalDeposit, decimals);
 
-    const value = token === "0x0000000000000000000000000000000000000000" ? depositInWei : 0n;
+    const isNativeToken = token === "0x0000000000000000000000000000000000000000";
 
-    return writeContract({
+    const baseContract = {
       address: contractAddress,
       abi: DRIP_CORE_ABI,
-      functionName: "addRecipient",
+      functionName: "addRecipient" as const,
       args: [streamId, recipient, amountPerPeriodInWei, depositInWei],
-      value,
-    });
+    };
+
+    return writeContract(
+      (isNativeToken ? { ...baseContract, value: depositInWei } : baseContract) as any
+    );
   };
 
   /**
@@ -206,15 +212,18 @@ export function useDrip() {
     const amountPerPeriodInWei = parseEther(newAmountPerPeriod);
     const depositInWei = parseEther(additionalDeposit);
 
-    const value = token === "0x0000000000000000000000000000000000000000" ? depositInWei : 0n;
+    const isNativeToken = token === "0x0000000000000000000000000000000000000000";
 
-    return writeContract({
+    const baseContract = {
       address: contractAddress,
       abi: DRIP_CORE_ABI,
-      functionName: "updateRecipientRate",
+      functionName: "updateRecipientRate" as const,
       args: [streamId, recipient, amountPerPeriodInWei, depositInWei],
-      value,
-    });
+    };
+
+    return writeContract(
+      (isNativeToken ? { ...baseContract, value: depositInWei } : baseContract) as any
+    );
   };
 
   return {
@@ -267,7 +276,7 @@ export function useRecipientBalance(streamId: bigint | undefined, recipient: `0x
     return getContractAddress(chainId, "DripCore");
   }, [chainId]);
 
-  const { data: balance, isLoading, error } = useReadContract({
+  const { data: balance, isLoading, error, refetch } = useReadContract({
     address: contractAddress || undefined,
     abi: DRIP_CORE_ABI,
     functionName: "getRecipientBalance",
@@ -277,7 +286,7 @@ export function useRecipientBalance(streamId: bigint | undefined, recipient: `0x
     },
   });
 
-  return { balance, isLoading, error };
+  return { balance, isLoading, error, refetch };
 }
 
 /**

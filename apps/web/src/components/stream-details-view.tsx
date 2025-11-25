@@ -55,7 +55,7 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
             {isStreamNotFound && (
               <div className="space-y-2">
                 <p className="text-sm text-muted-foreground">
-                  The contract was recently redeployed with new features. Please create a new stream.
+                  The contract was recently redeployed with new features. Please create a new streamData.
                 </p>
                 <div className="flex gap-2 justify-center">
                   <Button asChild variant="outline">
@@ -73,18 +73,20 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
     );
   }
 
-  const tokenInfo = getTokenByAddress(stream.token as `0x${string}`, chainId);
+  // Type assertion: stream is guaranteed to exist at this point
+  const streamData = stream as any;
+  const tokenInfo = getTokenByAddress(streamData.token as `0x${string}`, chainId);
   const decimals = tokenInfo?.decimals || 18;
   const symbol = tokenInfo?.symbol || "Token";
 
-  const status = Number(stream.status);
+  const status = Number(streamData.status);
   const isPaused = status === 1;
   const isActive = status === 0;
   const isCompleted = status === 2;
   const isCancelled = status === 3;
 
-  const startTime = Number(stream.startTime);
-  const endTime = Number(stream.endTime);
+  const startTime = Number(streamData.startTime);
+  const endTime = Number(streamData.endTime);
   const now = Math.floor(Date.now() / 1000);
   const elapsed = Math.max(0, now - startTime);
   const remaining = Math.max(0, endTime - now);
@@ -108,13 +110,13 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
   };
 
   // Calculate analytics
-  const totalDeposit = stream.deposit;
-  const allRecipients = recipientsInfo || [];
+  const totalDeposit = BigInt(streamData.deposit || 0);
+  const allRecipients = (recipientsInfo || []) as any[];
   
   // Filter recipients based on user role
   // If user is recipient (not sender), only show their own info
-  const isUserSender = address && stream.sender.toLowerCase() === address.toLowerCase();
-  const isUserRecipient = address && !isUserSender && stream.recipients.some(
+  const isUserSender = address && streamData.sender.toLowerCase() === address.toLowerCase();
+  const isUserRecipient = address && !isUserSender && streamData.recipients.some(
     (r: string) => r.toLowerCase() === address.toLowerCase()
   );
   
@@ -144,7 +146,7 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
 
   const handlePause = async () => {
     try {
-      toast.loading("Pausing stream...", { id: "pause-stream" });
+      toast.loading("Pausing streamData...", { id: "pause-stream" });
       await pauseStream(streamId);
       toast.success("Stream paused", { id: "pause-stream" });
     } catch (error: any) {
@@ -154,7 +156,7 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
 
   const handleResume = async () => {
     try {
-      toast.loading("Resuming stream...", { id: "resume-stream" });
+      toast.loading("Resuming streamData...", { id: "resume-stream" });
       await resumeStream(streamId);
       toast.success("Stream resumed", { id: "resume-stream" });
     } catch (error: any) {
@@ -167,7 +169,7 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
       return;
     }
     try {
-      toast.loading("Cancelling stream...", { id: "cancel-stream" });
+      toast.loading("Cancelling streamData...", { id: "cancel-stream" });
       await cancelStream(streamId);
       toast.success("Stream cancelled", { id: "cancel-stream" });
     } catch (error: any) {
@@ -190,10 +192,10 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="text-2xl mb-2">
-                {stream.title || `Stream #${streamId.toString()}`}
+                {streamData.title || `Stream #${streamId.toString()}`}
               </CardTitle>
-              {stream.description && (
-                <p className="text-muted-foreground">{stream.description}</p>
+              {streamData.description && (
+                <p className="text-muted-foreground">{streamData.description}</p>
               )}
             </div>
             <div className="flex items-center gap-2">
@@ -224,7 +226,7 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
               <p className="text-sm text-muted-foreground">From</p>
-              <p className="font-mono text-sm">{formatAddress(stream.sender)}</p>
+              <p className="font-mono text-sm">{formatAddress(streamData.sender)}</p>
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Token</p>
@@ -351,7 +353,7 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
             <CardTitle>
               {isUserRecipient 
                 ? "Your Recipient Info" 
-                : `Recipients (${isUserSender ? stream.recipients.length : recipients.length})`}
+                : `Recipients (${isUserSender ? streamData.recipients.length : recipients.length})`}
             </CardTitle>
             {isUserSender && (isActive || isPaused) && (
               <Button onClick={() => setShowAddRecipient(true)} size="sm">
@@ -482,7 +484,7 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
         <WithdrawModal
           streamId={streamId}
           recipient={withdrawRecipient}
-          token={stream.token as `0x${string}`}
+          token={streamData.token as `0x${string}`}
           onClose={() => setWithdrawRecipient(null)}
         />
       )}
@@ -491,7 +493,7 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
       {showAddRecipient && (
         <AddRecipientModal
           streamId={streamId}
-          token={stream.token as `0x${string}`}
+          token={streamData.token as `0x${string}`}
           periodSeconds={periodSeconds}
           onClose={() => setShowAddRecipient(false)}
           onSuccess={() => {
@@ -507,7 +509,7 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
         <EditRecipientModal
           streamId={streamId}
           recipient={editRecipient.address}
-          token={stream.token as `0x${string}`}
+          token={streamData.token as `0x${string}`}
           currentRate={editRecipient.rate}
           periodSeconds={periodSeconds}
           onClose={() => setEditRecipient(null)}
