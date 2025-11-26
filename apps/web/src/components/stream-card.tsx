@@ -56,7 +56,7 @@ export function StreamCard({
   };
 
   return (
-    <Card>
+    <Card className="glass-card">
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg">Stream #{streamId.toString()}</CardTitle>

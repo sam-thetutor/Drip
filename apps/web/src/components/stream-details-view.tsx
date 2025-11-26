@@ -44,7 +44,7 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
     const isStreamNotFound = errorMessage.includes("Stream does not exist") || errorMessage.includes("not found");
     
     return (
-      <Card>
+      <Card className="glass-card">
         <CardContent className="pt-6">
           <div className="text-center space-y-4">
             <p className="text-destructive">
@@ -187,7 +187,7 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
   return (
     <div className="space-y-6">
       {/* Stream Header */}
-      <Card>
+      <Card className="glass-card">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
@@ -274,7 +274,7 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
         {isUserRecipient ? (
           // Show recipient-specific analytics
           <>
-            <Card>
+            <Card className="glass-card">
               <CardContent className="pt-6">
                 <div className="text-2xl font-bold text-blue-600">
                   {formatTokenAmount(totalAccrued, decimals)}
@@ -282,7 +282,7 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
                 <div className="text-sm text-muted-foreground">Available to Withdraw ({symbol})</div>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="glass-card">
               <CardContent className="pt-6">
                 <div className="text-2xl font-bold text-green-600">
                   {formatTokenAmount(totalWithdrawn, decimals)}
@@ -290,7 +290,7 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
                 <div className="text-sm text-muted-foreground">Total Withdrawn ({symbol})</div>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="glass-card">
               <CardContent className="pt-6">
                 <div className="text-2xl font-bold">
                   {formatTokenAmount(totalWithdrawn + totalAccrued, decimals)}
@@ -298,7 +298,7 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
                 <div className="text-sm text-muted-foreground">Total Received ({symbol})</div>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="glass-card">
               <CardContent className="pt-6">
                 <div className="text-2xl font-bold">
                   {formatTokenAmount(recipients[0]?.ratePerSecond || 0n, decimals)}
@@ -310,7 +310,7 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
         ) : (
           // Show sender analytics (all recipients)
           <>
-            <Card>
+            <Card className="glass-card">
               <CardContent className="pt-6">
                 <div className="text-2xl font-bold">
                   {formatTokenAmount(totalDeposit, decimals)}
@@ -318,7 +318,7 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
                 <div className="text-sm text-muted-foreground">Total Deposit ({symbol})</div>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="glass-card">
               <CardContent className="pt-6">
                 <div className="text-2xl font-bold text-green-600">
                   {formatTokenAmount(totalDistributed, decimals)}
@@ -326,7 +326,7 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
                 <div className="text-sm text-muted-foreground">Total Distributed ({symbol})</div>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="glass-card">
               <CardContent className="pt-6">
                 <div className="text-2xl font-bold text-blue-600">
                   {formatTokenAmount(totalAccrued, decimals)}
@@ -334,7 +334,7 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
                 <div className="text-sm text-muted-foreground">Available to Withdraw ({symbol})</div>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="glass-card">
               <CardContent className="pt-6">
                 <div className="text-2xl font-bold">
                   {formatTokenAmount(remainingDeposit, decimals)}
@@ -347,7 +347,7 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
       </div>
 
       {/* Recipients List */}
-      <Card>
+      <Card className="glass-card">
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>
@@ -462,7 +462,7 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
       </Card>
 
       {/* Contract Link */}
-      <Card>
+      <Card className="glass-card">
         <CardContent className="pt-6">
           <div className="flex items-center justify-between">
             <div>

@@ -69,7 +69,7 @@ export function SubscriptionCard({
   };
 
   return (
-    <Card>
+    <Card className="glass-card">
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg">Subscription #{subscriptionId.toString()}</CardTitle>

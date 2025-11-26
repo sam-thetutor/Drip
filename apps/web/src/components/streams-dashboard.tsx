@@ -58,7 +58,7 @@ export function StreamsDashboard() {
 
   if (!isConnected || !address) {
     return (
-      <Card>
+      <Card className="glass-card">
         <CardContent className="pt-6">
           <p className="text-center text-muted-foreground">
             Please connect your wallet to view your streams
@@ -79,7 +79,7 @@ export function StreamsDashboard() {
 
   if (error) {
     return (
-      <Card>
+      <Card className="glass-card">
         <CardContent className="pt-6">
           <p className="text-center text-destructive">
             Error loading streams: {error.message}

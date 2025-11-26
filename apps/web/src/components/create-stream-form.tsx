@@ -153,10 +153,10 @@ export function CreateStreamForm() {
 
   if (!isConnected) {
     return (
-      <Card>
+      <Card className="glass-card">
         <CardContent className="pt-6">
           <p className="text-center text-muted-foreground">
-            Please connect your wallet to create a stream
+            Connect your wallet to set up a payment stream.
           </p>
         </CardContent>
       </Card>
@@ -165,20 +165,150 @@ export function CreateStreamForm() {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-      <Card>
+      {/* Row: basics + schedule (2 columns on desktop) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* 1. Stream basics */}
+        <Card className="glass-card">
+          <CardHeader>
+            <CardTitle>Stream basics</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Give this stream a short name and an optional description so you and your team
+              know what it&apos;s for.
+            </p>
+
+            <div className="space-y-2">
+              <Label htmlFor="title">Stream name</Label>
+              <Input
+                id="title"
+                placeholder="e.g. Team Salary – Engineering"
+                maxLength={120}
+                {...register("title")}
+              />
+              {errors.title && (
+                <p className="text-sm text-destructive">{errors.title.message}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="description">What is this stream for? (optional)</Label>
+              <textarea
+                id="description"
+                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder="Short note for your future self or your team…"
+                maxLength={1024}
+                {...register("description")}
+              />
+              {errors.description && (
+                <p className="text-sm text-destructive">
+                  {errors.description.message}
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 3. Schedule & funding */}
+        <Card className="glass-card">
+          <CardHeader>
+            <CardTitle>Schedule &amp; funding</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="token">Payment token</Label>
+              <TokenSelector
+                value={watchedToken as `0x${string}`}
+                onValueChange={(value) => {
+                  setValue("token", value);
+                }}
+              />
+              <p className="text-xs text-muted-foreground">
+                Choose what you&apos;re streaming (CELO, cUSD, USDC…).
+              </p>
+              {errors.token && (
+                <p className="text-sm text-destructive">{errors.token.message}</p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="periodDays">How often should it drip? (days)</Label>
+                <Input
+                  id="periodDays"
+                  type="number"
+                  step="0.1"
+                  min="0.1"
+                  placeholder="e.g. 30 for monthly"
+                  {...register("periodDays")}
+                />
+                {errors.periodDays && (
+                  <p className="text-sm text-destructive">
+                    {errors.periodDays.message}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="totalPeriods">Number of payments</Label>
+                <Input
+                  id="totalPeriods"
+                  type="number"
+                  min="1"
+                  placeholder="e.g. 12"
+                  {...register("totalPeriods")}
+                />
+                {errors.totalPeriods && (
+                  <p className="text-sm text-destructive">
+                    {errors.totalPeriods.message}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="p-4 bg-muted rounded-lg space-y-1">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium">You&apos;ll deposit now</span>
+                <span className="text-lg font-bold">
+                  {calculatedDeposit}{" "}
+                  {getTokenByAddress(watchedToken as `0x${string}`, chainId)?.symbol ||
+                    "CELO"}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Total deposit = total per period × number of payments. You can top up or stop
+                the stream later.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 2. Recipients & amounts */}
+      <Card className="glass-card">
         <CardHeader>
-          <CardTitle>Recipients</CardTitle>
+          <CardTitle>Recipients &amp; amounts</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Add one or more wallets and how much each receives per period.
+          </p>
+
+          <div className="grid grid-cols-[minmax(0,2.5fr)_minmax(0,1.5fr)_auto] gap-4 text-xs text-muted-foreground px-1">
+            <span>Recipient address</span>
+            <span>Amount per period</span>
+            <span className="sr-only">Actions</span>
+          </div>
+
           {fields.map((field, index) => (
-            <div key={field.id} className="flex gap-4 items-start">
-              <div className="flex-1 space-y-2">
-                <Label htmlFor={`recipient-${index}`}>
-                  Recipient {index + 1} Address
-                </Label>
+            <div
+              key={field.id}
+              className="grid grid-cols-[minmax(0,2.5fr)_minmax(0,1.5fr)_auto] gap-4 items-start"
+            >
+              <div className="space-y-2">
                 <Input
                   id={`recipient-${index}`}
-                  placeholder="0x..."
+                  placeholder="0x… or ENS"
                   {...register(`recipients.${index}.address`)}
                 />
                 {errors.recipients?.[index]?.address && (
@@ -187,15 +317,12 @@ export function CreateStreamForm() {
                   </p>
                 )}
               </div>
-              <div className="flex-1 space-y-2">
-                <Label htmlFor={`amount-${index}`}>
-                  Amount per Period
-                </Label>
+              <div className="space-y-2">
                 <Input
                   id={`amount-${index}`}
                   type="number"
                   step="0.000001"
-                  placeholder="0.0"
+                  placeholder="e.g. 100"
                   {...register(`recipients.${index}.amountPerPeriod`)}
                 />
                 {errors.recipients?.[index]?.amountPerPeriod && (
@@ -210,13 +337,14 @@ export function CreateStreamForm() {
                   variant="ghost"
                   size="icon"
                   onClick={() => remove(index)}
-                  className="mt-8"
+                  className="mt-1"
                 >
                   <X className="h-4 w-4" />
                 </Button>
               )}
             </div>
           ))}
+
           <Button
             type="button"
             variant="outline"
@@ -224,105 +352,11 @@ export function CreateStreamForm() {
             className="w-full"
           >
             <Plus className="h-4 w-4 mr-2" />
-            Add Recipient
+            Add another recipient
           </Button>
-        </CardContent>
-      </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Stream Configuration</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="token">Payment Token</Label>
-            <TokenSelector
-              value={watchedToken as `0x${string}`}
-              onValueChange={(value) => {
-                setValue("token", value);
-              }}
-            />
-            {errors.token && (
-              <p className="text-sm text-destructive">{errors.token.message}</p>
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="periodDays">Period Duration (Days)</Label>
-              <Input
-                id="periodDays"
-                type="number"
-                step="0.1"
-                min="0.1"
-                placeholder="1"
-                {...register("periodDays")}
-              />
-              {errors.periodDays && (
-                <p className="text-sm text-destructive">
-                  {errors.periodDays.message}
-                </p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="totalPeriods">Total Periods</Label>
-              <Input
-                id="totalPeriods"
-                type="number"
-                min="1"
-                placeholder="30"
-                {...register("totalPeriods")}
-              />
-              {errors.totalPeriods && (
-                <p className="text-sm text-destructive">
-                  {errors.totalPeriods.message}
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div className="p-4 bg-muted rounded-lg">
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-medium">Total Deposit:</span>
-              <span className="text-lg font-bold">{calculatedDeposit} {getTokenByAddress(watchedToken as `0x${string}`, chainId)?.symbol || "CELO"}</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Optional Details</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="title">Title (Optional)</Label>
-            <Input
-              id="title"
-              placeholder="e.g., Monthly Salary"
-              maxLength={120}
-              {...register("title")}
-            />
-            {errors.title && (
-              <p className="text-sm text-destructive">{errors.title.message}</p>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="description">Description (Optional)</Label>
-            <textarea
-              id="description"
-              className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-              placeholder="Add a description for this stream..."
-              maxLength={1024}
-              {...register("description")}
-            />
-            {errors.description && (
-              <p className="text-sm text-destructive">
-                {errors.description.message}
-              </p>
-            )}
+          <div className="mt-2 text-xs text-muted-foreground">
+            Total per period is calculated from all recipients above.
           </div>
         </CardContent>
       </Card>

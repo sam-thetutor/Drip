@@ -68,7 +68,7 @@ export function UserBalance() {
   const isUSDTAvailable = USDT_ADDRESS !== "0x0000000000000000000000000000000000000000";
 
   return (
-    <Card className="w-full max-w-md mx-auto mb-8">
+    <Card className="glass-card w-full max-w-md mx-auto mb-8">
       <CardHeader>
         <CardTitle className="text-lg font-medium">Connected Wallet</CardTitle>
         <p className="text-sm text-muted-foreground truncate pt-1">{address}</p>
