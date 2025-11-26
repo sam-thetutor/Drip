@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,14 +30,27 @@ export function DepositSubscriptionModal({
   onClose,
 }: DepositSubscriptionModalProps) {
   const chainId = useChainId();
-  const { depositToSubscription, isPending, isConfirming } = useSubscription();
+  const { depositToSubscription, isPending, isConfirming, isConfirmed } = useSubscription();
   const [amount, setAmount] = useState<string>("");
+  const [hasSubmitted, setHasSubmitted] = useState(false);
 
   // Get token info for formatting
   const tokenInfo = getTokenByAddress(token, chainId) || {
     decimals: 18,
     symbol: "CELO",
   };
+
+  // Watch for transaction confirmation
+  useEffect(() => {
+    if (hasSubmitted && isConfirmed) {
+      toast.success("Deposit successful!", { id: "deposit-sub" });
+      setHasSubmitted(false);
+      // Use setTimeout to avoid calling onClose during render
+      setTimeout(() => {
+        onClose();
+      }, 100);
+    }
+  }, [isConfirmed, hasSubmitted]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDeposit = async () => {
     if (!amount || parseFloat(amount) <= 0) {
@@ -46,12 +59,13 @@ export function DepositSubscriptionModal({
     }
 
     try {
-      toast.loading("Processing deposit...", { id: "deposit-sub" });
+      toast.loading("Submitting transaction...", { id: "deposit-sub" });
       await depositToSubscription(subscriptionId, amount, token);
-      toast.success("Deposit successful!", { id: "deposit-sub" });
-      onClose();
+      setHasSubmitted(true);
+      toast.loading("Waiting for confirmation...", { id: "deposit-sub" });
     } catch (error: any) {
       toast.error(error?.message || "Failed to deposit", { id: "deposit-sub" });
+      setHasSubmitted(false);
     }
   };
 

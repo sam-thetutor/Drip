@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -70,6 +70,19 @@ export function CreateSubscriptionForm() {
     },
   });
 
+  // Watch for transaction confirmation
+  useEffect(() => {
+    if (isConfirmed && hash) {
+      toast.success("Subscription created successfully!", {
+        id: "create-subscription",
+      });
+      // Navigate to subscriptions page after a short delay
+      setTimeout(() => {
+        router.push("/subscriptions");
+      }, 1500);
+    }
+  }, [isConfirmed, hash, router]);
+
   const onSubmit = async (data: SubscriptionFormData) => {
     if (!isConnected || !address) {
       toast.error("Please connect your wallet");
@@ -79,7 +92,7 @@ export function CreateSubscriptionForm() {
     try {
       const cadenceEnum = cadenceToEnum[data.cadence];
 
-      toast.loading("Creating subscription...", { id: "create-subscription" });
+      toast.loading("Submitting transaction...", { id: "create-subscription" });
 
       await createSubscription(
         data.recipient as `0x${string}`,
@@ -92,13 +105,7 @@ export function CreateSubscriptionForm() {
         data.description || ""
       );
 
-      toast.success("Subscription created! Transaction submitted.", {
-        id: "create-subscription",
-      });
-
-      if (hash) {
-        toast.info("Waiting for confirmation...", { id: "confirm-subscription" });
-      }
+      toast.loading("Waiting for confirmation...", { id: "create-subscription" });
     } catch (error: any) {
       toast.error(error?.message || "Failed to create subscription", {
         id: "create-subscription",

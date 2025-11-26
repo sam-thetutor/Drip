@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -22,18 +23,32 @@ export function CancelSubscriptionModal({
   subscriptionId,
   onClose,
 }: CancelSubscriptionModalProps) {
-  const { cancelSubscription, isPending, isConfirming } = useSubscription();
+  const { cancelSubscription, isPending, isConfirming, isConfirmed } = useSubscription();
+  const [hasSubmitted, setHasSubmitted] = useState(false);
+
+  // Watch for transaction confirmation
+  useEffect(() => {
+    if (hasSubmitted && isConfirmed) {
+      toast.success("Subscription cancelled", { id: "cancel-sub" });
+      setHasSubmitted(false);
+      // Use setTimeout to avoid calling onClose during render
+      setTimeout(() => {
+        onClose();
+      }, 100);
+    }
+  }, [isConfirmed, hasSubmitted]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleCancel = async () => {
     try {
-      toast.loading("Cancelling subscription...", { id: "cancel-sub" });
+      toast.loading("Submitting transaction...", { id: "cancel-sub" });
       await cancelSubscription(subscriptionId);
-      toast.success("Subscription cancelled", { id: "cancel-sub" });
-      onClose();
+      setHasSubmitted(true);
+      toast.loading("Waiting for confirmation...", { id: "cancel-sub" });
     } catch (error: any) {
       toast.error(error?.message || "Failed to cancel subscription", {
         id: "cancel-sub",
       });
+      setHasSubmitted(false);
     }
   };
 

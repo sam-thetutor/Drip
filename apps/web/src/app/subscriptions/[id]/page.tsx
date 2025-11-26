@@ -17,6 +17,7 @@ import {
   TrendingUp,
   Wallet,
   Clock,
+  Edit,
 } from "lucide-react";
 import { useAccount } from "wagmi";
 import {
@@ -29,15 +30,17 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatEther } from "viem";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DepositSubscriptionModal } from "@/components/deposit-subscription-modal";
 import { CancelSubscriptionModal } from "@/components/cancel-subscription-modal";
+import { ModifySubscriptionModal } from "@/components/modify-subscription-modal";
 
 export default function SubscriptionDetailsPage() {
   const params = useParams();
   const { address } = useAccount();
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showModifyModal, setShowModifyModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
   const paymentsPerPage = 10;
   const subscriptionId =
@@ -45,10 +48,10 @@ export default function SubscriptionDetailsPage() {
       ? BigInt(params.id)
       : undefined;
 
-  const { subscription, isLoading, error } = useSubscriptionData(
+  const { subscription, isLoading, error, refetch: refetchSubscription } = useSubscriptionData(
     subscriptionId
   );
-  const { balance } = useSubscriptionBalance(subscriptionId);
+  const { balance, refetch: refetchBalance } = useSubscriptionBalance(subscriptionId);
   const { payments, total: totalPayments, isLoading: historyLoading } =
     usePaymentHistory(subscriptionId, currentPage * paymentsPerPage, paymentsPerPage);
   const { isDue, nextPaymentTime: dueNextPaymentTime } = usePaymentDue(
@@ -60,7 +63,9 @@ export default function SubscriptionDetailsPage() {
     resumeSubscription,
     cancelSubscription,
     isPending,
+    isConfirmed,
   } = useSubscription();
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
 
   if (!subscriptionId) {
     return (
@@ -212,16 +217,37 @@ export default function SubscriptionDetailsPage() {
 
   const timeUntilNext = getTimeUntilNextPayment();
 
+  // Watch for transaction confirmation
+  useEffect(() => {
+    if (pendingAction && isConfirmed) {
+      switch (pendingAction) {
+        case "execute":
+          toast.success("Payment executed", { id: "exec-sub" });
+          break;
+        case "pause":
+          toast.success("Subscription paused", { id: "pause-sub" });
+          break;
+        case "resume":
+          toast.success("Subscription resumed", { id: "resume-sub" });
+          break;
+      }
+      setPendingAction(null);
+      refetchSubscription();
+    }
+  }, [isConfirmed, pendingAction, refetchSubscription]);
+
   const handleExecutePayment = async () => {
     if (!isSubscriber || isCancelled) return;
     try {
-      toast.loading("Executing payment...", { id: "exec-sub" });
+      toast.loading("Submitting transaction...", { id: "exec-sub" });
       await executePayment(subscriptionId);
-      toast.success("Payment executed", { id: "exec-sub" });
+      setPendingAction("execute");
+      toast.loading("Waiting for confirmation...", { id: "exec-sub" });
     } catch (e: any) {
       toast.error(e?.message || "Failed to execute payment", {
         id: "exec-sub",
       });
+      setPendingAction(null);
     }
   };
 
@@ -233,28 +259,37 @@ export default function SubscriptionDetailsPage() {
   const handlePause = async () => {
     if (!isSubscriber || !isActive) return;
     try {
-      toast.loading("Pausing subscription...", { id: "pause-sub" });
+      toast.loading("Submitting transaction...", { id: "pause-sub" });
       await pauseSubscription(subscriptionId);
-      toast.success("Subscription paused", { id: "pause-sub" });
+      setPendingAction("pause");
+      toast.loading("Waiting for confirmation...", { id: "pause-sub" });
     } catch (e: any) {
       toast.error(e?.message || "Failed to pause", { id: "pause-sub" });
+      setPendingAction(null);
     }
   };
 
   const handleResume = async () => {
     if (!isSubscriber || !isPaused) return;
     try {
-      toast.loading("Resuming subscription...", { id: "resume-sub" });
+      toast.loading("Submitting transaction...", { id: "resume-sub" });
       await resumeSubscription(subscriptionId);
-      toast.success("Subscription resumed", { id: "resume-sub" });
+      setPendingAction("resume");
+      toast.loading("Waiting for confirmation...", { id: "resume-sub" });
     } catch (e: any) {
       toast.error(e?.message || "Failed to resume", { id: "resume-sub" });
+      setPendingAction(null);
     }
   };
 
   const handleCancel = () => {
     if (!isSubscriber || isCancelled) return;
     setShowCancelModal(true);
+  };
+
+  const handleModify = () => {
+    if (!isSubscriber || isCancelled) return;
+    setShowModifyModal(true);
   };
 
   return (
@@ -468,6 +503,17 @@ export default function SubscriptionDetailsPage() {
                   <Button
                     variant="outline"
                     size="sm"
+                    onClick={handleModify}
+                    disabled={isPending}
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
+                    Modify
+                  </Button>
+                )}
+                {!isCancelled && (
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={handleTopUp}
                     disabled={isPending}
                   >
@@ -496,7 +542,11 @@ export default function SubscriptionDetailsPage() {
           <DepositSubscriptionModal
             subscriptionId={subscriptionId}
             token={sub.token as `0x${string}`}
-            onClose={() => setShowDepositModal(false)}
+            onClose={() => {
+              setShowDepositModal(false);
+              refetchBalance();
+              refetchSubscription();
+            }}
           />
         )}
 
@@ -505,6 +555,21 @@ export default function SubscriptionDetailsPage() {
           <CancelSubscriptionModal
             subscriptionId={subscriptionId}
             onClose={() => setShowCancelModal(false)}
+          />
+        )}
+
+        {/* Modify Modal */}
+        {showModifyModal && (
+          <ModifySubscriptionModal
+            subscriptionId={subscriptionId}
+            token={sub.token as `0x${string}`}
+            currentAmount={sub.amount as bigint}
+            currentCadence={Number(sub.cadence ?? 0)}
+            currentInterval={sub.interval as bigint}
+            onClose={() => {
+              setShowModifyModal(false);
+              refetchSubscription();
+            }}
           />
         )}
 

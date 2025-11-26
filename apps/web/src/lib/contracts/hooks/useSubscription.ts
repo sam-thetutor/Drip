@@ -238,7 +238,7 @@ export function useSubscriptionData(subscriptionId: bigint | undefined) {
     return getContractAddress(chainId, "SubscriptionManager");
   }, [chainId]);
 
-  const { data: subscription, isLoading, error } = useReadContract({
+  const { data: subscription, isLoading, error, refetch } = useReadContract({
     address: contractAddress || undefined,
     abi: SUBSCRIPTION_MANAGER_ABI,
     functionName: "getSubscription",
@@ -248,7 +248,7 @@ export function useSubscriptionData(subscriptionId: bigint | undefined) {
     },
   });
 
-  return { subscription, isLoading, error };
+  return { subscription, isLoading, error, refetch };
 }
 
 /**
@@ -260,7 +260,7 @@ export function useSubscriptionBalance(subscriptionId: bigint | undefined) {
     return getContractAddress(chainId, "SubscriptionManager");
   }, [chainId]);
 
-  const { data: balance, isLoading, error } = useReadContract({
+  const { data: balance, isLoading, error, refetch } = useReadContract({
     address: contractAddress || undefined,
     abi: SUBSCRIPTION_MANAGER_ABI,
     functionName: "getSubscriptionBalance",
@@ -270,7 +270,7 @@ export function useSubscriptionBalance(subscriptionId: bigint | undefined) {
     },
   });
 
-  return { balance, isLoading, error };
+  return { balance, isLoading, error, refetch };
 }
 
 /**
