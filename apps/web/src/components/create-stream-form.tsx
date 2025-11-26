@@ -29,10 +29,9 @@ const streamSchema = z.object({
     )
     .min(1, "At least one recipient required"),
   token: z.string().regex(/^0x[a-fA-F0-9]{40}$/, "Token required"),
-  periodDays: z.string().min(1, "Period required").refine(
-    (val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0,
-    "Must be a positive number"
-  ),
+  cadence: z.enum(["hourly", "daily", "weekly", "monthly", "quarterly"], {
+    required_error: "Choose how often it should drip",
+  }),
   totalPeriods: z.string().min(1, "Total periods required").refine(
     (val) => !isNaN(parseInt(val)) && parseInt(val) > 0,
     "Must be a positive integer"
@@ -42,6 +41,8 @@ const streamSchema = z.object({
 });
 
 type StreamFormData = z.infer<typeof streamSchema>;
+
+type CadenceOption = StreamFormData["cadence"];
 
 export function CreateStreamForm() {
   const { address, isConnected } = useAccount();
@@ -62,7 +63,7 @@ export function CreateStreamForm() {
     defaultValues: {
       recipients: [{ address: "", amountPerPeriod: "" }],
       token: "0x0000000000000000000000000000000000000000", // Default to CELO
-      periodDays: "1",
+      cadence: "monthly",
       totalPeriods: "30",
       title: "",
       description: "",
@@ -76,7 +77,6 @@ export function CreateStreamForm() {
 
   const watchedRecipients = watch("recipients");
   const watchedToken = watch("token");
-  const watchedPeriodDays = watch("periodDays");
   const watchedTotalPeriods = watch("totalPeriods");
 
   // Calculate deposit when values change
@@ -116,7 +116,15 @@ export function CreateStreamForm() {
         return;
       }
 
-      const periodSeconds = parseFloat(data.periodDays) * 24 * 60 * 60;
+      const cadenceToSeconds: Record<CadenceOption, number> = {
+        hourly: 60 * 60,
+        daily: 24 * 60 * 60,
+        weekly: 7 * 24 * 60 * 60,
+        monthly: 30 * 24 * 60 * 60,
+        quarterly: 90 * 24 * 60 * 60,
+      };
+
+      const periodSeconds = cadenceToSeconds[data.cadence];
       const recipients = data.recipients.map((r) => r.address as `0x${string}`);
       const amountsPerPeriod = data.recipients.map((r) => r.amountPerPeriod);
 
@@ -233,18 +241,21 @@ export function CreateStreamForm() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="periodDays">How often should it drip? (days)</Label>
-                <Input
-                  id="periodDays"
-                  type="number"
-                  step="0.1"
-                  min="0.1"
-                  placeholder="e.g. 30 for monthly"
-                  {...register("periodDays")}
-                />
-                {errors.periodDays && (
+                <Label htmlFor="cadence">How often should it drip?</Label>
+                <select
+                  id="cadence"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  {...register("cadence")}
+                >
+                  <option value="hourly">Every hour</option>
+                  <option value="daily">Every day</option>
+                  <option value="weekly">Every week</option>
+                  <option value="monthly">Every month</option>
+                  <option value="quarterly">Every quarter</option>
+                </select>
+                {errors.cadence && (
                   <p className="text-sm text-destructive">
-                    {errors.periodDays.message}
+                    {errors.cadence.message}
                   </p>
                 )}
               </div>
