@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
+import { CreateSubscriptionForm } from "@/components/create-subscription-form";
 
 export default function CreateSubscriptionPage() {
   return (
@@ -20,12 +21,7 @@ export default function CreateSubscriptionPage() {
           </p>
         </div>
 
-        {/* Form Placeholder */}
-        <div className="border rounded-lg p-8">
-          <p className="text-muted-foreground text-center">
-            Subscription creation form will be implemented here
-          </p>
-        </div>
+        <CreateSubscriptionForm />
       </div>
     </main>
   );

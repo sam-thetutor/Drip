@@ -58,9 +58,6 @@ export function useSubscription() {
 
     const amountInWei = parseEther(amount); // Assuming 18 decimals - should be dynamic
 
-    // For native CELO, send the amount as value (optional initial deposit)
-    const isNativeToken = token === "0x0000000000000000000000000000000000000000";
-
     const baseContract = {
       address: contractAddress,
       abi: SUBSCRIPTION_MANAGER_ABI,
@@ -77,9 +74,9 @@ export function useSubscription() {
       ],
     };
 
-    return writeContract(
-      (isNativeToken ? { ...baseContract, value: amountInWei } : baseContract) as any
-    );
+    // Note: createSubscription does not escrow funds; deposits are done via depositToSubscription.
+    // We intentionally do NOT send value here, even for native CELO.
+    return writeContract(baseContract as any);
   };
 
   /**
@@ -102,7 +99,7 @@ export function useSubscription() {
       address: contractAddress,
       abi: SUBSCRIPTION_MANAGER_ABI,
       functionName: "depositToSubscription" as const,
-      args: [subscriptionId, amountInWei, token],
+      args: [subscriptionId, amountInWei],
     };
 
     return writeContract(
@@ -166,6 +163,38 @@ export function useSubscription() {
   };
 
   /**
+   * Pause a subscription
+   */
+  const pauseSubscription = async (subscriptionId: bigint) => {
+    if (!contractAddress) {
+      throw new Error("SubscriptionManager contract not deployed on this network");
+    }
+
+    return writeContract({
+      address: contractAddress,
+      abi: SUBSCRIPTION_MANAGER_ABI,
+      functionName: "pauseSubscription",
+      args: [subscriptionId],
+    });
+  };
+
+  /**
+   * Resume a subscription
+   */
+  const resumeSubscription = async (subscriptionId: bigint) => {
+    if (!contractAddress) {
+      throw new Error("SubscriptionManager contract not deployed on this network");
+    }
+
+    return writeContract({
+      address: contractAddress,
+      abi: SUBSCRIPTION_MANAGER_ABI,
+      functionName: "resumeSubscription",
+      args: [subscriptionId],
+    });
+  };
+
+  /**
    * Cancel a subscription
    */
   const cancelSubscription = async (subscriptionId: bigint) => {
@@ -189,6 +218,8 @@ export function useSubscription() {
     executePayment,
     executeBatchPayments,
     modifySubscription,
+    pauseSubscription,
+    resumeSubscription,
     cancelSubscription,
     isPending,
     isConfirming,
@@ -263,4 +294,88 @@ export function useUserSubscriptions(userAddress: `0x${string}` | undefined) {
 
   return { subscriptionIds, isLoading, error };
 }
+
+/**
+ * Hook for getting all subscriptions (sent and received) for a user
+ */
+export function useUserSubscriptionsAll(userAddress: `0x${string}` | undefined) {
+  const chainId = useChainId();
+  const contractAddress = useMemo(() => {
+    return getContractAddress(chainId, "SubscriptionManager");
+  }, [chainId]);
+
+  const { data: subscriptions, isLoading, error } = useReadContract({
+    address: contractAddress || undefined,
+    abi: SUBSCRIPTION_MANAGER_ABI,
+    functionName: "getUserSubscriptionsAll",
+    args: userAddress ? [userAddress] : undefined,
+    query: {
+      enabled: !!userAddress && !!contractAddress,
+    },
+  });
+
+  return { subscriptions, isLoading, error };
+}
+
+/**
+ * Hook for getting payment history for a subscription
+ */
+export function usePaymentHistory(
+  subscriptionId: bigint | undefined,
+  offset: number = 0,
+  limit: number = 10
+) {
+  const chainId = useChainId();
+  const contractAddress = useMemo(() => {
+    return getContractAddress(chainId, "SubscriptionManager");
+  }, [chainId]);
+
+  const { data, isLoading, error, refetch } = useReadContract({
+    address: contractAddress || undefined,
+    abi: SUBSCRIPTION_MANAGER_ABI,
+    functionName: "getPaymentHistory",
+    args:
+      subscriptionId !== undefined
+        ? [subscriptionId, BigInt(offset), BigInt(limit)]
+        : undefined,
+    query: {
+      enabled: !!subscriptionId && !!contractAddress,
+      refetchInterval: 10000, // Auto-refresh every 10 seconds
+    },
+  });
+
+  // Data is returned as [payments, total]
+  const payments = data?.[0] || [];
+  const total = data?.[1] || 0n;
+
+  return { payments, total: Number(total), isLoading, error, refetch };
+}
+
+/**
+ * Hook for checking if a payment is due
+ */
+export function usePaymentDue(subscriptionId: bigint | undefined) {
+  const chainId = useChainId();
+  const contractAddress = useMemo(() => {
+    return getContractAddress(chainId, "SubscriptionManager");
+  }, [chainId]);
+
+  const { data, isLoading, error } = useReadContract({
+    address: contractAddress || undefined,
+    abi: SUBSCRIPTION_MANAGER_ABI,
+    functionName: "isPaymentDue",
+    args: subscriptionId !== undefined ? [subscriptionId] : undefined,
+    query: {
+      enabled: !!subscriptionId && !!contractAddress,
+      refetchInterval: 30000, // Check every 30 seconds
+    },
+  });
+
+  // Data is returned as [isDue, nextPaymentTime]
+  const isDue = data?.[0] || false;
+  const nextPaymentTime = data?.[1] || 0n;
+
+  return { isDue, nextPaymentTime, isLoading, error };
+}
+
 
