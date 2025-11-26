@@ -55,8 +55,8 @@ export function Navbar() {
                 ))}
                 <div className="mt-6 pt-6 border-t">
                   <div className="space-y-2">
-                    <WalletButton className="w-full" />
                     <ConnectButton />
+                    <WalletButton className="w-full" />
                   </div>
                 </div>
               </nav>
@@ -87,9 +87,14 @@ export function Navbar() {
                   </Link>
           ))}
           
-          <div className="flex items-center gap-3">
-            <WalletButton />
-            <ConnectButton />
+          {/* Wallet Connection - Show ConnectButton if not connected, WalletButton if connected */}
+          <div className="flex items-center gap-3 min-w-[140px] justify-end">
+            <div className="flex items-center">
+              <ConnectButton />
+            </div>
+            <div className="flex items-center">
+              <WalletButton />
+            </div>
           </div>
         </nav>
       </div>

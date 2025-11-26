@@ -1,6 +1,6 @@
 "use client";
 
-import { RainbowKitProvider, connectorsForWallets } from "@rainbow-me/rainbowkit";
+import { RainbowKitProvider, connectorsForWallets, darkTheme } from "@rainbow-me/rainbowkit";
 import "@rainbow-me/rainbowkit/styles.css";
 import { injectedWallet } from "@rainbow-me/rainbowkit/wallets";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -41,8 +41,8 @@ const connectors = connectorsForWallets(
     },
   ],
   {
-    appName: "my-celo-app",
-    projectId: process.env.NEXT_PUBLIC_WC_PROJECT_ID!,
+    appName: "Drip - Programmable Payments",
+    projectId: process.env.NEXT_PUBLIC_WC_PROJECT_ID || "default-project-id",
   }
 );
 
@@ -58,6 +58,15 @@ const wagmiConfig = createConfig({
 });
 
 const queryClient = new QueryClient();
+
+// Custom RainbowKit theme with green accent color matching Create Stream button
+const customTheme = darkTheme({
+  accentColor: "#10B981", // Green matching Create Stream button
+  accentColorForeground: "white",
+  borderRadius: "medium",
+  fontStack: "system",
+  overlayBlur: "small",
+});
 
 function WalletProviderInner({ children }: { children: React.ReactNode }) {
   const { connect, connectors } = useConnect();
@@ -83,7 +92,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   return (
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
-        <RainbowKitProvider>
+        <RainbowKitProvider theme={customTheme}>
           <WalletProviderInner>{children}</WalletProviderInner>
         </RainbowKitProvider>
       </QueryClientProvider>

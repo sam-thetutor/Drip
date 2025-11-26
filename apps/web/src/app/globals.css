@@ -128,4 +128,89 @@
   .delay-1000 {
     animation-delay: 1s;
   }
+
+  /* Custom RainbowKit Connect Button Styling - Match Create Stream Button */
+  :global([data-rk]) button {
+    background-color: #10B981 !important;
+    color: white !important;
+    border-color: #10B981 !important;
+  }
+
+  :global([data-rk]) button:hover {
+    background-color: #059669 !important;
+    border-color: #059669 !important;
+  }
+
+  /* Dripping Animation */
+  @keyframes drip {
+    0% {
+      transform: translateY(0) scaleY(1);
+      opacity: 1;
+    }
+    50% {
+      transform: translateY(150px) scaleY(1.2);
+      opacity: 0.8;
+    }
+    100% {
+      transform: translateY(300px) scaleY(0.8);
+      opacity: 0;
+    }
+  }
+
+  @keyframes fill {
+    0%, 100% {
+      background: linear-gradient(to top, rgba(16, 185, 129, 0.3), rgba(16, 185, 129, 0.1));
+    }
+    50% {
+      background: linear-gradient(to top, rgba(16, 185, 129, 0.5), rgba(16, 185, 129, 0.2));
+    }
+  }
+
+  .animate-drip {
+    animation: drip 2s ease-in-out infinite;
+  }
+
+  .animate-fill {
+    animation: fill 3s ease-in-out infinite;
+  }
+}
+
+/* Custom RainbowKit Connect Button Styling - Match Create Stream Button (Green) */
+/* Comprehensive targeting for RainbowKit ConnectButton */
+.connect-button-wrapper button,
+.connect-button-wrapper [role="button"],
+.connect-button-wrapper button[aria-label*="Connect"],
+.connect-button-wrapper button[data-testid],
+.connect-button-wrapper [data-rk] button,
+button[aria-label*="Connect"],
+button[aria-label*="Account"],
+button[data-testid="rk-connect-button"] {
+  background-color: #10B981 !important;
+  color: white !important;
+  border: none !important;
+  font-weight: 500 !important;
+  transition: background-color 0.2s ease !important;
+}
+
+.connect-button-wrapper button:hover,
+.connect-button-wrapper [role="button"]:hover,
+.connect-button-wrapper button[aria-label*="Connect"]:hover,
+.connect-button-wrapper button[data-testid]:hover,
+.connect-button-wrapper [data-rk] button:hover,
+button[aria-label*="Connect"]:hover,
+button[data-testid="rk-connect-button"]:hover {
+  background-color: #059669 !important;
+}
+
+/* Global RainbowKit button override - exclude account button when connected */
+[data-rk] button:not([data-testid="rk-account-button"]),
+[data-rk] > div > button {
+  background-color: #10B981 !important;
+  color: white !important;
+  border: none !important;
+}
+
+[data-rk] button:not([data-testid="rk-account-button"]):hover,
+[data-rk] > div > button:hover {
+  background-color: #059669 !important;
 }
