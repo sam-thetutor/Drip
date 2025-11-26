@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Droplet, Zap, Shield, Clock } from "lucide-react";
@@ -89,67 +90,84 @@ export default function Home() {
             </div>
 
             {/* Right Column - Dripping Animation Visualization */}
-            <div className="relative h-[500px] flex items-center justify-center">
-              {/* Dripping Animation Container */}
+            <div className="relative h-[520px] flex items-center justify-center">
+              {/* Soft focus area to subtly highlight animation */}
+              <div className="absolute inset-6 rounded-[36px] bg-gradient-to-b from-black/45 via-black/25 to-transparent blur-3xl pointer-events-none"></div>
+              
               <div className="relative w-full max-w-md h-full">
                 {/* Source Container (Top) */}
-                <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-32 h-20 bg-gradient-to-b from-green/30 to-green/10 rounded-t-lg border-2 border-green/50 flex items-center justify-center">
-                  <div className="text-center">
-                    <Droplet className="h-8 w-8 text-green mx-auto mb-1 animate-pulse" />
-                    <span className="text-xs text-green font-semibold">Funds Pool</span>
+                <div className="absolute top-4 left-1/2 transform -translate-x-1/2 w-28 h-16 bg-white/5 rounded-xl border border-white/20 flex items-center justify-center">
+                  <div className="text-center space-y-1">
+                    <Droplet className="h-6 w-6 text-white mx-auto opacity-90" />
+                    <span className="text-[10px] uppercase tracking-[0.2em] text-white/80">
+                      Funds Pool
+                    </span>
                   </div>
                 </div>
 
                 {/* Dripping Drops Animation */}
-                <div className="absolute top-20 left-1/2 transform -translate-x-1/2 w-full h-[350px] overflow-hidden">
-                  {/* Multiple dripping streams */}
-                  {[...Array(5)].map((_, i) => (
-                    <div
-                      key={i}
-                      className="absolute animate-drip"
-                      style={{
-                        left: `${20 + i * 15}%`,
-                        animationDuration: `${2 + i * 0.5}s`,
-                        animationDelay: `${i * 0.3}s`,
-                      }}
-                    >
-                      <div className="w-3 h-8 bg-gradient-to-b from-green to-green/50 rounded-full blur-[1px]"></div>
+                {/** Define drop paths that align with each flow line */}
+                {(() => {
+                  const dropTargets = [20, 35, 50, 65, 80]; // percent positions for each line
+                  return (
+                    <div className="absolute top-16 left-0 w-full h-[360px] overflow-visible">
+                      {dropTargets.map((target, idx) => (
+                        <div
+                          key={`drop-${idx}`}
+                          className="diagonal-drop"
+                          style={
+                            {
+                              "--target-x": `${target}%`,
+                              "--start-top": "110px",
+                              "--dy": "230px",
+                              "--duration": `${2.5 + idx * 0.2}s`,
+                              animationDelay: `${idx * 0.25}s`,
+                            } as CSSProperties
+                          }
+                        >
+                          <div className="w-2.5 h-11 bg-gradient-to-b from-white via-white/70 to-transparent rounded-full opacity-90"></div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  );
+                })()}
+                
 
                 {/* Recipient Containers (Bottom) */}
-                <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-full flex justify-around">
+                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 w-full flex justify-around">
                   {[0, 1, 2].map((i) => (
                     <div
                       key={i}
-                      className="w-24 h-20 bg-gradient-to-t from-green/30 to-green/10 rounded-b-lg border-2 border-green/50 flex items-center justify-center relative overflow-hidden animate-fill"
+                      className="w-20 h-18 rounded-xl border border-white/20 bg-white/5 flex items-center justify-center relative overflow-hidden animate-fill"
                       style={{
-                        animationDuration: `${3 + i * 0.5}s`,
-                        animationDelay: `${1 + i * 0.5}s`,
+                        animationDuration: `${3.5 + i * 0.4}s`,
+                        animationDelay: `${0.8 + i * 0.4}s`,
                       }}
                     >
-                      <div className="absolute bottom-0 left-0 right-0 bg-green/40 rounded-b-lg" style={{ height: `${30 + i * 20}%` }}></div>
-                      <Droplet className="h-6 w-6 text-green relative z-10" />
+                      <div
+                        className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-white/50 to-transparent"
+                        style={{ height: `${25 + i * 18}%` }}
+                      ></div>
+                      <Droplet className="h-5 w-5 text-white opacity-80" />
                     </div>
                   ))}
                 </div>
 
                 {/* Flow Lines */}
                 <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 1 }}>
-                  {[...Array(5)].map((_, i) => (
+                  {[20, 35, 50, 65, 80].map((target, idx) => (
                     <line
-                      key={i}
+                      key={`line-${idx}`}
                       x1="50%"
-                      y1="80"
-                      x2={`${20 + i * 15}%`}
-                      y2="350"
-                      stroke="rgba(16, 185, 129, 0.3)"
-                      strokeWidth="2"
-                      strokeDasharray="4 4"
+                      y1="110"
+                      x2={`${target}%`}
+                      y2="330"
+                      stroke="rgba(255, 255, 255, 0.25)"
+                      strokeWidth="1.5"
+                      strokeDasharray="3 6"
                       className="animate-pulse"
                       style={{
-                        animationDelay: `${i * 0.2}s`,
+                        animationDelay: `${idx * 0.15}s`,
                       }}
                     />
                   ))}

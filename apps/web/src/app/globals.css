@@ -48,9 +48,35 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
     background: hsl(var(--background));
     min-height: 100vh;
+    position: relative;
+  }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background-image: url("/drip-am1.jpg");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    z-index: -2;
+  }
+
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(
+      120deg,
+      rgba(5, 5, 5, 0.92) 10%,
+      rgba(5, 5, 5, 0.75) 45%,
+      rgba(5, 5, 5, 0.3) 100%
+    );
+    z-index: -1;
+    pointer-events: none;
   }
 }
 
@@ -172,6 +198,33 @@
 
   .animate-fill {
     animation: fill 3s ease-in-out infinite;
+  }
+
+  .diagonal-drop {
+    position: absolute;
+    top: var(--start-top, 110px);
+    left: 50%;
+    transform: translateX(-50%);
+    animation: dripDiagonal var(--duration, 3s) linear infinite;
+  }
+
+  @keyframes dripDiagonal {
+    0% {
+      top: var(--start-top, 110px);
+      left: 50%;
+      opacity: 0;
+    }
+    15% {
+      opacity: 1;
+    }
+    85% {
+      opacity: 1;
+    }
+    100% {
+      top: calc(var(--start-top, 110px) + var(--dy, 240px));
+      left: var(--target-x, 50%);
+      opacity: 0;
+    }
   }
 }
 

@@ -24,7 +24,7 @@ export function Navbar() {
   const pathname = usePathname()
   
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/80 backdrop-blur-md supports-[backdrop-filter]:bg-background/60">
+    <header className="sticky top-0 z-50 w-full border-b border-white/15 bg-transparent backdrop-blur-sm supports-[backdrop-filter]:bg-transparent">
       <div className="container flex h-16 max-w-[1280px] items-center justify-between px-4">
         <div className="flex items-center gap-2">
           {/* Mobile menu button */}
