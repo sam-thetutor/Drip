@@ -1,104 +1,98 @@
 "use client"
 
 import Link from "next/link"
-import Image from "next/image"
 import { usePathname } from "next/navigation"
-import { Menu } from "lucide-react"
+import { Home, Droplets, Repeat, Wallet } from "lucide-react"
 
-import { Button } from "@/components/ui/button"
-import {
-  Sheet,
-  SheetContent,
-  SheetTrigger,
-} from "@/components/ui/sheet"
 import { ConnectButton } from "@/components/connect-button"
 import { WalletButton } from "@/components/wallet-button"
 
 const navLinks = [
-  { name: "Home", href: "/" },
-  { name: "Streams", href: "/streams" },
-  { name: "Subscriptions", href: "/subscriptions" },
-  { name: "Treasury", href: "/treasury" },
+  { name: "Home", href: "/", icon: Home },
+  { name: "Streams", href: "/streams", icon: Droplets },
+  { name: "Subscriptions", href: "/subscriptions", icon: Repeat },
+  { name: "Treasury", href: "/treasury", icon: Wallet },
 ]
 
 export function Navbar() {
   const pathname = usePathname()
   
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-white/15 bg-transparent backdrop-blur-sm supports-[backdrop-filter]:bg-transparent">
-      <div className="container flex h-16 max-w-[1280px] items-center justify-between px-4">
-        <div className="flex items-center gap-2">
-          {/* Mobile menu button */}
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="md:hidden">
-                <Menu className="h-5 w-5" />
-                <span className="sr-only">Toggle menu</span>
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-80 glass-card border-border/50">
-              <div className="flex items-center gap-2 mb-8">
-                <span className="font-bold text-lg text-green">
-                  Drip
-                </span>
-              </div>
-              <nav className="flex flex-col gap-4">
-                {navLinks.map((link) => (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    className={`flex items-center gap-2 text-base font-medium transition-all hover:text-green ${
-                      pathname === link.href ? "text-green" : "text-foreground/70"
-                    }`}
-                  >
-                    {link.name}
-                  </Link>
-                ))}
-                <div className="mt-6 pt-6 border-t">
-                  <div className="space-y-2">
-                    <ConnectButton />
-                    <WalletButton className="w-full" />
-                  </div>
-                </div>
-              </nav>
-            </SheetContent>
-          </Sheet>
-
-          {/* Logo */}
+    <>
+      {/* Top navbar - simplified on mobile, full on desktop */}
+      <header className="sticky top-0 z-50 w-full border-b border-white/15 bg-transparent backdrop-blur-sm supports-[backdrop-filter]:bg-transparent md:relative md:border-b">
+        <div className="container flex h-14 md:h-16 max-w-[1280px] items-center justify-between px-4">
+          {/* Logo - always visible */}
           <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity group">
-            <span className="hidden font-bold text-xl sm:inline-block text-green group-hover:scale-105 transition-transform">
+            <span className="font-bold text-lg md:text-xl text-green group-hover:scale-105 transition-transform">
               Drip
             </span>
           </Link>
-        </div>
-        
-        {/* Desktop navigation */}
-        <nav className="hidden md:flex items-center gap-8">
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-                    href={link.href}
-                    className={`flex items-center gap-1.5 text-sm font-medium transition-all hover:text-green hover:scale-105 ${
-                      pathname === link.href
-                        ? "text-green"
-                        : "text-foreground/70"
-                    }`}
-                  >
-                    {link.name}
-                  </Link>
-          ))}
           
-          {/* Wallet Connection - Show ConnectButton if not connected, WalletButton if connected */}
-          <div className="flex items-center gap-3 min-w-[140px] justify-end">
-            <div className="flex items-center">
-              <ConnectButton />
+          {/* Desktop navigation */}
+          <nav className="hidden md:flex items-center gap-8">
+            {navLinks.map((link) => {
+              const Icon = link.icon
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={`flex items-center gap-1.5 text-sm font-medium transition-all hover:text-green hover:scale-105 ${
+                    pathname === link.href
+                      ? "text-green"
+                      : "text-foreground/70"
+                  }`}
+                >
+                  {link.name}
+                </Link>
+              )
+            })}
+            
+            {/* Wallet Connection - Show ConnectButton if not connected, WalletButton if connected */}
+            <div className="flex items-center gap-3 min-w-[140px] justify-end">
+              <div className="flex items-center">
+                <ConnectButton />
+              </div>
+              <div className="flex items-center">
+                <WalletButton />
+              </div>
             </div>
-            <div className="flex items-center">
-              <WalletButton />
-            </div>
+          </nav>
+
+          {/* Mobile: Wallet button only at top */}
+          <div className="flex md:hidden items-center">
+            <ConnectButton />
+            <WalletButton />
           </div>
-        </nav>
-      </div>
-    </header>
+        </div>
+      </header>
+
+      {/* Bottom Navigation Bar - Mobile only - Always visible on all pages */}
+      <nav className="fixed bottom-0 left-0 right-0 z-[100] md:hidden border-t border-white/15 bg-black/60 backdrop-blur-lg supports-[backdrop-filter]:bg-black/60 shadow-[0_-4px_20px_rgba(0,0,0,0.3)]">
+        <div className="container max-w-[1280px]">
+          <div className="grid grid-cols-4 h-16">
+            {navLinks.map((link) => {
+              const Icon = link.icon
+              // Match exact path or paths that start with the link href (for nested routes)
+              const isActive = pathname === link.href || (link.href !== '/' && pathname?.startsWith(link.href))
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={`flex flex-col items-center justify-center gap-1 text-xs font-medium transition-all active:scale-95 ${
+                    isActive
+                      ? "text-green"
+                      : "text-foreground/60"
+                  }`}
+                >
+                  <Icon className={`h-5 w-5 ${isActive ? "text-green" : ""}`} />
+                  <span className="text-[10px]">{link.name}</span>
+                </Link>
+              )
+            })}
+          </div>
+        </div>
+      </nav>
+    </>
   )
 }

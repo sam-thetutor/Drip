@@ -22,7 +22,7 @@ export default function RootLayout({
       <body className={inter.className}>
         <WalletProvider>
           <Navbar />
-          <main className="flex-1">
+          <main className="flex-1 pb-16 md:pb-0">
             {children}
           </main>
           <Toaster position="top-right" />

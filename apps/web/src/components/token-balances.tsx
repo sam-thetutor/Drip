@@ -44,7 +44,7 @@ export function TokenBalances({ tokenBalances }: TokenBalancesProps) {
         </p>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
           {tokens.map(([address, { balance, decimals, symbol }]) => {
             const formattedBalance = formatUnits(balance, decimals);
             const displayBalance = parseFloat(formattedBalance).toLocaleString(undefined, {
@@ -55,11 +55,11 @@ export function TokenBalances({ tokenBalances }: TokenBalancesProps) {
             return (
               <div
                 key={address}
-                className="p-4 rounded-lg border bg-background/50 backdrop-blur-sm"
+                className="p-3 md:p-4 rounded-lg border bg-background/50 backdrop-blur-sm"
               >
-                <p className="text-sm text-muted-foreground mb-1">{symbol}</p>
-                <p className="text-2xl font-bold">{displayBalance}</p>
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="text-xs md:text-sm text-muted-foreground mb-1">{symbol}</p>
+                <p className="text-lg md:text-2xl font-bold">{displayBalance}</p>
+                <p className="text-[10px] md:text-xs text-muted-foreground mt-1">
                   {address === "0x0000000000000000000000000000000000000000"
                     ? "Native CELO"
                     : `${address.slice(0, 6)}...${address.slice(-4)}`}

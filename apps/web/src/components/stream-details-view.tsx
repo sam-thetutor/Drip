@@ -270,40 +270,40 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
       </Card>
 
       {/* Analytics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
         {isUserRecipient ? (
           // Show recipient-specific analytics
           <>
             <Card className="glass-card">
-              <CardContent className="pt-6">
-                <div className="text-2xl font-bold text-blue-600">
+              <CardContent className="pt-4 md:pt-6 px-3 md:px-6">
+                <div className="text-xl md:text-2xl font-bold text-blue-600">
                   {formatTokenAmount(totalAccrued, decimals)}
                 </div>
-                <div className="text-sm text-muted-foreground">Available to Withdraw ({symbol})</div>
+                <div className="text-xs md:text-sm text-muted-foreground">Available to Withdraw ({symbol})</div>
               </CardContent>
             </Card>
             <Card className="glass-card">
-              <CardContent className="pt-6">
-                <div className="text-2xl font-bold text-green-600">
+              <CardContent className="pt-4 md:pt-6 px-3 md:px-6">
+                <div className="text-xl md:text-2xl font-bold text-green-600">
                   {formatTokenAmount(totalWithdrawn, decimals)}
                 </div>
-                <div className="text-sm text-muted-foreground">Total Withdrawn ({symbol})</div>
+                <div className="text-xs md:text-sm text-muted-foreground">Total Withdrawn ({symbol})</div>
               </CardContent>
             </Card>
             <Card className="glass-card">
-              <CardContent className="pt-6">
-                <div className="text-2xl font-bold">
+              <CardContent className="pt-4 md:pt-6 px-3 md:px-6">
+                <div className="text-xl md:text-2xl font-bold">
                   {formatTokenAmount(totalWithdrawn + totalAccrued, decimals)}
                 </div>
-                <div className="text-sm text-muted-foreground">Total Received ({symbol})</div>
+                <div className="text-xs md:text-sm text-muted-foreground">Total Received ({symbol})</div>
               </CardContent>
             </Card>
             <Card className="glass-card">
-              <CardContent className="pt-6">
-                <div className="text-2xl font-bold">
+              <CardContent className="pt-4 md:pt-6 px-3 md:px-6">
+                <div className="text-xl md:text-2xl font-bold">
                   {formatTokenAmount(recipients[0]?.ratePerSecond || 0n, decimals)}
                 </div>
-                <div className="text-sm text-muted-foreground">Rate ({symbol}/sec)</div>
+                <div className="text-xs md:text-sm text-muted-foreground">Rate ({symbol}/sec)</div>
               </CardContent>
             </Card>
           </>
@@ -311,35 +311,35 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
           // Show sender analytics (all recipients)
           <>
             <Card className="glass-card">
-              <CardContent className="pt-6">
-                <div className="text-2xl font-bold">
+              <CardContent className="pt-4 md:pt-6 px-3 md:px-6">
+                <div className="text-xl md:text-2xl font-bold">
                   {formatTokenAmount(totalDeposit, decimals)}
                 </div>
-                <div className="text-sm text-muted-foreground">Total Deposit ({symbol})</div>
+                <div className="text-xs md:text-sm text-muted-foreground">Total Deposit ({symbol})</div>
               </CardContent>
             </Card>
             <Card className="glass-card">
-              <CardContent className="pt-6">
-                <div className="text-2xl font-bold text-green-600">
+              <CardContent className="pt-4 md:pt-6 px-3 md:px-6">
+                <div className="text-xl md:text-2xl font-bold text-green-600">
                   {formatTokenAmount(totalDistributed, decimals)}
                 </div>
-                <div className="text-sm text-muted-foreground">Total Distributed ({symbol})</div>
+                <div className="text-xs md:text-sm text-muted-foreground">Total Distributed ({symbol})</div>
               </CardContent>
             </Card>
             <Card className="glass-card">
-              <CardContent className="pt-6">
-                <div className="text-2xl font-bold text-blue-600">
+              <CardContent className="pt-4 md:pt-6 px-3 md:px-6">
+                <div className="text-xl md:text-2xl font-bold text-blue-600">
                   {formatTokenAmount(totalAccrued, decimals)}
                 </div>
-                <div className="text-sm text-muted-foreground">Available to Withdraw ({symbol})</div>
+                <div className="text-xs md:text-sm text-muted-foreground">Available to Withdraw ({symbol})</div>
               </CardContent>
             </Card>
             <Card className="glass-card">
-              <CardContent className="pt-6">
-                <div className="text-2xl font-bold">
+              <CardContent className="pt-4 md:pt-6 px-3 md:px-6">
+                <div className="text-xl md:text-2xl font-bold">
                   {formatTokenAmount(remainingDeposit, decimals)}
                 </div>
-                <div className="text-sm text-muted-foreground">Remaining ({symbol})</div>
+                <div className="text-xs md:text-sm text-muted-foreground">Remaining ({symbol})</div>
               </CardContent>
             </Card>
           </>

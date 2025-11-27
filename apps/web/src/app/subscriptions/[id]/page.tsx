@@ -67,6 +67,26 @@ export default function SubscriptionDetailsPage() {
   } = useSubscription();
   const [pendingAction, setPendingAction] = useState<string | null>(null);
 
+  // Watch for transaction confirmation - must be before any early returns
+  useEffect(() => {
+    if (pendingAction && isConfirmed) {
+      switch (pendingAction) {
+        case "execute":
+          toast.success("Payment executed", { id: "exec-sub" });
+          break;
+        case "pause":
+          toast.success("Subscription paused", { id: "pause-sub" });
+          break;
+        case "resume":
+          toast.success("Subscription resumed", { id: "resume-sub" });
+          break;
+      }
+      setPendingAction(null);
+      refetchSubscription();
+      refetchBalance();
+    }
+  }, [isConfirmed, pendingAction, refetchSubscription, refetchBalance]);
+
   if (!subscriptionId) {
     return (
       <main className="flex-1">
@@ -217,25 +237,6 @@ export default function SubscriptionDetailsPage() {
 
   const timeUntilNext = getTimeUntilNextPayment();
 
-  // Watch for transaction confirmation
-  useEffect(() => {
-    if (pendingAction && isConfirmed) {
-      switch (pendingAction) {
-        case "execute":
-          toast.success("Payment executed", { id: "exec-sub" });
-          break;
-        case "pause":
-          toast.success("Subscription paused", { id: "pause-sub" });
-          break;
-        case "resume":
-          toast.success("Subscription resumed", { id: "resume-sub" });
-          break;
-      }
-      setPendingAction(null);
-      refetchSubscription();
-    }
-  }, [isConfirmed, pendingAction, refetchSubscription]);
-
   const handleExecutePayment = async () => {
     if (!isSubscriber || isCancelled) return;
     try {
@@ -337,49 +338,49 @@ export default function SubscriptionDetailsPage() {
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Metrics Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
               <Card className="glass-card">
-                <CardContent className="pt-6">
+                <CardContent className="pt-4 md:pt-6 px-3 md:px-6">
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-sm text-muted-foreground">Total Paid</p>
-                    <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                    <p className="text-xs md:text-sm text-muted-foreground">Total Paid</p>
+                    <TrendingUp className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
                   </div>
-                  <p className="text-2xl font-bold">
+                  <p className="text-xl md:text-2xl font-bold">
                     {totalPaidAmount} {tokenLabel}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="text-[10px] md:text-xs text-muted-foreground mt-1">
                     {paymentCount} payment{paymentCount !== 1 ? "s" : ""}
                   </p>
                 </CardContent>
               </Card>
 
               <Card className="glass-card">
-                <CardContent className="pt-6">
+                <CardContent className="pt-4 md:pt-6 px-3 md:px-6">
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-xs md:text-sm text-muted-foreground">
                       Escrow Balance
                     </p>
-                    <Wallet className="h-4 w-4 text-muted-foreground" />
+                    <Wallet className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
                   </div>
-                  <p className="text-2xl font-bold">{formattedBalance}</p>
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="text-xl md:text-2xl font-bold">{formattedBalance}</p>
+                  <p className="text-[10px] md:text-xs text-muted-foreground mt-1">
                     Available for payments
                   </p>
                 </CardContent>
               </Card>
 
               <Card className="glass-card">
-                <CardContent className="pt-6">
+                <CardContent className="pt-4 md:pt-6 px-3 md:px-6">
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-xs md:text-sm text-muted-foreground">
                       Avg Payment
                     </p>
-                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <Calendar className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
                   </div>
-                  <p className="text-2xl font-bold">
+                  <p className="text-xl md:text-2xl font-bold">
                     {avgPayment.toFixed(6)} {tokenLabel}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="text-[10px] md:text-xs text-muted-foreground mt-1">
                     Per payment
                   </p>
                 </CardContent>
@@ -387,17 +388,17 @@ export default function SubscriptionDetailsPage() {
 
               {monthly > 0 && (
                 <Card className="glass-card">
-                  <CardContent className="pt-6">
+                  <CardContent className="pt-4 md:pt-6 px-3 md:px-6">
                     <div className="flex items-center justify-between mb-2">
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-xs md:text-sm text-muted-foreground">
                         Est. Monthly
                       </p>
-                      <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                      <TrendingUp className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
                     </div>
-                    <p className="text-2xl font-bold">
+                    <p className="text-xl md:text-2xl font-bold">
                       {monthly.toFixed(4)} {tokenLabel}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="text-[10px] md:text-xs text-muted-foreground mt-1">
                       ~{yearly.toFixed(2)} {tokenLabel}/year
                     </p>
                   </CardContent>
@@ -406,22 +407,22 @@ export default function SubscriptionDetailsPage() {
 
               {/* Payment Due Card */}
               {isActive && timeUntilNext && (
-                <Card className="glass-card">
-                  <CardContent className="pt-6">
+                <Card className="glass-card col-span-2 lg:col-span-1">
+                  <CardContent className="pt-4 md:pt-6 px-3 md:px-6">
                     <div className="flex items-center justify-between mb-2">
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-xs md:text-sm text-muted-foreground">
                         Payment Due
                       </p>
-                      <Clock className="h-4 w-4 text-muted-foreground" />
+                      <Clock className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
                     </div>
                     <p
-                      className={`text-2xl font-bold ${
+                      className={`text-xl md:text-2xl font-bold ${
                         isDue ? "text-orange-500" : "text-blue-500"
                       }`}
                     >
                       {isDue ? "Due now" : timeUntilNext.replace("Due in ", "")}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="text-[10px] md:text-xs text-muted-foreground mt-1">
                       {isDue
                         ? "Execute payment"
                         : "Next scheduled payment"}

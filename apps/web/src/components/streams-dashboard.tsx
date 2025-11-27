@@ -109,35 +109,35 @@ export function StreamsDashboard() {
   return (
     <div className="space-y-8">
       {/* Summary Stats - DeFi Style */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
         <Card className="glass-card card-hover">
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-foreground">{totalStreams}</div>
-            <div className="text-sm text-muted-foreground mt-1">Total Streams</div>
+          <CardContent className="pt-4 md:pt-6 px-3 md:px-6">
+            <div className="text-xl md:text-2xl font-bold text-foreground">{totalStreams}</div>
+            <div className="text-xs md:text-sm text-muted-foreground mt-1">Total Streams</div>
           </CardContent>
         </Card>
         <Card className="glass-card card-hover">
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-green">
+          <CardContent className="pt-4 md:pt-6 px-3 md:px-6">
+            <div className="text-xl md:text-2xl font-bold text-green">
               {groupedStreams.active.length}
             </div>
-            <div className="text-sm text-muted-foreground mt-1">Active</div>
+            <div className="text-xs md:text-sm text-muted-foreground mt-1">Active</div>
           </CardContent>
         </Card>
         <Card className="glass-card card-hover">
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-orange">
+          <CardContent className="pt-4 md:pt-6 px-3 md:px-6">
+            <div className="text-xl md:text-2xl font-bold text-orange">
               {groupedStreams.paused.length}
             </div>
-            <div className="text-sm text-muted-foreground mt-1">Paused</div>
+            <div className="text-xs md:text-sm text-muted-foreground mt-1">Paused</div>
           </CardContent>
         </Card>
         <Card className="glass-card card-hover">
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-muted-foreground">
+          <CardContent className="pt-4 md:pt-6 px-3 md:px-6">
+            <div className="text-xl md:text-2xl font-bold text-muted-foreground">
               {groupedStreams.completed.length + groupedStreams.cancelled.length}
             </div>
-            <div className="text-sm text-muted-foreground mt-1">Completed</div>
+            <div className="text-xs md:text-sm text-muted-foreground mt-1">Completed</div>
           </CardContent>
         </Card>
       </div>
