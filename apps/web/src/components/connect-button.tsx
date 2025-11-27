@@ -1,17 +1,17 @@
 "use client";
 
 import { ConnectButton as RainbowKitConnectButton } from "@rainbow-me/rainbowkit";
-import { useAccount, useConnect } from "wagmi";
+import { useAccount } from "wagmi";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 
 export function ConnectButton() {
   const { isConnected } = useAccount();
-  const { connect, connectors } = useConnect();
   const [isMinipay, setIsMinipay] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    // Set mounted immediately on client side
     setMounted(true);
     // @ts-ignore
     if (typeof window !== "undefined" && window.ethereum?.isMiniPay) {
@@ -23,7 +23,7 @@ export function ConnectButton() {
   if (!mounted) {
     // Return a placeholder button while loading to prevent layout shift
     return (
-      <Button disabled className="h-10">
+      <Button disabled className="h-10 opacity-50 cursor-not-allowed">
         Connect Wallet
       </Button>
     );

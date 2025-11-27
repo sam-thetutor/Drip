@@ -18,6 +18,7 @@ const navLinks = [
   { name: "Home", href: "/" },
   { name: "Streams", href: "/streams" },
   { name: "Subscriptions", href: "/subscriptions" },
+  { name: "Treasury", href: "/treasury" },
 ]
 
 export function Navbar() {
