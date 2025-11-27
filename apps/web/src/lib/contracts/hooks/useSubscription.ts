@@ -345,8 +345,8 @@ export function usePaymentHistory(
   });
 
   // Data is returned as [payments, total]
-  const payments = data?.[0] || [];
-  const total = data?.[1] || 0n;
+  const payments = Array.isArray(data) && data.length > 0 ? (data[0] as any[]) : [];
+  const total = Array.isArray(data) && data.length > 1 ? (data[1] as bigint) : 0n;
 
   return { payments, total: Number(total), isLoading, error, refetch };
 }
@@ -372,8 +372,8 @@ export function usePaymentDue(subscriptionId: bigint | undefined) {
   });
 
   // Data is returned as [isDue, nextPaymentTime]
-  const isDue = data?.[0] || false;
-  const nextPaymentTime = data?.[1] || 0n;
+  const isDue = Array.isArray(data) && data.length > 0 ? (data[0] as boolean) : false;
+  const nextPaymentTime = Array.isArray(data) && data.length > 1 ? (data[1] as bigint) : 0n;
 
   return { isDue, nextPaymentTime, isLoading, error };
 }
