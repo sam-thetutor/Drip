@@ -18,7 +18,7 @@ export interface Token {
 }
 
 // Token addresses by network - Supporting only Sepolia testnet and Mainnet
-const TOKENS_BY_NETWORK: Record<number, Token[]> = {
+export const TOKENS_BY_NETWORK: Record<number, Token[]> = {
   [CELO_MAINNET_ID]: [
     { symbol: "CELO", address: "0x0000000000000000000000000000000000000000", decimals: 18, name: "Celo" },
     { symbol: "cUSD", address: "0x765de816845861e75a25fca122bb6898b8b1282a", decimals: 18, name: "Celo Dollar" },

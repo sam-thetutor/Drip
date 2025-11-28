@@ -3,9 +3,34 @@
 import { useAccount, useChainId, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { getContractAddress, CONTRACT_ADDRESSES, CELO_SEPOLIA_ID } from "../config";
 import { DRIP_CORE_ABI } from "../abis";
-import { parseEther, parseUnits, formatEther, formatUnits } from "viem";
+import { parseEther, parseUnits, formatEther, formatUnits, maxUint256, readContract } from "viem";
 import { useMemo } from "react";
 import { getTokenByAddress } from "@/components/token-selector";
+import { usePublicClient } from "wagmi";
+
+// Standard ERC20 ABI for approval and allowance checks
+const ERC20_ABI = [
+  {
+    constant: true,
+    inputs: [
+      { name: "_owner", type: "address" },
+      { name: "_spender", type: "address" },
+    ],
+    name: "allowance",
+    outputs: [{ name: "", type: "uint256" }],
+    type: "function",
+  },
+  {
+    constant: false,
+    inputs: [
+      { name: "_spender", type: "address" },
+      { name: "_value", type: "uint256" },
+    ],
+    name: "approve",
+    outputs: [{ name: "", type: "bool" }],
+    type: "function",
+  },
+] as const;
 
 /**
  * Hook for interacting with DripCore contract
@@ -13,6 +38,7 @@ import { getTokenByAddress } from "@/components/token-selector";
 export function useDrip() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
+  const publicClient = usePublicClient();
   const { writeContract, data: hash, isPending, error } = useWriteContract();
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({
     hash,
@@ -21,6 +47,44 @@ export function useDrip() {
   const contractAddress = useMemo(() => {
     return getContractAddress(chainId, "DripCore");
   }, [chainId]);
+
+  /**
+   * Check token allowance for DripCore contract
+   */
+  const checkTokenAllowance = async (token: `0x${string}`, amount: bigint): Promise<boolean> => {
+    if (!address || !contractAddress || !publicClient) return false;
+    if (token === "0x0000000000000000000000000000000000000000") return true; // Native token doesn't need approval
+
+    try {
+      const allowance = await publicClient.readContract({
+        address: token,
+        abi: ERC20_ABI,
+        functionName: "allowance",
+        args: [address, contractAddress],
+      });
+
+      return allowance >= amount;
+    } catch (error) {
+      console.error("Error checking allowance:", error);
+      return false;
+    }
+  };
+
+  /**
+   * Approve token spending for DripCore contract
+   */
+  const approveToken = async (token: `0x${string}`, amount: bigint) => {
+    if (!address || !contractAddress) {
+      throw new Error("Wallet not connected or contract not deployed");
+    }
+
+    return writeContract({
+      address: token,
+      abi: ERC20_ABI,
+      functionName: "approve",
+      args: [contractAddress, amount],
+    });
+  };
 
   /**
    * Create a new payment stream
@@ -45,13 +109,138 @@ export function useDrip() {
       throw new Error("DripCore contract not deployed on this network");
     }
 
-    // Convert amounts to wei (assuming 18 decimals for now - should be dynamic based on token)
-    const amountsInWei = amountsPerPeriod.map((amount) => parseEther(amount));
-    const depositInWei = parseEther(deposit);
+    // Get token decimals from token info
+    const tokenInfo = getTokenByAddress(token, chainId);
+    const decimals = tokenInfo?.decimals || 18;
+
+    // Validate deposit is not zero
+    if (!deposit || deposit === "0" || parseFloat(deposit) <= 0) {
+      throw new Error("Deposit amount must be greater than 0");
+    }
+
+    // Validate amounts per period
+    for (const amount of amountsPerPeriod) {
+      if (!amount || parseFloat(amount) <= 0) {
+        throw new Error("All recipient amounts must be greater than 0");
+      }
+    }
+
+    // Convert amounts using correct decimals for the token
+    const amountsInWei = amountsPerPeriod.map((amount, index) => {
+      try {
+        // Validate the amount is a valid number
+        const amountNum = parseFloat(amount);
+        if (isNaN(amountNum) || amountNum <= 0) {
+          throw new Error(`Recipient ${index + 1} amount must be greater than 0`);
+        }
+        
+        // Parse with the token's specific decimals
+        const parsed = parseUnits(amount, decimals);
+        
+        if (parsed === 0n) {
+          throw new Error(
+            `Recipient ${index + 1} amount "${amount}" is too small for ${tokenInfo?.symbol || "token"} ` +
+            `(decimals: ${decimals}). Minimum: ${formatUnits(1n, decimals)}`
+          );
+        }
+        
+        console.log(`Amount conversion for recipient ${index + 1}:`, {
+          original: amount,
+          decimals,
+          parsed: parsed.toString(),
+          formatted: formatUnits(parsed, decimals),
+        });
+        
+        return parsed;
+      } catch (error: any) {
+        throw new Error(`Invalid amount for recipient ${index + 1}: ${amount}. ${error?.message || ""}`);
+      }
+    });
+    
+    const depositInWei = (() => {
+      try {
+        // Ensure deposit string is valid
+        const depositNum = parseFloat(deposit);
+        if (isNaN(depositNum) || depositNum <= 0) {
+          throw new Error(`Deposit must be a positive number. Got: ${deposit}`);
+        }
+        
+        const parsed = parseUnits(deposit, decimals);
+        if (parsed === 0n) {
+          throw new Error(`Deposit amount is too small or zero after conversion. Original: ${deposit}, Decimals: ${decimals}`);
+        }
+        
+        console.log("Deposit conversion:", {
+          original: deposit,
+          decimals,
+          parsed: parsed.toString(),
+          formatted: formatUnits(parsed, decimals),
+        });
+        
+        return parsed;
+      } catch (error: any) {
+        throw new Error(`Invalid deposit format: ${deposit}. ${error?.message || ""}`);
+      }
+    })();
+
+    // Validate amounts in wei are not zero
+    for (let i = 0; i < amountsInWei.length; i++) {
+      if (amountsInWei[i] === 0n) {
+        throw new Error(`Recipient ${i + 1} amount is too small or zero: ${amountsPerPeriod[i]}`);
+      }
+    }
 
     // For native CELO, send the deposit as value
     const isNativeToken = token === "0x0000000000000000000000000000000000000000";
     
+    // For ERC20 tokens, check and request approval if needed
+    if (!isNativeToken && address && publicClient) {
+      // Calculate total amount needed (deposit + platform fee)
+      // Platform fee is 0.5% (50 bps), so total = deposit / 0.995
+      const platformFeeBps = 50; // 0.5%
+      const totalNeeded = (depositInWei * BigInt(10000)) / BigInt(10000 - platformFeeBps);
+      
+      // Check current allowance
+      try {
+        const currentAllowance = await publicClient.readContract({
+          address: token,
+          abi: ERC20_ABI,
+          functionName: "allowance",
+          args: [address, contractAddress],
+        }) as bigint;
+
+        // If allowance is insufficient, throw error with helpful message
+        if (currentAllowance < totalNeeded) {
+          throw new Error(
+            `Insufficient token approval. Please approve ${tokenInfo?.symbol || "token"} spending first. ` +
+            `The contract needs approval to transfer ${formatUnits(totalNeeded, decimals)} ${tokenInfo?.symbol || "tokens"}. ` +
+            `Current allowance: ${formatUnits(currentAllowance, decimals)} ${tokenInfo?.symbol || "tokens"}.`
+          );
+        }
+      } catch (error: any) {
+        // If it's already our custom error, rethrow it
+        if (error?.message?.includes("Insufficient token approval")) {
+          throw error;
+        }
+        // Otherwise, log and continue (might be a network error, let the transaction fail naturally)
+        console.error("Error checking allowance:", error);
+      }
+    }
+    
+    // Final validation before sending
+    console.log("Final stream creation parameters:", {
+      recipients,
+      token,
+      tokenSymbol: tokenInfo?.symbol,
+      decimals,
+      amountsPerPeriod,
+      amountsInWei: amountsInWei.map(a => a.toString()),
+      periodSeconds,
+      deposit,
+      depositInWei: depositInWei.toString(),
+      isNativeToken,
+    });
+
     const baseContract = {
       address: contractAddress,
       abi: DRIP_CORE_ABI,
@@ -209,8 +398,12 @@ export function useDrip() {
       throw new Error("DripCore contract not deployed on this network");
     }
 
-    const amountPerPeriodInWei = parseEther(newAmountPerPeriod);
-    const depositInWei = parseEther(additionalDeposit);
+    // Get token decimals from token info
+    const tokenInfo = getTokenByAddress(token, chainId);
+    const decimals = tokenInfo?.decimals || 18;
+
+    const amountPerPeriodInWei = parseUnits(newAmountPerPeriod, decimals);
+    const depositInWei = parseUnits(additionalDeposit, decimals);
 
     const isNativeToken = token === "0x0000000000000000000000000000000000000000";
 
@@ -226,6 +419,65 @@ export function useDrip() {
     );
   };
 
+  /**
+   * Lock stream rate for a duration
+   * @param streamId Stream ID
+   * @param lockDuration Duration in seconds to lock the rates
+   */
+  const lockStreamRate = async (streamId: bigint, lockDuration: number) => {
+    if (!contractAddress) {
+      throw new Error("DripCore contract not deployed on this network");
+    }
+
+    return writeContract({
+      address: contractAddress,
+      abi: DRIP_CORE_ABI,
+      functionName: "lockStreamRate",
+      args: [streamId, BigInt(lockDuration)],
+    });
+  };
+
+  /**
+   * Extend stream duration and/or add deposit
+   * @param streamId Stream ID
+   * @param newEndTime New end time timestamp (0 to keep current, or future timestamp to extend)
+   * @param depositAmount Additional deposit amount (human-readable, 0 for no deposit)
+   * @param token Token address (for native payment detection and decimals)
+   */
+  const extendStream = async (
+    streamId: bigint,
+    newEndTime: number,
+    depositAmount: string,
+    token: `0x${string}`
+  ) => {
+    if (!contractAddress) {
+      throw new Error("DripCore contract not deployed on this network");
+    }
+
+    // Get token decimals from token info
+    const tokenInfo = getTokenByAddress(token, chainId);
+    const decimals = tokenInfo?.decimals || 18;
+
+    const depositAmountInWei = depositAmount === "0" || depositAmount === "" 
+      ? 0n 
+      : parseUnits(depositAmount, decimals);
+
+    const isNativeToken = token === "0x0000000000000000000000000000000000000000";
+
+    const baseContract = {
+      address: contractAddress,
+      abi: DRIP_CORE_ABI,
+      functionName: "extendStream" as const,
+      args: [streamId, BigInt(newEndTime), depositAmountInWei],
+    };
+
+    return writeContract(
+      (isNativeToken && depositAmountInWei > 0n 
+        ? { ...baseContract, value: depositAmountInWei } 
+        : baseContract) as any
+    );
+  };
+
   return {
     contractAddress,
     isConnected,
@@ -237,6 +489,10 @@ export function useDrip() {
     addRecipient,
     removeRecipient,
     updateRecipientRate,
+    lockStreamRate,
+    extendStream,
+    checkTokenAllowance,
+    approveToken,
     isPending,
     isConfirming,
     isConfirmed,
@@ -311,5 +567,76 @@ export function useUserStreams(userAddress: `0x${string}` | undefined) {
   });
 
   return { streamIds, isLoading, error };
+}
+
+/**
+ * Hook for getting stream rate lock status
+ * @param streamId Stream ID
+ * @returns Rate lock information including whether locked, lock until timestamp, and time remaining
+ */
+export function useStreamRateLockStatus(streamId: bigint | undefined) {
+  const chainId = useChainId();
+  const contractAddress = useMemo(() => {
+    return getContractAddress(chainId, "DripCore");
+  }, [chainId]);
+
+  const { data: stream, isLoading, error } = useReadContract({
+    address: contractAddress || undefined,
+    abi: DRIP_CORE_ABI,
+    functionName: "getStream",
+    args: streamId !== undefined ? [streamId] : undefined,
+    query: {
+      enabled: !!streamId && !!contractAddress,
+      refetchInterval: 30000, // Refetch every 30 seconds to update lock status
+    },
+  });
+
+  const rateLockStatus = useMemo(() => {
+    if (!stream || !streamId) {
+      return {
+        isLocked: false,
+        lockUntil: null,
+        timeRemaining: null,
+        isLoading,
+        error,
+      };
+    }
+
+    // Stream data is a tuple, we need to access rateLockUntil
+    // The structure is: [streamId, sender, recipients, token, deposit, startTime, endTime, status, rateLockUntil, title, description]
+    const streamData = stream as any;
+    const rateLockUntil = streamData.rateLockUntil 
+      ? BigInt(streamData.rateLockUntil) 
+      : 0n;
+
+    const now = BigInt(Math.floor(Date.now() / 1000));
+    const isLocked = rateLockUntil > 0n && rateLockUntil > now;
+
+    let timeRemaining: string | null = null;
+    if (isLocked) {
+      const remainingSeconds = Number(rateLockUntil - now);
+      const days = Math.floor(remainingSeconds / 86400);
+      const hours = Math.floor((remainingSeconds % 86400) / 3600);
+      const minutes = Math.floor((remainingSeconds % 3600) / 60);
+      
+      if (days > 0) {
+        timeRemaining = `${days}d ${hours}h`;
+      } else if (hours > 0) {
+        timeRemaining = `${hours}h ${minutes}m`;
+      } else {
+        timeRemaining = `${minutes}m`;
+      }
+    }
+
+    return {
+      isLocked,
+      lockUntil: rateLockUntil > 0n ? Number(rateLockUntil) : null,
+      timeRemaining,
+      isLoading,
+      error,
+    };
+  }, [stream, streamId, isLoading, error]);
+
+  return rateLockStatus;
 }
 

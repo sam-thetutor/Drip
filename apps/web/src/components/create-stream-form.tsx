@@ -13,7 +13,7 @@ import { TokenSelector, getTokenByAddress } from "@/components/token-selector";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Plus, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { parseEther, formatEther } from "viem";
+import { parseEther, formatEther, parseUnits, formatUnits, maxUint256 } from "viem";
 import { useRouter } from "next/navigation";
 
 const streamSchema = z.object({
@@ -48,8 +48,10 @@ export function CreateStreamForm() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const router = useRouter();
-  const { createStream, isPending, isConfirming, isConfirmed, hash } = useDrip();
+  const { createStream, approveToken, checkTokenAllowance, isPending, isConfirming, isConfirmed, hash } = useDrip();
   const [calculatedDeposit, setCalculatedDeposit] = useState<string>("0");
+  const [needsApproval, setNeedsApproval] = useState<boolean>(false);
+  const [approvalAmount, setApprovalAmount] = useState<string>("0");
 
   const {
     register,
@@ -79,6 +81,49 @@ export function CreateStreamForm() {
   const watchedToken = watch("token");
   const watchedTotalPeriods = watch("totalPeriods");
 
+  // Check if approval is needed when token or deposit changes
+  useEffect(() => {
+    const checkApproval = async () => {
+      if (!isConnected || !address || !watchedToken || calculatedDeposit === "0") {
+        setNeedsApproval(false);
+        return;
+      }
+
+      const isNativeToken = watchedToken === "0x0000000000000000000000000000000000000000";
+      if (isNativeToken) {
+        setNeedsApproval(false);
+        return;
+      }
+
+      try {
+        const token = getTokenByAddress(watchedToken as `0x${string}`, chainId);
+        if (!token) {
+          setNeedsApproval(false);
+          return;
+        }
+
+        const depositInWei = parseUnits(calculatedDeposit, token.decimals);
+        // Calculate total needed (deposit + platform fee of 0.5%)
+        const platformFeeBps = 50;
+        const totalNeeded = (depositInWei * BigInt(10000)) / BigInt(10000 - platformFeeBps);
+
+        const hasAllowance = await checkTokenAllowance(watchedToken as `0x${string}`, totalNeeded);
+        setNeedsApproval(!hasAllowance);
+        
+        if (!hasAllowance) {
+          setApprovalAmount(formatUnits(totalNeeded, token.decimals));
+        }
+      } catch (error) {
+        console.error("Error checking approval:", error);
+        setNeedsApproval(false);
+      }
+    };
+
+    // Add a small delay to avoid too many calls
+    const timeoutId = setTimeout(checkApproval, 500);
+    return () => clearTimeout(timeoutId);
+  }, [watchedToken, calculatedDeposit, isConnected, address, chainId]); // Removed checkTokenAllowance from deps
+
   // Calculate deposit when values change
   useEffect(() => {
     try {
@@ -88,24 +133,109 @@ export function CreateStreamForm() {
         return;
       }
 
+      // Calculate total amount per period from all recipients
       const totalAmountPerPeriod = watchedRecipients.reduce((sum, recipient) => {
-        return sum + parseFloat(recipient.amountPerPeriod || "0");
+        const amount = parseFloat(recipient.amountPerPeriod || "0");
+        if (isNaN(amount) || amount <= 0) return sum;
+        return sum + amount;
       }, 0);
 
+      if (totalAmountPerPeriod <= 0) {
+        setCalculatedDeposit("0");
+        return;
+      }
+
       const totalPeriods = parseInt(watchedTotalPeriods || "30");
+      if (isNaN(totalPeriods) || totalPeriods <= 0) {
+        setCalculatedDeposit("0");
+        return;
+      }
 
       // Calculate total deposit: amount per period * number of periods
       const totalDeposit = totalAmountPerPeriod * totalPeriods;
 
-      setCalculatedDeposit(totalDeposit.toFixed(6));
+      // Format based on token decimals to avoid rounding issues
+      // Use the token's actual decimals, but ensure we don't lose precision
+      const decimals = token.decimals;
+      // For tokens with more than 6 decimals, we'll still show up to 6 for readability
+      // but the actual precision is preserved in the calculation
+      const displayDecimals = Math.min(decimals, 18);
+      const formattedDeposit = totalDeposit.toFixed(displayDecimals);
+      
+      // Ensure it's not zero
+      const depositValue = parseFloat(formattedDeposit);
+      if (isNaN(depositValue) || depositValue <= 0) {
+        setCalculatedDeposit("0");
+        return;
+      }
+
+      // For very small amounts, ensure we don't lose precision
+      // If the formatted value is 0 but the original isn't, use more precision
+      if (depositValue === 0 && totalDeposit > 0) {
+        // Use full precision for very small amounts
+        setCalculatedDeposit(totalDeposit.toFixed(decimals));
+      } else {
+        setCalculatedDeposit(formattedDeposit);
+      }
     } catch (error) {
+      console.error("Error calculating deposit:", error);
       setCalculatedDeposit("0");
     }
   }, [watchedRecipients, watchedToken, watchedTotalPeriods, chainId]);
 
+  const handleApprove = async () => {
+    if (!isConnected || !address || !watchedToken || calculatedDeposit === "0") {
+      toast.error("Please fill in all required fields");
+      return;
+    }
+
+    try {
+      const token = getTokenByAddress(watchedToken as `0x${string}`, chainId);
+      if (!token) {
+        toast.error("Invalid token selected");
+        return;
+      }
+
+      const depositInWei = parseUnits(calculatedDeposit, token.decimals);
+      // Calculate total needed (deposit + platform fee of 0.5%)
+      const platformFeeBps = 50;
+      const totalNeeded = (depositInWei * BigInt(10000)) / BigInt(10000 - platformFeeBps);
+
+      toast.loading("Approving token...", { id: "approve-token" });
+      
+      await approveToken(watchedToken as `0x${string}`, maxUint256); // Approve max for convenience
+      
+      toast.success("Token approved successfully!", { id: "approve-token" });
+      setNeedsApproval(false);
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to approve token", { id: "approve-token" });
+    }
+  };
+
   const onSubmit = async (data: StreamFormData) => {
     if (!isConnected || !address) {
       toast.error("Please connect your wallet");
+      return;
+    }
+
+    // Check if approval is needed
+    if (needsApproval) {
+      toast.error("Please approve token spending first");
+      return;
+    }
+
+    // Validate deposit
+    if (!calculatedDeposit || calculatedDeposit === "0" || parseFloat(calculatedDeposit) <= 0) {
+      toast.error("Invalid deposit amount. Please check recipient amounts and periods.");
+      return;
+    }
+
+    // Validate recipients have amounts
+    const hasValidRecipients = data.recipients.every(
+      (r) => r.address && r.amountPerPeriod && parseFloat(r.amountPerPeriod) > 0
+    );
+    if (!hasValidRecipients) {
+      toast.error("Please ensure all recipients have valid addresses and amounts");
       return;
     }
 
@@ -128,6 +258,21 @@ export function CreateStreamForm() {
       const recipients = data.recipients.map((r) => r.address as `0x${string}`);
       const amountsPerPeriod = data.recipients.map((r) => r.amountPerPeriod);
 
+      // Validate amounts are not empty
+      if (amountsPerPeriod.some((amt) => !amt || parseFloat(amt) <= 0)) {
+        toast.error("All recipient amounts must be greater than 0");
+        return;
+      }
+
+      console.log("Creating stream with:", {
+        recipients,
+        token: data.token,
+        amountsPerPeriod,
+        periodSeconds,
+        deposit: calculatedDeposit,
+        tokenDecimals: token.decimals,
+      });
+
       toast.loading("Creating stream...", { id: "create-stream" });
 
       await createStream(
@@ -147,7 +292,13 @@ export function CreateStreamForm() {
         toast.info("Waiting for confirmation...", { id: "confirm-stream" });
       }
     } catch (error: any) {
-      toast.error(error?.message || "Failed to create stream", { id: "create-stream" });
+      const errorMessage = error?.message || "Failed to create stream";
+      if (errorMessage.includes("Insufficient token approval")) {
+        setNeedsApproval(true);
+        toast.error(errorMessage, { id: "create-stream", duration: 5000 });
+      } else {
+        toast.error(errorMessage, { id: "create-stream" });
+      }
     }
   };
 
@@ -372,10 +523,46 @@ export function CreateStreamForm() {
         </CardContent>
       </Card>
 
+      {/* Token Approval Notice */}
+      {needsApproval && watchedToken !== "0x0000000000000000000000000000000000000000" && (
+        <Card className="glass-card border-yellow-500/30 bg-yellow-500/10">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-4">
+              <div className="flex-1">
+                <h3 className="font-semibold text-yellow-600 mb-2">Token Approval Required</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Before creating a stream with {getTokenByAddress(watchedToken as `0x${string}`, chainId)?.symbol || "this token"}, 
+                  you need to approve the DripCore contract to spend your tokens.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Required approval: {approvalAmount} {getTokenByAddress(watchedToken as `0x${string}`, chainId)?.symbol || "tokens"}
+                </p>
+              </div>
+              <Button
+                type="button"
+                onClick={handleApprove}
+                disabled={isPending || isConfirming}
+                variant="outline"
+                className="border-yellow-500 text-yellow-600 hover:bg-yellow-500/20"
+              >
+                {isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Approving...
+                  </>
+                ) : (
+                  "Approve Token"
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="flex gap-4">
         <Button
           type="submit"
-          disabled={isPending || isConfirming}
+          disabled={isPending || isConfirming || needsApproval}
           className="flex-1"
         >
           {isPending || isConfirming ? (
@@ -383,6 +570,8 @@ export function CreateStreamForm() {
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               {isConfirming ? "Confirming..." : "Creating..."}
             </>
+          ) : needsApproval ? (
+            "Approve Token First"
           ) : (
             "Create Stream"
           )}

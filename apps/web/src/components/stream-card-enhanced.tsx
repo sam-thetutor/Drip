@@ -3,15 +3,16 @@
 import { useAccount } from "wagmi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Pause, Play, X, Download, ExternalLink } from "lucide-react";
+import { Pause, Play, X, Download, ExternalLink, Lock } from "lucide-react";
 import { formatEther, formatUnits } from "viem";
 import { formatTokenAmount } from "@/lib/utils/format";
-import { useDrip, useRecipientBalance } from "@/lib/contracts";
+import { useDrip, useRecipientBalance, useStreamRateLockStatus } from "@/lib/contracts";
 import { getTokenByAddress } from "@/components/token-selector";
 import { useChainId } from "wagmi";
 import { toast } from "sonner";
 import { useEffect } from "react";
 import Link from "next/link";
+import { Tooltip } from "@/components/ui/tooltip";
 
 interface StreamCardEnhancedProps {
   streamId: bigint;
@@ -39,6 +40,7 @@ export function StreamCardEnhanced({
   const { address } = useAccount();
   const chainId = useChainId();
   const { pauseStream, resumeStream, cancelStream, withdrawFromStream, isPending } = useDrip();
+  const rateLockStatus = useStreamRateLockStatus(streamId);
 
   const isPaused = status === 1;
   const isActive = status === 0;
@@ -115,12 +117,12 @@ export function StreamCardEnhanced({
   const handleCancel = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!confirm("Are you sure you want to cancel this stream?")) return;
+    if (!confirm("Are you sure you want to cancel this stream? All accrued funds will be automatically sent to recipients, and any remaining deposit will be refunded to you.")) return;
     
     try {
       toast.loading("Cancelling stream...", { id: "cancel-stream" });
       await cancelStream(streamId);
-      toast.success("Stream cancelled", { id: "cancel-stream" });
+      toast.success("Stream cancelled. All accrued funds were sent to recipients.", { id: "cancel-stream" });
     } catch (error: any) {
       toast.error(error?.message || "Failed to cancel stream", { id: "cancel-stream" });
     }
@@ -157,7 +159,7 @@ export function StreamCardEnhanced({
               ID: {streamId.toString()}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {isActive && !isPaused && (
               <span className="px-2 py-1 text-xs font-medium bg-green/20 text-green rounded-full border border-green/30">
                 Active
@@ -177,6 +179,30 @@ export function StreamCardEnhanced({
               <span className="px-2 py-1 text-xs font-medium bg-destructive/20 text-destructive rounded-full border border-destructive/30">
                 Cancelled
               </span>
+            )}
+            {rateLockStatus.isLocked && (
+              <Tooltip
+                content={
+                  <div className="space-y-1">
+                    <p className="font-semibold">Stream Rates are Locked</p>
+                    <p className="text-xs opacity-90">
+                      {isUserSender
+                        ? "As the sender, you cannot modify recipients while rates are locked. This protects recipients from unexpected changes."
+                        : "As a recipient, your payment rate is protected and cannot be changed by the sender while rates are locked."}
+                    </p>
+                    {rateLockStatus.timeRemaining && (
+                      <p className="text-xs opacity-75 mt-1">
+                        Time remaining: {rateLockStatus.timeRemaining}
+                      </p>
+                    )}
+                  </div>
+                }
+              >
+                <span className="px-2 py-1 text-xs font-medium bg-yellow-500/20 text-yellow-600 rounded-full border border-yellow-500/30 flex items-center gap-1 cursor-help">
+                  <Lock className="h-3 w-3" />
+                  Locked
+                </span>
+              </Tooltip>
             )}
           </div>
         </div>

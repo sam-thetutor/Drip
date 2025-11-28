@@ -32,21 +32,23 @@ export const celoSepolia = defineChain({
  * Contract addresses by network
  * 
  * Deployed addresses:
- * - Celo Sepolia Testnet:
- *   - DripCore: 0xA14adF0D5dc52bbCf32d8a571986F13637dbDB17
- *   - SubscriptionManager: 0x51a7F75Af71808D34A7D18FD2fC36BEea7b47Be8
+ * - Celo Sepolia Testnet (Proxy Deployment):
+ *   - DripCore Proxy: 0xfAaB5005f7844eC5499cF258F52dE29EDc74aa31
+ *   - DripCore Implementation: 0xe4789E09696De271E9192e88883722C38326D741
+ *   - Proxy Admin: 0xb94d80dB6a120D6c22f199c5Ff9B4CF9C8F4EE25
+ *   - SubscriptionManager: 0xb8eCfcC00e1d63525b81cF2bC17125f56952D384
  * - Celo Mainnet:
- *   - DripCore: 0x7584c4366C8b71A1c45342e0D2CEd19e1f1a668A
- *   - SubscriptionManager: 0x1001E2E27a29F7003A30c408716A89B6e3F49e15
+ *   - DripCore: 0x5530975fDe062FE6706298fF3945E3d1a17A310a
+ *   - SubscriptionManager: 0xBE3e232657233224F14b7b2a5625f69aF8F95054
  */
 export const CONTRACT_ADDRESSES = {
   [CELO_MAINNET_ID]: {
-    DripCore: "0x7584c4366C8b71A1c45342e0D2CEd19e1f1a668A" as `0x${string}`,
-    SubscriptionManager: "0x1001E2E27a29F7003A30c408716A89B6e3F49e15" as `0x${string}`,
+    DripCore: "0x5530975fDe062FE6706298fF3945E3d1a17A310a" as `0x${string}`,
+    SubscriptionManager: "0xBE3e232657233224F14b7b2a5625f69aF8F95054" as `0x${string}`,
   },
   [CELO_SEPOLIA_ID]: {
-    DripCore: "0xA14adF0D5dc52bbCf32d8a571986F13637dbDB17" as `0x${string}`,
-    SubscriptionManager: "0x51a7F75Af71808D34A7D18FD2fC36BEea7b47Be8" as `0x${string}`,
+    DripCore: "0xfAaB5005f7844eC5499cF258F52dE29EDc74aa31" as `0x${string}`,
+    SubscriptionManager: "0xb8eCfcC00e1d63525b81cF2bC17125f56952D384" as `0x${string}`,
   },
 } as const;
 

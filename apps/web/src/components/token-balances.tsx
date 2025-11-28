@@ -3,6 +3,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Wallet } from "lucide-react";
 import { formatUnits } from "viem";
+import { useChainId } from "wagmi";
+import { TOKENS_BY_NETWORK } from "@/components/token-selector";
+import { CELO_SEPOLIA_ID } from "@/lib/contracts/config";
+import { useMemo } from "react";
 
 interface TokenBalancesProps {
   tokenBalances: Record<
@@ -12,25 +16,54 @@ interface TokenBalancesProps {
 }
 
 export function TokenBalances({ tokenBalances }: TokenBalancesProps) {
-  const tokens = Object.entries(tokenBalances);
+  const chainId = useChainId();
+  
+  // Get token addresses for the current network
+  const tokens = TOKENS_BY_NETWORK[chainId] || TOKENS_BY_NETWORK[CELO_SEPOLIA_ID];
+  
+  // Always show cUSD, USDC, USDT (if available), and CELO
+  const requiredTokens = useMemo(() => {
+    const requiredSymbols = ["cUSD", "USDC", "USDT", "CELO"];
+    // Filter to only include tokens that exist on the current network
+    return tokens.filter(t => requiredSymbols.includes(t.symbol));
+  }, [tokens]);
 
-  if (tokens.length === 0) {
-    return (
-      <Card className="glass-card">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Wallet className="h-5 w-5" />
-            Token Balances
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground text-center py-4">
-            No token balances found
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
+  // Merge actual balances with required tokens, showing 0 for missing ones
+  const displayTokens = useMemo(() => {
+    return requiredTokens.map(token => {
+      const existingBalance = tokenBalances[token.address];
+      if (existingBalance) {
+        return {
+          address: token.address,
+          balance: existingBalance.balance,
+          decimals: existingBalance.decimals,
+          symbol: existingBalance.symbol,
+        };
+      }
+      // Return 0 balance for tokens not in the treasury
+      return {
+        address: token.address,
+        balance: 0n,
+        decimals: token.decimals,
+        symbol: token.symbol,
+      };
+    });
+  }, [requiredTokens, tokenBalances]);
+
+  // Also include any other tokens that might be in the treasury but not in the required list
+  const otherTokens = useMemo(() => {
+    return Object.entries(tokenBalances)
+      .filter(([address]) => {
+        // Check if this token is not in the required tokens list
+        return !requiredTokens.some(t => t.address.toLowerCase() === address.toLowerCase());
+      })
+      .map(([address, data]) => ({
+        address,
+        ...data,
+      }));
+  }, [tokenBalances, requiredTokens]);
+
+  const allTokens = [...displayTokens, ...otherTokens];
 
   return (
     <Card className="glass-card">
@@ -45,7 +78,7 @@ export function TokenBalances({ tokenBalances }: TokenBalancesProps) {
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-          {tokens.map(([address, { balance, decimals, symbol }]) => {
+          {allTokens.map(({ address, balance, decimals, symbol }) => {
             const formattedBalance = formatUnits(balance, decimals);
             const displayBalance = parseFloat(formattedBalance).toLocaleString(undefined, {
               minimumFractionDigits: 2,
