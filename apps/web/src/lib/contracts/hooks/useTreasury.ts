@@ -39,12 +39,21 @@ export function useTreasury() {
     const balances: Record<string, { balance: bigint; decimals: number; symbol: string }> = {};
 
     // Process streams
+    // Only count streams where user is the sender (they escrowed the funds)
     if (streams && Array.isArray(streams)) {
       streams.forEach((stream: any) => {
+        // Only count streams where user is sender (they own the escrowed funds)
+        const isSender = stream.userRole === "sender" || stream.userRole === "both";
+        if (!isSender) return; // Skip streams where user is only a recipient
+        
         const token = stream.token as string;
-        const deposit = stream.totalDeposit ? BigInt(stream.totalDeposit) : 0n;
-        const withdrawn = stream.totalWithdrawn ? BigInt(stream.totalWithdrawn) : 0n;
-        const balance = deposit - withdrawn;
+        // The stream.deposit field represents the remaining deposit in the stream
+        // This is the actual escrowed balance
+        const deposit = stream.deposit ? BigInt(stream.deposit) : 0n;
+        
+        // Only count active or paused streams (completed/cancelled have no escrow)
+        const status = Number(stream.status ?? 0);
+        if (status !== 0 && status !== 1) return; // 0 = Active, 1 = Paused
 
         if (!balances[token]) {
           const tokenInfo = getTokenByAddress(token as `0x${string}`, chainId) || {
@@ -57,7 +66,7 @@ export function useTreasury() {
             symbol: tokenInfo.symbol,
           };
         }
-        balances[token].balance = balances[token].balance + balance;
+        balances[token].balance = balances[token].balance + deposit;
       });
     }
 

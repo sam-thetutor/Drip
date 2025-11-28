@@ -19,6 +19,7 @@
     "deploy:proxy:celo:mainnet": "hardhat run scripts/deploy-proxy.ts --network celo && node update-frontend-config.js 42220",
     "upgrade": "hardhat run scripts/upgrade-proxy.ts",
     "verify": "hardhat verify",
+    "verify:sourcify": "ts-node scripts/verify-sourcify.ts",
     "clean": "hardhat clean",
     "typechain": "hardhat typechain"
   },

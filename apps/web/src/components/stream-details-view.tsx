@@ -1,20 +1,23 @@
 "use client";
 
 import { useAccount, useChainId } from "wagmi";
-import { useStream, useStreamRecipientsInfo, useDrip } from "@/lib/contracts";
+import { useStream, useStreamRecipientsInfo, useDrip, useStreamRateLockStatus } from "@/lib/contracts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Pause, Play, X, Download, Loader2, ExternalLink, Plus, Edit, Trash2 } from "lucide-react";
+import { Pause, Play, X, Download, Loader2, ExternalLink, Plus, Edit, Trash2, Lock, TrendingUp } from "lucide-react";
 import { formatEther, formatUnits } from "viem";
 import { formatTokenAmount } from "@/lib/utils/format";
 import { getContractAddress } from "@/lib/contracts/config";
 import { getTokenByAddress } from "@/components/token-selector";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { WithdrawModal } from "@/components/withdraw-modal";
 import { AddRecipientModal } from "@/components/add-recipient-modal";
 import { EditRecipientModal } from "@/components/edit-recipient-modal";
+import { LockStreamRateModal } from "@/components/lock-stream-rate-modal";
+import { ExtendStreamModal } from "@/components/extend-stream-modal";
+import { Tooltip } from "@/components/ui/tooltip";
 
 interface StreamDetailsViewProps {
   streamId: bigint;
@@ -25,10 +28,34 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
   const chainId = useChainId();
   const { stream, isLoading: streamLoading, error: streamError, refetch: streamRefetch } = useStream(streamId);
   const { recipientsInfo, isLoading: recipientsLoading, refetch: recipientsRefetch } = useStreamRecipientsInfo(streamId);
-  const { pauseStream, resumeStream, cancelStream, removeRecipient, isPending } = useDrip();
+  const { pauseStream, resumeStream, cancelStream, removeRecipient, isPending, isConfirming, isConfirmed } = useDrip();
+  const rateLockStatus = useStreamRateLockStatus(streamId);
   const [withdrawRecipient, setWithdrawRecipient] = useState<`0x${string}` | null>(null);
   const [showAddRecipient, setShowAddRecipient] = useState(false);
   const [editRecipient, setEditRecipient] = useState<{ address: `0x${string}`, rate: bigint } | null>(null);
+  const [showLockRateModal, setShowLockRateModal] = useState(false);
+  const [showExtendStreamModal, setShowExtendStreamModal] = useState(false);
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
+
+  // Watch for transaction confirmation - MUST be before any conditional returns
+  useEffect(() => {
+    if (pendingAction && isConfirmed) {
+      switch (pendingAction) {
+        case "pause":
+          toast.success("Stream paused successfully!", { id: "pause-stream" });
+          break;
+        case "resume":
+          toast.success("Stream resumed successfully!", { id: "resume-stream" });
+          break;
+        case "cancel":
+          toast.success("Stream cancelled successfully! All accrued funds were sent to recipients.", { id: "cancel-stream" });
+          break;
+      }
+      setPendingAction(null);
+      if (streamRefetch) streamRefetch();
+      if (recipientsRefetch) recipientsRefetch();
+    }
+  }, [isConfirmed, pendingAction, streamRefetch, recipientsRefetch]);
 
   if (streamLoading) {
     return (
@@ -146,34 +173,40 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
 
   const handlePause = async () => {
     try {
-      toast.loading("Pausing streamData...", { id: "pause-stream" });
+      toast.loading("Submitting transaction...", { id: "pause-stream" });
+      setPendingAction("pause");
       await pauseStream(streamId);
-      toast.success("Stream paused", { id: "pause-stream" });
+      toast.loading("Waiting for confirmation...", { id: "pause-stream" });
     } catch (error: any) {
       toast.error(error?.message || "Failed to pause stream", { id: "pause-stream" });
+      setPendingAction(null);
     }
   };
 
   const handleResume = async () => {
     try {
-      toast.loading("Resuming streamData...", { id: "resume-stream" });
+      toast.loading("Submitting transaction...", { id: "resume-stream" });
+      setPendingAction("resume");
       await resumeStream(streamId);
-      toast.success("Stream resumed", { id: "resume-stream" });
+      toast.loading("Waiting for confirmation...", { id: "resume-stream" });
     } catch (error: any) {
       toast.error(error?.message || "Failed to resume stream", { id: "resume-stream" });
+      setPendingAction(null);
     }
   };
 
   const handleCancel = async () => {
-    if (!confirm("Are you sure you want to cancel this stream? Remaining funds will be refunded.")) {
+    if (!confirm("Are you sure you want to cancel this stream? All accrued funds will be automatically sent to recipients, and any remaining deposit will be refunded to you.")) {
       return;
     }
     try {
-      toast.loading("Cancelling streamData...", { id: "cancel-stream" });
+      toast.loading("Submitting transaction...", { id: "cancel-stream" });
+      setPendingAction("cancel");
       await cancelStream(streamId);
-      toast.success("Stream cancelled", { id: "cancel-stream" });
+      toast.loading("Waiting for confirmation...", { id: "cancel-stream" });
     } catch (error: any) {
       toast.error(error?.message || "Failed to cancel stream", { id: "cancel-stream" });
+      setPendingAction(null);
     }
   };
 
@@ -198,7 +231,7 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
                 <p className="text-muted-foreground">{streamData.description}</p>
               )}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               {isActive && !isPaused && (
                 <span className="px-3 py-1 text-sm font-medium bg-green-100 text-green-800 rounded-full">
                   Active
@@ -218,6 +251,33 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
                 <span className="px-3 py-1 text-sm font-medium bg-gray-100 text-gray-800 rounded-full">
                   Cancelled
                 </span>
+              )}
+              {rateLockStatus.isLocked && (
+                <Tooltip
+                  content={
+                    <div className="space-y-1">
+                      <p className="font-semibold">Stream Rates are Locked</p>
+                      <p className="text-xs opacity-90">
+                        {isUserSender
+                          ? "As the sender, you cannot add, remove, or modify recipients while rates are locked. This protects recipients from unexpected changes."
+                          : "As a recipient, your payment rate is protected and cannot be changed by the sender while rates are locked."}
+                      </p>
+                      {rateLockStatus.lockUntil && (
+                        <p className="text-xs opacity-75 mt-1">
+                          Lock expires: {formatTime(rateLockStatus.lockUntil)}
+                        </p>
+                      )}
+                    </div>
+                  }
+                >
+                  <span className="px-3 py-1 text-sm font-medium bg-yellow-500/20 text-yellow-600 rounded-full border border-yellow-500/30 flex items-center gap-1.5 cursor-help">
+                    <Lock className="h-4 w-4" />
+                    <span>Rates Locked</span>
+                    {rateLockStatus.timeRemaining && (
+                      <span className="text-xs opacity-75">({rateLockStatus.timeRemaining})</span>
+                    )}
+                  </span>
+                </Tooltip>
               )}
             </div>
           </div>
@@ -246,21 +306,68 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
             </div>
           </div>
 
+          {/* Rate Lock Status */}
+          {rateLockStatus.isLocked && (
+            <div className="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+              <div className="flex items-center gap-2 text-yellow-600">
+                <Lock className="h-4 w-4" />
+                <Tooltip
+                  content={
+                    <div className="space-y-1">
+                      <p className="font-semibold">What does "Rates Locked" mean?</p>
+                      <p className="text-xs opacity-90">
+                        {isUserSender
+                          ? "As the sender, you cannot add, remove, or modify recipients while rates are locked. This protects recipients from unexpected changes to their payment rates."
+                          : "As a recipient, your payment rate is protected and cannot be changed by the sender while rates are locked. This ensures payment stability."}
+                      </p>
+                    </div>
+                  }
+                >
+                  <span className="text-sm font-medium cursor-help">
+                    Stream rates are locked until {rateLockStatus.lockUntil ? formatTime(rateLockStatus.lockUntil) : "unknown"}
+                    {rateLockStatus.timeRemaining && ` (${rateLockStatus.timeRemaining} remaining)`}
+                  </span>
+                </Tooltip>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {isUserSender
+                  ? "You cannot add, remove, or modify recipients while rates are locked."
+                  : "The sender cannot modify recipient rates while locked. Your payment rate is protected."}
+              </p>
+            </div>
+          )}
+
           {/* Stream Controls */}
           {isUserSender && (isActive || isPaused) && (
-            <div className="flex gap-2 mt-6 pt-6 border-t">
+            <div className="flex flex-wrap gap-2 mt-6 pt-6 border-t">
               {!isPaused ? (
-                <Button variant="outline" onClick={handlePause} disabled={isPending}>
+                <Button variant="outline" onClick={handlePause} disabled={isPending || isConfirming}>
                   <Pause className="h-4 w-4 mr-2" />
                   Pause Stream
                 </Button>
               ) : (
-                <Button variant="outline" onClick={handleResume} disabled={isPending}>
+                <Button variant="outline" onClick={handleResume} disabled={isPending || isConfirming}>
                   <Play className="h-4 w-4 mr-2" />
                   Resume Stream
                 </Button>
               )}
-              <Button variant="destructive" onClick={handleCancel} disabled={isPending}>
+              <Button 
+                variant="outline" 
+                onClick={() => setShowLockRateModal(true)} 
+                disabled={isPending || isConfirming || rateLockStatus.isLocked}
+              >
+                <Lock className="h-4 w-4 mr-2" />
+                Lock Rate
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => setShowExtendStreamModal(true)} 
+                disabled={isPending || isConfirming || rateLockStatus.isLocked}
+              >
+                <TrendingUp className="h-4 w-4 mr-2" />
+                Extend / Top Up
+              </Button>
+              <Button variant="destructive" onClick={handleCancel} disabled={isPending || isConfirming}>
                 <X className="h-4 w-4 mr-2" />
                 Cancel Stream
               </Button>
@@ -356,7 +463,12 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
                 : `Recipients (${isUserSender ? streamData.recipients.length : recipients.length})`}
             </CardTitle>
             {isUserSender && (isActive || isPaused) && (
-              <Button onClick={() => setShowAddRecipient(true)} size="sm">
+              <Button 
+                onClick={() => setShowAddRecipient(true)} 
+                size="sm"
+                disabled={rateLockStatus.isLocked}
+                title={rateLockStatus.isLocked ? "Cannot add recipients while rates are locked" : ""}
+              >
                 <Plus className="h-4 w-4 mr-2" />
                 Add Recipient
               </Button>
@@ -431,6 +543,8 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
                             variant="outline"
                             size="sm"
                             onClick={() => setEditRecipient({ address: recipient.recipient as `0x${string}`, rate })}
+                            disabled={rateLockStatus.isLocked}
+                            title={rateLockStatus.isLocked ? "Cannot edit recipients while rates are locked" : ""}
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
@@ -447,6 +561,8 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
                                 toast.error(error?.message || "Failed to remove recipient", { id: "remove-recipient" });
                               }
                             }}
+                            disabled={rateLockStatus.isLocked}
+                            title={rateLockStatus.isLocked ? "Cannot remove recipients while rates are locked" : ""}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -517,6 +633,33 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
             // Refetch recipients info
             if (recipientsRefetch) recipientsRefetch();
             if (streamRefetch) streamRefetch();
+          }}
+        />
+      )}
+
+      {/* Lock Stream Rate Modal */}
+      {showLockRateModal && (
+        <LockStreamRateModal
+          streamId={streamId}
+          isOpen={showLockRateModal}
+          onClose={() => setShowLockRateModal(false)}
+          currentLockUntil={rateLockStatus.lockUntil || undefined}
+        />
+      )}
+
+      {/* Extend Stream Modal */}
+      {showExtendStreamModal && streamData && (
+        <ExtendStreamModal
+          streamId={streamId}
+          currentEndTime={endTime}
+          token={streamData.token as `0x${string}`}
+          recipients={streamData.recipients as `0x${string}`[]}
+          isOpen={showExtendStreamModal}
+          onClose={() => {
+            setShowExtendStreamModal(false);
+            // Refetch stream data after closing
+            if (streamRefetch) streamRefetch();
+            if (recipientsRefetch) recipientsRefetch();
           }}
         />
       )}

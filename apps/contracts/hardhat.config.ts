@@ -11,6 +11,9 @@ try {
 }
 
 const config: HardhatUserConfig = {
+  sourcify: {
+   enabled: true,
+  },
   solidity: {
     version: "0.8.20",
     settings: {
@@ -48,9 +51,9 @@ const config: HardhatUserConfig = {
   },
   etherscan: {
     apiKey: {
-      celo: process.env.CELOSCAN_API_KEY || "",
-      alfajores: process.env.CELOSCAN_API_KEY || "",
-      sepolia: process.env.CELOSCAN_API_KEY || "",
+      celo: process.env.CELOSCAN_API_KEY || "HDIQG285AQ9CKVTCBH8I8C1DB2CZRTV5XX",
+      alfajores: process.env.CELOSCAN_API_KEY || "HDIQG285AQ9CKVTCBH8I8C1DB2CZRTV5XX",
+      sepolia: process.env.CELOSCAN_API_KEY || "HDIQG285AQ9CKVTCBH8I8C1DB2CZRTV5XX",
     },
     customChains: [
       {
