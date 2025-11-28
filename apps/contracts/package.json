@@ -12,6 +12,12 @@
     "deploy:sepolia": "hardhat ignition deploy ignition/modules/Drip.ts --network sepolia",
     "deploy:celo": "hardhat ignition deploy ignition/modules/Drip.ts --network celo",
     "deploy:celo:mainnet": "hardhat ignition deploy ignition/modules/Drip.ts --network celo && node update-frontend-config.js 42220",
+    "deploy:proxy": "hardhat run scripts/deploy-proxy.ts",
+    "deploy:proxy:alfajores": "hardhat run scripts/deploy-proxy.ts --network alfajores",
+    "deploy:proxy:sepolia": "hardhat run scripts/deploy-proxy.ts --network sepolia",
+    "deploy:proxy:celo": "hardhat run scripts/deploy-proxy.ts --network celo",
+    "deploy:proxy:celo:mainnet": "hardhat run scripts/deploy-proxy.ts --network celo && node update-frontend-config.js 42220",
+    "upgrade": "hardhat run scripts/upgrade-proxy.ts",
     "verify": "hardhat verify",
     "clean": "hardhat clean",
     "typechain": "hardhat typechain"
@@ -25,6 +31,10 @@
   ],
   "author": "",
   "license": "MIT",
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.0.0",
+    "@openzeppelin/contracts-upgradeable": "^5.0.0"
+  },
   "devDependencies": {
     "@nomicfoundation/hardhat-chai-matchers": "^2.0.0",
     "@nomicfoundation/hardhat-ethers": "^3.0.0",
@@ -34,6 +44,8 @@
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
     "@nomicfoundation/hardhat-toolbox-viem": "^3.0.0",
     "@nomicfoundation/hardhat-verify": "^2.0.0",
+    "@openzeppelin/hardhat-upgrades": "^3.0.0",
+    "dotenv": "^16.0.0",
     "@typechain/ethers-v6": "^0.5.0",
     "@typechain/hardhat": "^9.0.0",
     "@types/chai": "^4.2.0",
@@ -47,8 +59,5 @@
     "typechain": "^8.3.0",
     "typescript": ">=4.5.0",
     "viem": "^2.0.0"
-  },
-  "dependencies": {
-    "@openzeppelin/contracts": "^5.0.0"
   }
 }

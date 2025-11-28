@@ -1,6 +1,7 @@
 import type { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox-viem";
 import "@nomicfoundation/hardhat-ethers";
+import "@openzeppelin/hardhat-upgrades";
 
 // Load environment variables from .env file if it exists
 try {

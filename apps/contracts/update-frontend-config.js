@@ -49,20 +49,38 @@ const frontendConfigPath = path.join(
   'config.ts'
 );
 
-// Read deployed addresses
-if (!fs.existsSync(deployedAddressesPath)) {
+// Try to read proxy deployment first, fallback to regular deployment
+const proxyDeploymentPath = path.join(
+  __dirname,
+  'ignition',
+  'deployments',
+  deploymentFolder,
+  'proxy-deployment.json'
+);
+
+let dripCoreAddress, subscriptionManagerAddress;
+
+if (fs.existsSync(proxyDeploymentPath)) {
+  // Use proxy deployment
+  const proxyDeployment = JSON.parse(fs.readFileSync(proxyDeploymentPath, 'utf8'));
+  dripCoreAddress = proxyDeployment.contracts.DripCore.proxy; // Use proxy address, not implementation
+  subscriptionManagerAddress = proxyDeployment.contracts.SubscriptionManager;
+  console.log('📦 Using proxy deployment addresses');
+} else if (fs.existsSync(deployedAddressesPath)) {
+  // Fallback to regular deployment
+  const deployedAddresses = JSON.parse(fs.readFileSync(deployedAddressesPath, 'utf8'));
+  dripCoreAddress = deployedAddresses['DripModule#DripCore'] || deployedAddresses['DripProxyModule#DripCoreProxy'];
+  subscriptionManagerAddress = deployedAddresses['DripModule#SubscriptionManager'] || deployedAddresses['DripProxyModule#SubscriptionManager'];
+  console.log('📦 Using regular deployment addresses');
+} else {
   console.error(`Deployment addresses not found at: ${deployedAddressesPath}`);
-  console.error('Please deploy contracts first using: pnpm deploy:celo');
+  console.error('Please deploy contracts first using: pnpm deploy:proxy:celo or pnpm deploy:celo');
   process.exit(1);
 }
 
-const deployedAddresses = JSON.parse(fs.readFileSync(deployedAddressesPath, 'utf8'));
-const dripCoreAddress = deployedAddresses['DripModule#DripCore'];
-const subscriptionManagerAddress = deployedAddresses['DripModule#SubscriptionManager'];
-
 if (!dripCoreAddress || !subscriptionManagerAddress) {
   console.error('Could not find contract addresses in deployment file');
-  console.error('Expected keys: DripModule#DripCore, DripModule#SubscriptionManager');
+  console.error('Expected keys: DripCore.proxy (for proxy) or DripModule#DripCore (for regular)');
   process.exit(1);
 }
 

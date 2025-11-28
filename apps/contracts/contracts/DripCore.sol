@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "./interfaces/IDrip.sol";
 import "./interfaces/IERC20.sol";
 import "./utils/TokenHelper.sol";
@@ -11,8 +12,9 @@ import "./utils/TokenHelper.sol";
  * @title DripCore
  * @notice Main contract for payment streaming functionality with multiple recipients
  * @dev Implements per-second payment streaming with pause/resume/cancel capabilities
+ * @dev This contract is upgradeable via proxy pattern
  */
-contract DripCore is IDrip, ReentrancyGuard, Ownable {
+contract DripCore is IDrip, Initializable, ReentrancyGuardUpgradeable, OwnableUpgradeable {
     using TokenHelper for address;
 
     /// @notice Counter for generating unique stream IDs
@@ -55,18 +57,30 @@ contract DripCore is IDrip, ReentrancyGuard, Ownable {
     uint256 public constant MAX_DESCRIPTION_LEN = 1024;
 
     /// @notice Platform fee percentage (basis points, e.g., 50 = 0.5%)
-    uint256 public platformFeeBps = 50; // 0.5% default
+    uint256 public platformFeeBps;
 
     /// @notice Platform fee recipient
     address public platformFeeRecipient;
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     /**
-     * @notice Constructor
+     * @notice Initialize the contract (replaces constructor for upgradeable contracts)
      * @param _platformFeeRecipient Address to receive platform fees
+     * @param _owner Address that will own the contract
      */
-    constructor(address _platformFeeRecipient) Ownable(msg.sender) {
+    function initialize(address _platformFeeRecipient, address _owner) public initializer {
         require(_platformFeeRecipient != address(0), "DripCore: Invalid fee recipient");
+        require(_owner != address(0), "DripCore: Invalid owner");
+        
+        __ReentrancyGuard_init();
+        __Ownable_init(_owner);
+        
         platformFeeRecipient = _platformFeeRecipient;
+        platformFeeBps = 50; // 0.5% default - must be set in initializer for upgradeable contracts
     }
 
     /**
@@ -164,6 +178,7 @@ contract DripCore is IDrip, ReentrancyGuard, Ownable {
             startTime: startTime,
             endTime: endTime,
             status: StreamStatus.Active,
+            rateLockUntil: 0,
             title: title,
             description: description
         });
@@ -205,19 +220,30 @@ contract DripCore is IDrip, ReentrancyGuard, Ownable {
             lastWithdraw = stream.startTime;
         }
 
-        // Calculate total paused time
+        // Cap elapsed time at stream endTime
+        uint256 effectiveEndTime = currentTime > stream.endTime ? stream.endTime : currentTime;
+
+        // Calculate total paused time (capped at endTime)
         uint256 totalPausedTime = _pausedTime[streamId];
         if (stream.status == StreamStatus.Paused && _pauseStartTime[streamId] > 0) {
-            totalPausedTime += (currentTime - _pauseStartTime[streamId]);
+            uint256 pauseEnd = effectiveEndTime < _pauseStartTime[streamId] 
+                ? _pauseStartTime[streamId] 
+                : effectiveEndTime;
+            totalPausedTime += (pauseEnd - _pauseStartTime[streamId]);
         }
 
-        // Calculate elapsed time (excluding paused time)
+        // Calculate elapsed time (excluding paused time, capped at endTime)
         uint256 elapsedTime;
-        if (currentTime > lastWithdraw) {
-            uint256 rawElapsed = currentTime - lastWithdraw;
+        
+        if (effectiveEndTime > lastWithdraw) {
+            uint256 rawElapsed = effectiveEndTime - lastWithdraw;
             // Adjust for paused time if pause occurred after last withdraw
             if (_pauseStartTime[streamId] > lastWithdraw && stream.status == StreamStatus.Paused) {
-                uint256 pauseDuration = currentTime - _pauseStartTime[streamId];
+                // Calculate pause duration up to effective end time
+                uint256 pauseEndTime = _pauseStartTime[streamId] < effectiveEndTime 
+                    ? effectiveEndTime 
+                    : _pauseStartTime[streamId];
+                uint256 pauseDuration = pauseEndTime - _pauseStartTime[streamId];
                 if (rawElapsed > pauseDuration) {
                     elapsedTime = rawElapsed - pauseDuration;
                 } else {
@@ -236,12 +262,67 @@ contract DripCore is IDrip, ReentrancyGuard, Ownable {
         uint256 totalDistributed = _calculateTotalDistributed(streamId, currentTime);
         uint256 remainingDeposit = stream.deposit > totalDistributed ? stream.deposit - totalDistributed : 0;
 
-        // Cap by remaining deposit
-        if (recipientAccrued > remainingDeposit) {
-            recipientAccrued = remainingDeposit;
+        // If stream has expired, distribute remaining deposit proportionally among recipients
+        if (currentTime > stream.endTime && remainingDeposit > 0) {
+            // Calculate total rate for all recipients
+            uint256 totalRate = 0;
+            for (uint256 i = 0; i < stream.recipients.length; i++) {
+                totalRate += _recipientRates[streamId][stream.recipients[i]];
+            }
+            
+            if (totalRate > 0) {
+                // Calculate what this recipient has already withdrawn
+                uint256 alreadyWithdrawn = _recipientTotalWithdrawn[streamId][recipient];
+                
+                // Calculate what this recipient should have received by endTime (their full allocation)
+                uint256 periodSeconds = stream.endTime > stream.startTime ? stream.endTime - stream.startTime : 0;
+                uint256 totalPausedTimeForPeriod = _pausedTime[streamId];
+                if (periodSeconds > totalPausedTimeForPeriod) {
+                    periodSeconds -= totalPausedTimeForPeriod;
+                } else {
+                    periodSeconds = 0;
+                }
+                uint256 recipientTotalAllocation = ratePerSecond * periodSeconds;
+                
+                // Cap by deposit (in case rates exceed deposit)
+                if (recipientTotalAllocation > stream.deposit) {
+                    recipientTotalAllocation = stream.deposit;
+                }
+                
+                // Calculate what recipient should still receive based on their allocation
+                uint256 recipientShouldReceive = recipientTotalAllocation > alreadyWithdrawn 
+                    ? recipientTotalAllocation - alreadyWithdrawn 
+                    : 0;
+                
+                // Distribute remaining deposit proportionally
+                uint256 recipientProportionalShare = (remainingDeposit * ratePerSecond) / totalRate;
+                
+                // Recipient can withdraw: their remaining allocation OR their proportional share of remaining deposit, whichever is larger
+                // This ensures they get at least their fair share
+                balance = recipientShouldReceive > recipientProportionalShare 
+                    ? recipientShouldReceive 
+                    : recipientProportionalShare;
+                
+                // Cap by remaining deposit
+                if (balance > remainingDeposit) {
+                    balance = remainingDeposit;
+                }
+            } else {
+                // No rates, use normal calculation capped by remaining deposit
+                if (recipientAccrued > remainingDeposit) {
+                    recipientAccrued = remainingDeposit;
+                }
+                balance = recipientAccrued;
+            }
+        } else {
+            // Stream not expired, use normal calculation
+            // Cap by remaining deposit
+            if (recipientAccrued > remainingDeposit) {
+                recipientAccrued = remainingDeposit;
+            }
+            balance = recipientAccrued;
         }
-
-        balance = recipientAccrued;
+        
         return balance;
     }
 
@@ -259,7 +340,10 @@ contract DripCore is IDrip, ReentrancyGuard, Ownable {
     ) external nonReentrant returns (uint256 withdrawn) {
         Stream storage stream = _streams[streamId];
         require(stream.streamId != 0, "DripCore: Stream does not exist");
-        require(stream.status == StreamStatus.Active, "DripCore: Stream not active");
+        require(
+            stream.status == StreamStatus.Active || stream.status == StreamStatus.Paused,
+            "DripCore: Stream not active or paused"
+        );
         require(_isRecipient(stream, recipient), "DripCore: Not a recipient");
         require(msg.sender == recipient, "DripCore: Only recipient can withdraw");
 
@@ -396,6 +480,9 @@ contract DripCore is IDrip, ReentrancyGuard, Ownable {
             "DripCore: Unauthorized"
         );
 
+        // Ensure recipients receive all accrued funds before refunding sender
+        _settleAllRecipients(stream, streamId);
+
         // Calculate remaining deposit
         uint256 totalDistributed = _calculateTotalDistributed(streamId, block.timestamp);
         uint256 refundAmount = stream.deposit > totalDistributed ? stream.deposit - totalDistributed : 0;
@@ -424,6 +511,97 @@ contract DripCore is IDrip, ReentrancyGuard, Ownable {
     }
 
     /**
+     * @notice Lock rate-related modifications for a stream
+     */
+    function lockStreamRate(uint256 streamId, uint256 lockDuration) external {
+        Stream storage stream = _streams[streamId];
+        require(stream.streamId != 0, "DripCore: Stream does not exist");
+        require(
+            stream.status == StreamStatus.Active || stream.status == StreamStatus.Paused,
+            "DripCore: Stream not active"
+        );
+        require(msg.sender == stream.sender, "DripCore: Only sender can lock");
+        require(lockDuration > 0, "DripCore: Invalid duration");
+
+        uint256 lockUntil = block.timestamp + lockDuration;
+        require(lockUntil > block.timestamp, "DripCore: Duration overflow");
+        require(lockUntil > stream.rateLockUntil, "DripCore: Lock already active");
+
+        stream.rateLockUntil = lockUntil;
+        emit StreamRateLocked(streamId, lockUntil);
+    }
+
+    /**
+     * @notice Extend a stream's duration or add extra deposit
+     */
+    function extendStream(
+        uint256 streamId,
+        uint256 newEndTime,
+        uint256 depositAmount
+    ) external payable nonReentrant {
+        Stream storage stream = _streams[streamId];
+        require(stream.streamId != 0, "DripCore: Stream does not exist");
+        require(
+            stream.status == StreamStatus.Active || stream.status == StreamStatus.Paused,
+            "DripCore: Stream not active"
+        );
+        require(msg.sender == stream.sender, "DripCore: Only sender can extend");
+        _requireRateUnlocked(stream);
+        require(newEndTime == 0 || newEndTime >= stream.endTime, "DripCore: Invalid end time");
+        require(depositAmount > 0 || newEndTime > stream.endTime, "DripCore: Nothing to update");
+
+        uint256 requiredDeposit = 0;
+        if (newEndTime > stream.endTime) {
+            address[] storage recipients = stream.recipients;
+            require(recipients.length > 0, "DripCore: No recipients");
+            uint256 totalRate = _getTotalStreamRate(streamId, recipients);
+            require(totalRate > 0, "DripCore: Total rate is zero");
+            requiredDeposit = totalRate * (newEndTime - stream.endTime);
+        }
+
+        uint256 netDepositAdded = 0;
+        if (depositAmount > 0) {
+            uint256 fee = (depositAmount * platformFeeBps) / 10000;
+            netDepositAdded = depositAmount - fee;
+            require(netDepositAdded > 0, "DripCore: Deposit too small");
+
+            if (stream.token == TokenHelper.NATIVE_TOKEN) {
+                require(msg.value == depositAmount, "DripCore: Incorrect native amount");
+                if (fee > 0) {
+                    (bool success, ) = platformFeeRecipient.call{value: fee}("");
+                    require(success, "DripCore: Fee transfer failed");
+                }
+            } else {
+                require(msg.value == 0, "DripCore: Native token not expected");
+                require(
+                    TokenHelper.safeTransferFrom(stream.token, msg.sender, address(this), netDepositAdded),
+                    "DripCore: Token transfer failed"
+                );
+                if (fee > 0) {
+                    require(
+                        TokenHelper.safeTransferFrom(stream.token, msg.sender, platformFeeRecipient, fee),
+                        "DripCore: Fee transfer failed"
+                    );
+                }
+            }
+
+            stream.deposit += netDepositAdded;
+        } else {
+            require(msg.value == 0, "DripCore: Native token not expected");
+        }
+
+        if (requiredDeposit > 0) {
+            require(netDepositAdded >= requiredDeposit, "DripCore: Insufficient deposit for extension");
+            stream.endTime = newEndTime;
+        } else if (newEndTime > stream.endTime) {
+            // In practice requiredDeposit will be > 0 when newEndTime increases, but keep guard
+            stream.endTime = newEndTime;
+        }
+
+        emit StreamExtended(streamId, stream.endTime, netDepositAdded);
+    }
+
+    /**
      * @notice Add a new recipient to an existing stream
      * @param streamId The stream identifier
      * @param recipient The new recipient address
@@ -442,6 +620,7 @@ contract DripCore is IDrip, ReentrancyGuard, Ownable {
             stream.status == StreamStatus.Active || stream.status == StreamStatus.Paused,
             "DripCore: Stream not active or paused"
         );
+        _requireRateUnlocked(stream);
         require(msg.sender == stream.sender, "DripCore: Only sender can modify recipients");
         require(recipient != address(0), "DripCore: Invalid recipient");
         require(recipient != msg.sender, "DripCore: Cannot stream to self");
@@ -519,6 +698,7 @@ contract DripCore is IDrip, ReentrancyGuard, Ownable {
             stream.status == StreamStatus.Active || stream.status == StreamStatus.Paused,
             "DripCore: Stream not active or paused"
         );
+        _requireRateUnlocked(stream);
         require(msg.sender == stream.sender, "DripCore: Only sender can modify recipients");
         require(_isRecipient(stream, recipient), "DripCore: Recipient does not exist");
 
@@ -600,6 +780,7 @@ contract DripCore is IDrip, ReentrancyGuard, Ownable {
             stream.status == StreamStatus.Active || stream.status == StreamStatus.Paused,
             "DripCore: Stream not active or paused"
         );
+        _requireRateUnlocked(stream);
         require(msg.sender == stream.sender, "DripCore: Only sender can modify recipients");
         require(_isRecipient(stream, recipient), "DripCore: Recipient does not exist");
         require(newAmountPerPeriod > 0, "DripCore: Invalid amount");
@@ -753,6 +934,63 @@ contract DripCore is IDrip, ReentrancyGuard, Ownable {
     }
 
     /**
+     * @notice Internal helper to enforce rate lock rules
+     */
+    function _requireRateUnlocked(Stream storage stream) internal view {
+        require(
+            stream.rateLockUntil == 0 || block.timestamp >= stream.rateLockUntil,
+            "DripCore: Stream rate locked"
+        );
+    }
+
+    /**
+     * @notice Internal function to settle accrued funds for a recipient
+     */
+    function _settleRecipientAccrued(
+        Stream storage stream,
+        uint256 streamId,
+        address recipient
+    ) internal returns (uint256) {
+        uint256 availableBalance = this.getRecipientBalance(streamId, recipient);
+        if (availableBalance == 0) {
+            return 0;
+        }
+
+        _recipientTotalWithdrawn[streamId][recipient] += availableBalance;
+        _recipientLastWithdraw[streamId][recipient] = block.timestamp;
+
+        require(
+            TokenHelper.safeTransfer(stream.token, recipient, availableBalance),
+            "DripCore: Transfer failed"
+        );
+
+        emit StreamWithdrawn(streamId, recipient, availableBalance);
+        return availableBalance;
+    }
+
+    /**
+     * @notice Internal function to settle all recipients before cancellation
+     */
+    function _settleAllRecipients(Stream storage stream, uint256 streamId) internal {
+        address[] storage recipients = stream.recipients;
+        for (uint256 i = 0; i < recipients.length; i++) {
+            _settleRecipientAccrued(stream, streamId, recipients[i]);
+        }
+    }
+
+    /**
+     * @notice Helper to compute total stream outflow rate
+     */
+    function _getTotalStreamRate(
+        uint256 streamId,
+        address[] storage recipients
+    ) internal view returns (uint256 totalRate) {
+        for (uint256 i = 0; i < recipients.length; i++) {
+            totalRate += _recipientRates[streamId][recipients[i]];
+        }
+    }
+
+    /**
      * @notice Internal function to check if address is a recipient
      */
     function _isRecipient(Stream memory stream, address recipient) internal pure returns (bool) {
@@ -776,13 +1014,19 @@ contract DripCore is IDrip, ReentrancyGuard, Ownable {
             totalOutflowRate += _recipientRates[streamId][stream.recipients[i]];
         }
 
-        // Calculate total paused time
+        // Cap elapsed time at stream endTime
+        uint256 effectiveEndTime = currentTime > stream.endTime ? stream.endTime : currentTime;
+        
+        // Calculate total paused time (capped at endTime)
         uint256 totalPausedTime = _pausedTime[streamId];
         if (stream.status == StreamStatus.Paused && _pauseStartTime[streamId] > 0) {
-            totalPausedTime += (currentTime - _pauseStartTime[streamId]);
+            uint256 pauseEnd = effectiveEndTime < _pauseStartTime[streamId] 
+                ? _pauseStartTime[streamId] 
+                : effectiveEndTime;
+            totalPausedTime += (pauseEnd - _pauseStartTime[streamId]);
         }
-
-        uint256 elapsedFromStart = currentTime - stream.startTime;
+        uint256 elapsedFromStart = effectiveEndTime > stream.startTime ? effectiveEndTime - stream.startTime : 0;
+        
         if (elapsedFromStart > totalPausedTime) {
             elapsedFromStart -= totalPausedTime;
         } else {
