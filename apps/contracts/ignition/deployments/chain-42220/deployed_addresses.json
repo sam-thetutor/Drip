@@ -1,4 +1,6 @@
 {
-  "DripModule#DripCore": "0x7584c4366C8b71A1c45342e0D2CEd19e1f1a668A",
-  "DripModule#SubscriptionManager": "0x1001E2E27a29F7003A30c408716A89B6e3F49e15"
+  "DripProxyModule#DripCoreProxy": "0x5530975fDe062FE6706298fF3945E3d1a17A310a",
+  "DripProxyModule#DripCoreImplementation": "0x8F4C50979efb901C50e79e11DdC2a45FD1451eE3",
+  "DripProxyModule#ProxyAdmin": "0x90FD81efC0bB74cca2997ebB6D77e5145788f481",
+  "DripProxyModule#SubscriptionManager": "0xBE3e232657233224F14b7b2a5625f69aF8F95054"
 }

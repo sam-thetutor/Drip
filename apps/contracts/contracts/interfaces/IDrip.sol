@@ -26,6 +26,7 @@ interface IDrip {
         uint256 startTime;          // Timestamp when stream starts
         uint256 endTime;            // Timestamp when stream ends (calculated from duration)
         StreamStatus status;         // Current status of the stream
+        uint256 rateLockUntil;      // Timestamp until which rate modifications are locked
         string title;               // Optional title (max 120 chars)
         string description;         // Optional description (max 1024 chars)
     }
@@ -74,6 +75,12 @@ interface IDrip {
 
     /// @notice Emitted when a stream completes naturally
     event StreamCompleted(uint256 indexed streamId);
+
+    /// @notice Emitted when a stream's rate is locked
+    event StreamRateLocked(uint256 indexed streamId, uint256 lockUntil);
+
+    /// @notice Emitted when a stream receives additional deposit or extended duration
+    event StreamExtended(uint256 indexed streamId, uint256 newEndTime, uint256 addedDeposit);
 
     /// @notice Emitted when a recipient is added to a stream
     event RecipientAdded(
@@ -168,6 +175,25 @@ interface IDrip {
      * @param streamId The stream identifier
      */
     function cancelStream(uint256 streamId) external;
+
+    /**
+     * @notice Lock rate-related modifications for a stream
+     * @param streamId The stream identifier
+     * @param lockDuration Duration (in seconds) to lock rate changes
+     */
+    function lockStreamRate(uint256 streamId, uint256 lockDuration) external;
+
+    /**
+     * @notice Extend a stream's duration and/or add additional deposit
+     * @param streamId The stream identifier
+     * @param newEndTime The new end time (0 to keep current end time)
+     * @param depositAmount Total additional deposit to add (before fees)
+     */
+    function extendStream(
+        uint256 streamId,
+        uint256 newEndTime,
+        uint256 depositAmount
+    ) external payable;
 
     /**
      * @notice Add a new recipient to an existing stream
