@@ -4,8 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Wallet } from "lucide-react";
 import { formatUnits } from "viem";
 import { useChainId } from "wagmi";
-import { TOKENS_BY_NETWORK } from "@/components/token-selector";
 import { CELO_SEPOLIA_ID } from "@/lib/contracts/config";
+import { TOKENS_BY_NETWORK } from "@/lib/tokens/config";
 import { useMemo } from "react";
 
 interface TokenBalancesProps {

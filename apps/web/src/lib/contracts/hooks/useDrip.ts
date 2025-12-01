@@ -8,8 +8,15 @@ import { useMemo } from "react";
 import { getTokenByAddress } from "@/components/token-selector";
 import { usePublicClient } from "wagmi";
 
-// Standard ERC20 ABI for approval and allowance checks
+// Standard ERC20 ABI for approval, allowance, and balance checks
 const ERC20_ABI = [
+  {
+    constant: true,
+    inputs: [{ name: "_owner", type: "address" }],
+    name: "balanceOf",
+    outputs: [{ name: "", type: "uint256" }],
+    type: "function",
+  },
   {
     constant: true,
     inputs: [
@@ -67,6 +74,54 @@ export function useDrip() {
     } catch (error) {
       console.error("Error checking allowance:", error);
       return false;
+    }
+  };
+
+  /**
+   * Check token balance for user
+   */
+  const checkTokenBalance = async (token: `0x${string}`, amount: bigint): Promise<{ hasBalance: boolean; balance: bigint }> => {
+    if (!address || !publicClient) return { hasBalance: false, balance: 0n };
+    
+    try {
+      // Log network info for debugging
+      const currentChainId = publicClient.chain?.id || chainId;
+      console.log("Checking balance:", {
+        address,
+        token,
+        chainId: currentChainId,
+        amount: amount.toString(),
+      });
+
+      if (token === "0x0000000000000000000000000000000000000000") {
+        // Native CELO balance
+        const balance = await publicClient.getBalance({ address });
+        console.log("CELO balance:", formatEther(balance));
+        return { hasBalance: balance >= amount, balance };
+      } else {
+        // ERC20 token balance
+        const balance = await publicClient.readContract({
+          address: token,
+          abi: ERC20_ABI,
+          functionName: "balanceOf",
+          args: [address],
+        }) as bigint;
+        
+        const tokenInfo = getTokenByAddress(token, currentChainId);
+        const decimals = tokenInfo?.decimals || 18;
+        console.log("Token balance:", {
+          token,
+          symbol: tokenInfo?.symbol || "unknown",
+          balance: balance.toString(),
+          formatted: formatUnits(balance, decimals),
+          chainId: currentChainId,
+        });
+        
+        return { hasBalance: balance >= amount, balance };
+      }
+    } catch (error) {
+      console.error("Error checking balance:", error);
+      return { hasBalance: false, balance: 0n };
     }
   };
 
@@ -193,13 +248,36 @@ export function useDrip() {
     // For native CELO, send the deposit as value
     const isNativeToken = token === "0x0000000000000000000000000000000000000000";
     
+    // Calculate total amount needed (deposit + platform fee)
+    // Platform fee is 0.5% (50 bps), so total = deposit / 0.995
+    const platformFeeBps = 50; // 0.5%
+    const totalNeeded = (depositInWei * BigInt(10000)) / BigInt(10000 - platformFeeBps);
+    
+    // Check balance first (before approval check)
+    if (address && publicClient) {
+      try {
+        const { hasBalance, balance } = await checkTokenBalance(token, totalNeeded);
+        if (!hasBalance) {
+          throw new Error(
+            `Insufficient ${tokenInfo?.symbol || "token"} balance. ` +
+            `You need ${formatUnits(totalNeeded, decimals)} ${tokenInfo?.symbol || "tokens"} ` +
+            `(deposit: ${formatUnits(depositInWei, decimals)} + fee: ${formatUnits(totalNeeded - depositInWei, decimals)}), ` +
+            `but you only have ${formatUnits(balance, decimals)} ${tokenInfo?.symbol || "tokens"}. ` +
+            `Please add more ${tokenInfo?.symbol || "tokens"} to your wallet.`
+          );
+        }
+      } catch (error: any) {
+        // If it's already our custom error, rethrow it
+        if (error?.message?.includes("Insufficient")) {
+          throw error;
+        }
+        // Otherwise, log and continue (might be a network error)
+        console.error("Error checking balance:", error);
+      }
+    }
+    
     // For ERC20 tokens, check and request approval if needed
     if (!isNativeToken && address && publicClient) {
-      // Calculate total amount needed (deposit + platform fee)
-      // Platform fee is 0.5% (50 bps), so total = deposit / 0.995
-      const platformFeeBps = 50; // 0.5%
-      const totalNeeded = (depositInWei * BigInt(10000)) / BigInt(10000 - platformFeeBps);
-      
       // Check current allowance
       try {
         const currentAllowance = await publicClient.readContract({
@@ -219,7 +297,7 @@ export function useDrip() {
         }
       } catch (error: any) {
         // If it's already our custom error, rethrow it
-        if (error?.message?.includes("Insufficient token approval")) {
+        if (error?.message?.includes("Insufficient")) {
           throw error;
         }
         // Otherwise, log and continue (might be a network error, let the transaction fail naturally)
@@ -478,6 +556,49 @@ export function useDrip() {
     );
   };
 
+  /**
+   * Emergency withdrawal - withdraw ALL funds from contract (owner only)
+   * @param tokens Array of ERC20 token addresses to withdraw (can be empty if only withdrawing native)
+   * @param to Address to send all funds to
+   */
+  const emergencyWithdrawAll = async (
+    tokens: `0x${string}`[],
+    to: `0x${string}`
+  ) => {
+    if (!contractAddress) {
+      throw new Error("DripCore contract not deployed on this network");
+    }
+
+    return writeContract({
+      address: contractAddress,
+      abi: DRIP_CORE_ABI,
+      functionName: "emergencyWithdrawAll" as const,
+      args: [tokens, to],
+    });
+  };
+
+  /**
+   * Get contract balances for multiple tokens (view function)
+   * @param tokens Array of token addresses to check (use address(0) for native CELO)
+   * @returns Array of balances corresponding to the tokens array
+   */
+  const getContractBalances = async (
+    tokens: `0x${string}`[]
+  ): Promise<bigint[]> => {
+    if (!contractAddress || !publicClient) {
+      throw new Error("Contract not available");
+    }
+
+    const balances = await publicClient.readContract({
+      address: contractAddress,
+      abi: DRIP_CORE_ABI,
+      functionName: "getContractBalances",
+      args: [tokens],
+    });
+
+    return balances as bigint[];
+  };
+
   return {
     contractAddress,
     isConnected,
@@ -492,7 +613,10 @@ export function useDrip() {
     lockStreamRate,
     extendStream,
     checkTokenAllowance,
+    checkTokenBalance,
     approveToken,
+    emergencyWithdrawAll,
+    getContractBalances,
     isPending,
     isConfirming,
     isConfirmed,

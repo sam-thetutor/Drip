@@ -97,6 +97,27 @@ interface IDrip {
         uint256 refundAmount
     );
 
+    /// @notice Emitted when emergency withdrawal is performed
+    event EmergencyWithdrawal(
+        address indexed token,
+        address indexed to,
+        uint256 amount
+    );
+
+    /**
+     * @notice Emergency withdrawal function - withdraw ALL funds from contract (owner only)
+     * @param tokens Array of ERC20 token addresses to withdraw (can be empty if only withdrawing native)
+     * @param to Address to send all funds to
+     */
+    function emergencyWithdrawAll(address[] calldata tokens, address payable to) external;
+
+    /**
+     * @notice Get contract balances for multiple tokens (view function)
+     * @param tokens Array of token addresses to check (use address(0) for native CELO)
+     * @return balances Array of balances corresponding to the tokens array
+     */
+    function getContractBalances(address[] calldata tokens) external view returns (uint256[] memory balances);
+
     /// @notice Emitted when a recipient's rate is updated
     event RecipientRateUpdated(
         uint256 indexed streamId,

@@ -277,6 +277,18 @@ contract DripCore is IDrip, Initializable, ReentrancyGuardUpgradeable, OwnableUp
                 // Calculate what this recipient should have received by endTime (their full allocation)
                 uint256 periodSeconds = stream.endTime > stream.startTime ? stream.endTime - stream.startTime : 0;
                 uint256 totalPausedTimeForPeriod = _pausedTime[streamId];
+                
+                // If stream is currently paused when it expires, add current pause duration
+                if (stream.status == StreamStatus.Paused && _pauseStartTime[streamId] > 0) {
+                    // Calculate pause duration from pause start to endTime (stream has expired)
+                    uint256 pauseEnd = stream.endTime < _pauseStartTime[streamId] 
+                        ? _pauseStartTime[streamId] 
+                        : stream.endTime;
+                    if (pauseEnd > _pauseStartTime[streamId]) {
+                        totalPausedTimeForPeriod += (pauseEnd - _pauseStartTime[streamId]);
+                    }
+                }
+                
                 if (periodSeconds > totalPausedTimeForPeriod) {
                     periodSeconds -= totalPausedTimeForPeriod;
                 } else {
@@ -1041,6 +1053,119 @@ contract DripCore is IDrip, Initializable, ReentrancyGuardUpgradeable, OwnableUp
         }
 
         return totalDistributed;
+    }
+
+    /**
+     * @notice Emergency withdrawal function - withdraw all native CELO from contract (owner only)
+     * @dev This function allows the owner to withdraw all native CELO in case of emergency
+     * @param to Address to send the funds to
+     */
+    function emergencyWithdrawNative(address payable to) external onlyOwner {
+        require(to != address(0), "DripCore: Invalid recipient");
+        uint256 balance = address(this).balance;
+        require(balance > 0, "DripCore: No native balance");
+        
+        (bool success, ) = to.call{value: balance}("");
+        require(success, "DripCore: Native withdrawal failed");
+        
+        emit EmergencyWithdrawal(address(0), to, balance);
+    }
+
+    /**
+     * @notice Emergency withdrawal function - withdraw specific ERC20 token from contract (owner only)
+     * @dev This function allows the owner to withdraw all of a specific ERC20 token in case of emergency
+     * @param token Token address to withdraw
+     * @param to Address to send the funds to
+     */
+    function emergencyWithdrawToken(address token, address to) external onlyOwner {
+        require(token != address(0), "DripCore: Invalid token address");
+        require(to != address(0), "DripCore: Invalid recipient");
+        
+        uint256 balance = TokenHelper.getBalance(token, address(this));
+        require(balance > 0, "DripCore: No token balance");
+        
+        require(
+            TokenHelper.safeTransfer(token, to, balance),
+            "DripCore: Token withdrawal failed"
+        );
+        
+        emit EmergencyWithdrawal(token, to, balance);
+    }
+
+    /**
+     * @notice Emergency withdrawal function - withdraw multiple ERC20 tokens at once (owner only)
+     * @dev This function allows the owner to withdraw all of multiple ERC20 tokens in a single transaction
+     * @param tokens Array of token addresses to withdraw
+     * @param to Address to send the funds to
+     */
+    function emergencyWithdrawTokens(address[] calldata tokens, address to) external onlyOwner {
+        require(to != address(0), "DripCore: Invalid recipient");
+        require(tokens.length > 0, "DripCore: Empty tokens array");
+        
+        for (uint256 i = 0; i < tokens.length; i++) {
+            address token = tokens[i];
+            if (token == address(0)) {
+                // Skip native token - use emergencyWithdrawNative instead
+                continue;
+            }
+            
+            uint256 balance = TokenHelper.getBalance(token, address(this));
+            if (balance > 0) {
+                require(
+                    TokenHelper.safeTransfer(token, to, balance),
+                    "DripCore: Token withdrawal failed"
+                );
+                emit EmergencyWithdrawal(token, to, balance);
+            }
+        }
+    }
+
+    /**
+     * @notice Emergency withdrawal function - withdraw ALL funds from contract (owner only)
+     * @dev This function withdraws all native CELO and all specified ERC20 tokens in a single transaction
+     * @dev Use this function to completely drain the contract if you want to abandon it
+     * @param tokens Array of ERC20 token addresses to withdraw (can be empty if only withdrawing native)
+     * @param to Address to send all funds to
+     */
+    function emergencyWithdrawAll(address[] calldata tokens, address payable to) external onlyOwner {
+        require(to != address(0), "DripCore: Invalid recipient");
+        
+        // Withdraw all native CELO
+        uint256 nativeBalance = address(this).balance;
+        if (nativeBalance > 0) {
+            (bool success, ) = to.call{value: nativeBalance}("");
+            require(success, "DripCore: Native withdrawal failed");
+            emit EmergencyWithdrawal(address(0), to, nativeBalance);
+        }
+        
+        // Withdraw all specified ERC20 tokens
+        for (uint256 i = 0; i < tokens.length; i++) {
+            address token = tokens[i];
+            require(token != address(0), "DripCore: Invalid token address (use address(0) for native)");
+            
+            uint256 balance = TokenHelper.getBalance(token, address(this));
+            if (balance > 0) {
+                require(
+                    TokenHelper.safeTransfer(token, to, balance),
+                    "DripCore: Token withdrawal failed"
+                );
+                emit EmergencyWithdrawal(token, to, balance);
+            }
+        }
+    }
+
+    /**
+     * @notice Get contract balances for multiple tokens (view function)
+     * @dev Helper function to check balances before calling emergencyWithdrawAll
+     * @param tokens Array of token addresses to check (use address(0) for native CELO)
+     * @return balances Array of balances corresponding to the tokens array
+     */
+    function getContractBalances(address[] calldata tokens) external view returns (uint256[] memory balances) {
+        balances = new uint256[](tokens.length);
+        for (uint256 i = 0; i < tokens.length; i++) {
+            balances[i] = TokenHelper.getBalance(tokens[i], address(this));
+        }
+        return balances;
     }
 
     /**

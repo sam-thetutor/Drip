@@ -46,13 +46,14 @@ const connectors = connectorsForWallets(
   }
 );
 
-// Only support Sepolia testnet and Celo Mainnet
+// Support Mainnet, Sepolia testnet, and Alfajores testnet
 const wagmiConfig = createConfig({
-  chains: [celo, celoSepolia],
+  chains: [celo, celoSepolia, celoAlfajores],
   connectors,
   transports: {
     [celo.id]: http(),
     [celoSepolia.id]: http(),
+    [celoAlfajores.id]: http(),
   },
   ssr: true,
 });

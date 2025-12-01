@@ -1,9 +1,10 @@
 import { celo } from "wagmi/chains";
 import { defineChain } from "viem";
 
-// Chain IDs - Supporting only Sepolia testnet and Mainnet
+// Chain IDs - Supporting Mainnet, Sepolia testnet, and Alfajores testnet
 export const CELO_MAINNET_ID = 42220;
 export const CELO_SEPOLIA_ID = 11142220;
+export const CELO_ALFAJORES_ID = 44787;
 
 // Define Celo Sepolia chain
 export const celoSepolia = defineChain({

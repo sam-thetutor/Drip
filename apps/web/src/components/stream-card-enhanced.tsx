@@ -51,23 +51,31 @@ export function StreamCardEnhanced({
   const decimals = tokenInfo?.decimals || 18;
   const symbol = tokenInfo?.symbol || "Token";
 
+  // Calculate if stream has expired
+  const now = Math.floor(Date.now() / 1000);
+  const endTimeNum = Number(endTime);
+  const hasExpired = now >= endTimeNum;
+
   // Fetch balance for user if they are a recipient
+  // Allow balance fetching for Active, Paused streams (even if expired, recipients can still withdraw their share)
+  // The contract allows withdrawals from Active and Paused streams, and distributes remaining deposit when expired
   const isUserRecipient = address && recipients.some(r => r.toLowerCase() === address.toLowerCase());
+  const canWithdraw = (isActive || isPaused); // Contract allows withdrawals from Active and Paused streams
   const { balance: userBalance, refetch: refetchBalance } = useRecipientBalance(
-    isUserRecipient && isActive ? streamId : undefined,
+    isUserRecipient && canWithdraw ? streamId : undefined,
     isUserRecipient ? address : undefined
   );
 
-  // Poll for balance updates every 5 seconds
+  // Poll for balance updates every 5 seconds for active/paused/expired streams
   useEffect(() => {
-    if (!isUserRecipient || !isActive) return;
+    if (!isUserRecipient || !canWithdraw) return;
 
     const interval = setInterval(() => {
       refetchBalance();
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [isUserRecipient, isActive, refetchBalance]);
+  }, [isUserRecipient, canWithdraw, refetchBalance]);
 
   const formatAddress = (addr: string) => {
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;

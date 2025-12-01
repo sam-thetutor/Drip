@@ -15,10 +15,13 @@ import { celoSepolia } from "@/lib/contracts/config";
 import { formatEther } from "viem";
 import { ChevronDown, LogOut } from "lucide-react";
 
-// Only support Sepolia testnet and Celo Mainnet
+// Support Mainnet, Sepolia testnet, and Alfajores testnet
+import { celoAlfajores } from "wagmi/chains";
+
 const CHAINS = [
   { id: celo.id, name: "Celo Mainnet" },
   { id: celoSepolia.id, name: "Celo Sepolia" },
+  { id: celoAlfajores.id, name: "Celo Alfajores" },
 ];
 
 interface WalletButtonProps {
