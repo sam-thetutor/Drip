@@ -30,7 +30,8 @@ library TokenHelper {
             require(success, "TokenHelper: Native transfer failed");
         } else {
             // Transfer ERC20 token
-            require(IERC20(token).transfer(to, amount), "TokenHelper: ERC20 transfer failed");
+            success = IERC20(token).transfer(to, amount);
+            require(success, "TokenHelper: ERC20 transfer failed");
         }
         return success;
     }
