@@ -35,7 +35,7 @@ export const TOKENS_BY_NETWORK: Record<number, Token[]> = {
     { symbol: "USDC", address: "0x01C5C0122039549AD1493B8220cABEdD739BC44E", decimals: 6, name: "USD Coin" },
     { symbol: "USDT", address: "0xd077A400968890Eacc75cdc901F0356c943e4fDb", decimals: 6, name: "Tether USD" },
     // Test Good Dollar token deployed on Sepolia for testing
-    { symbol: "G$", address: "0x66f653611e7b7aD22657c0F228CEE477050f0196", decimals: 18, name: "Good Dollar (Test)" },
+    { symbol: "G$", address: "0x66f653611e7b7aD22657c0F228CEE477050f0196", decimals: 18, name: "Good Dollar" },
   ],
   // Celo Alfajores Testnet (chainId: 44787)
   // Note: Alfajores is being sunset after September 2025, migrate to Sepolia
