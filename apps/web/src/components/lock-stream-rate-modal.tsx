@@ -20,6 +20,7 @@ interface LockStreamRateModalProps {
   streamId: bigint;
   isOpen: boolean;
   onClose: () => void;
+  currentLockUntil?: number;
 }
 
 export function LockStreamRateModal({

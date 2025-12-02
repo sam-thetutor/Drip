@@ -17,6 +17,7 @@ export interface Token {
  * - Mainnet: https://docs.celo.org/developer-guide/celo-for-eth-devs
  * - Sepolia: Celo Sepolia testnet
  * - Alfajores: Celo Alfajores testnet (sunset after Sep 2025, but still supported)
+ * - Good Dollar: https://docs.gooddollar.org/
  */
 export const TOKENS_BY_NETWORK: Record<number, Token[]> = {
   // Celo Mainnet (chainId: 42220)
@@ -25,6 +26,7 @@ export const TOKENS_BY_NETWORK: Record<number, Token[]> = {
     { symbol: "cUSD", address: "0x765DE816845861e75A25fCA122bb6898B8B1282a", decimals: 18, name: "Celo Dollar" },
     { symbol: "USDC", address: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", decimals: 6, name: "USD Coin" },
     { symbol: "USDT", address: "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", decimals: 6, name: "Tether USD" },
+    { symbol: "G$", address: "0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A", decimals: 18, name: "Good Dollar" },
   ],
   // Celo Sepolia Testnet (chainId: 11142220)
   [CELO_SEPOLIA_ID]: [
@@ -32,6 +34,8 @@ export const TOKENS_BY_NETWORK: Record<number, Token[]> = {
     { symbol: "cUSD", address: "0xdE9e4C3ce781b4bA68120d6261cbad65ce0aB00b", decimals: 18, name: "Celo Dollar" },
     { symbol: "USDC", address: "0x01C5C0122039549AD1493B8220cABEdD739BC44E", decimals: 6, name: "USD Coin" },
     { symbol: "USDT", address: "0xd077A400968890Eacc75cdc901F0356c943e4fDb", decimals: 6, name: "Tether USD" },
+    // Test Good Dollar token deployed on Sepolia for testing
+    { symbol: "G$", address: "0x66f653611e7b7aD22657c0F228CEE477050f0196", decimals: 18, name: "Good Dollar (Test)" },
   ],
   // Celo Alfajores Testnet (chainId: 44787)
   // Note: Alfajores is being sunset after September 2025, migrate to Sepolia

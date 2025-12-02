@@ -34,9 +34,11 @@ export function UserBalance() {
   const cUSD_ADDRESS = getTokenAddressBySymbol("cUSD", chainId) || getTokenAddressBySymbol("cUSD", CELO_MAINNET_ID);
   const USDC_ADDRESS = getTokenAddressBySymbol("USDC", chainId) || getTokenAddressBySymbol("USDC", CELO_MAINNET_ID);
   const USDT_ADDRESS = getTokenAddressBySymbol("USDT", chainId) || getTokenAddressBySymbol("USDT", CELO_MAINNET_ID);
+  const GDOLLAR_ADDRESS = getTokenAddressBySymbol("G$", chainId) || getTokenAddressBySymbol("G$", CELO_MAINNET_ID);
 
-  // Check if USDT is available on this network (not zero address)
+  // Check if tokens are available on this network (not zero address)
   const isUSDTAvailable = USDT_ADDRESS && USDT_ADDRESS !== "0x0000000000000000000000000000000000000000";
+  const isGDOLLARAvailable = GDOLLAR_ADDRESS && GDOLLAR_ADDRESS !== "0x0000000000000000000000000000000000000000";
 
   return (
     <Card className="glass-card w-full max-w-md mx-auto mb-8">
@@ -51,6 +53,9 @@ export function UserBalance() {
           <BalanceDisplay address={address} token={USDC_ADDRESS} symbol="USDC" />
           {isUSDTAvailable && (
             <BalanceDisplay address={address} token={USDT_ADDRESS} symbol="USDT" />
+          )}
+          {isGDOLLARAvailable && (
+            <BalanceDisplay address={address} token={GDOLLAR_ADDRESS} symbol="G$" />
           )}
         </div>
       </CardContent>

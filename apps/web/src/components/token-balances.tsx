@@ -21,9 +21,9 @@ export function TokenBalances({ tokenBalances }: TokenBalancesProps) {
   // Get token addresses for the current network
   const tokens = TOKENS_BY_NETWORK[chainId] || TOKENS_BY_NETWORK[CELO_SEPOLIA_ID];
   
-  // Always show cUSD, USDC, USDT (if available), and CELO
+  // Always show cUSD, USDC, USDT, G$ (if available), and CELO
   const requiredTokens = useMemo(() => {
-    const requiredSymbols = ["cUSD", "USDC", "USDT", "CELO"];
+    const requiredSymbols = ["cUSD", "USDC", "USDT", "G$", "CELO"];
     // Filter to only include tokens that exist on the current network
     return tokens.filter(t => requiredSymbols.includes(t.symbol));
   }, [tokens]);

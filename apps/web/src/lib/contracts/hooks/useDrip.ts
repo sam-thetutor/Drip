@@ -3,7 +3,7 @@
 import { useAccount, useChainId, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { getContractAddress, CONTRACT_ADDRESSES, CELO_SEPOLIA_ID } from "../config";
 import { DRIP_CORE_ABI } from "../abis";
-import { parseEther, parseUnits, formatEther, formatUnits, maxUint256, readContract } from "viem";
+import { parseEther, parseUnits, formatEther, formatUnits, maxUint256 } from "viem";
 import { useMemo } from "react";
 import { getTokenByAddress } from "@/components/token-selector";
 import { usePublicClient } from "wagmi";
@@ -63,12 +63,12 @@ export function useDrip() {
     if (token === "0x0000000000000000000000000000000000000000") return true; // Native token doesn't need approval
 
     try {
-      const allowance = await publicClient.readContract({
+      const allowance = (await publicClient.readContract({
         address: token,
         abi: ERC20_ABI,
         functionName: "allowance",
         args: [address, contractAddress],
-      });
+      })) as bigint;
 
       return allowance >= amount;
     } catch (error) {
