@@ -1,0 +1,27 @@
+// Prisma schema for leaderboard & indexer state
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model UserStats {
+  address            String   @id
+  streamsCreated     Int      @default(0)
+  withdrawalsClaimed Int      @default(0)
+  totalDeposited     Decimal  @default(0)
+  totalWithdrawn     Decimal  @default(0)
+  points             Decimal  @default(0)
+  updatedAt          DateTime @updatedAt
+}
+
+model IndexerState {
+  id                Int    @id @default(1)
+  lastProcessedBlock BigInt @default(0)
+}
+
+
