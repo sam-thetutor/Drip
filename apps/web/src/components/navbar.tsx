@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, Droplets, Repeat, Wallet } from "lucide-react"
+import { Home, Droplets, Repeat, Wallet, Trophy } from "lucide-react"
 
 import { ConnectButton } from "@/components/connect-button"
 import { WalletButton } from "@/components/wallet-button"
@@ -12,6 +12,7 @@ const navLinks = [
   { name: "Streams", href: "/streams", icon: Droplets },
   { name: "Subscriptions", href: "/subscriptions", icon: Repeat },
   { name: "Treasury", href: "/treasury", icon: Wallet },
+  { name: "Leaderboard", href: "/leaderboard", icon: Trophy },
 ]
 
 export function Navbar() {
