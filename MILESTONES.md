@@ -5,7 +5,7 @@ Drip is a programmable payment streaming and recurring subscription platform bui
 
 ---
 
-## Milestone 1: Project Foundation & Smart Contract Architecture
+## Milestone 1: Project Foundation & Contract Architecture
 **Status:** 🟡 Pending  
 **Estimated Time:** 3-5 days
 
