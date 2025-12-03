@@ -5,6 +5,9 @@ interface RouteContext {
   params: { address: string };
 }
 
+// Force dynamic rendering (this route uses database and dynamic params)
+export const dynamic = 'force-dynamic';
+
 // GET /api/leaderboard/user/[address]
 // Returns stats and rank for a specific user
 export async function GET(

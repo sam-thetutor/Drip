@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+// Force dynamic rendering (this route uses database)
+export const dynamic = 'force-dynamic';
+
 // GET /api/leaderboard
 // Returns top users ordered by points (desc)
 export async function GET() {

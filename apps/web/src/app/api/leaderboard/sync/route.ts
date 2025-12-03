@@ -14,6 +14,9 @@ import { prisma } from "@/lib/prisma";
 const STREAM_CREATED_POINTS = 10;
 const WITHDRAWAL_POINTS = 5;
 
+// Force dynamic rendering (this route uses request.url and database)
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   try {
     // Optional query params: network, reset, fromBlock
