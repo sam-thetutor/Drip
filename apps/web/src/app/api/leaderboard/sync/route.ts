@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createPublicClient, http, decodeEventLog } from "viem";
+import { createPublicClient, http, decodeEventLog, type Chain } from "viem";
 import { celo } from "viem/chains";
 import {
   celoSepolia,
   CELO_SEPOLIA_ID,
   CELO_MAINNET_ID,
-  CONTRACT_ADDRESSES,
+  getContractAddress,
   DRIP_CORE_ABI,
 } from "@/lib/contracts";
 import { prisma } from "@/lib/prisma";
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     const fromBlockParam = url.searchParams.get("fromBlock");
 
     // Select chain + RPC based on network
-    let chain = celoSepolia;
+    let chain: Chain = celoSepolia;
     let chainId = CELO_SEPOLIA_ID;
     let rpcUrl =
       process.env.CELO_SEPOLIA_RPC_URL ??
@@ -46,7 +46,13 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const dripCoreAddress = CONTRACT_ADDRESSES[chainId].DripCore;
+    const dripCoreAddress = getContractAddress(chainId, "DripCore");
+    if (!dripCoreAddress) {
+      return NextResponse.json(
+        { error: `DripCore not deployed on chain ${chainId}` },
+        { status: 500 }
+      );
+    }
 
     const client = createPublicClient({
       chain,
