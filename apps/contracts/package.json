@@ -54,13 +54,13 @@
     "@types/mocha": "^10.0.10",
     "chai": "^4.5.0",
     "dotenv": "^16.6.1",
-    "ethers": "^6.15.0",
+    "ethers": "^6.16.0",
     "hardhat": "^2.27.1",
     "hardhat-gas-reporter": "^1.0.10",
     "solidity-coverage": "^0.8.16",
     "ts-node": "^10.9.2",
     "typechain": "^8.3.2",
     "typescript": "^5.9.3",
-    "viem": "^2.40.3"
+    "viem": "^2.41.2"
   }
 }

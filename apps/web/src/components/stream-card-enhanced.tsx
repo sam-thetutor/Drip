@@ -57,10 +57,10 @@ export function StreamCardEnhanced({
   const hasExpired = now >= endTimeNum;
 
   // Fetch balance for user if they are a recipient
-  // Allow balance fetching for Active, Paused streams (even if expired, recipients can still withdraw their share)
-  // The contract allows withdrawals from Active and Paused streams, and distributes remaining deposit when expired
+  // Allow balance fetching for Active, Paused, and Completed streams (even if expired, recipients can still withdraw their share)
+  // The contract allows withdrawals from Active, Paused, and Completed streams, and distributes remaining deposit when expired
   const isUserRecipient = address && recipients.some(r => r.toLowerCase() === address.toLowerCase());
-  const canWithdraw = (isActive || isPaused); // Contract allows withdrawals from Active and Paused streams
+  const canWithdraw = (isActive || isPaused || isCompleted); // Contract allows withdrawals from Active, Paused, and Completed streams
   const { balance: userBalance, refetch: refetchBalance } = useRecipientBalance(
     isUserRecipient && canWithdraw ? streamId : undefined,
     isUserRecipient ? address : undefined

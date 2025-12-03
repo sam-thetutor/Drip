@@ -29,37 +29,37 @@ importers:
     devDependencies:
       '@nomicfoundation/hardhat-chai-matchers':
         specifier: ^2.1.0
-        version: 2.1.0(@nomicfoundation/hardhat-ethers@3.1.2)(chai@4.5.0)(ethers@6.15.0)(hardhat@2.27.1)
+        version: 2.1.0(@nomicfoundation/hardhat-ethers@3.1.2)(chai@4.5.0)(ethers@6.16.0)(hardhat@2.27.1)
       '@nomicfoundation/hardhat-ethers':
         specifier: ^3.1.2
-        version: 3.1.2(ethers@6.15.0)(hardhat@2.27.1)
+        version: 3.1.2(ethers@6.16.0)(hardhat@2.27.1)
       '@nomicfoundation/hardhat-ignition':
         specifier: ^0.15.15
         version: 0.15.15(@nomicfoundation/hardhat-verify@2.1.3)(hardhat@2.27.1)
       '@nomicfoundation/hardhat-ignition-ethers':
         specifier: ^0.15.16
-        version: 0.15.16(@nomicfoundation/hardhat-ethers@3.1.2)(@nomicfoundation/hardhat-ignition@0.15.15)(@nomicfoundation/ignition-core@0.15.14)(ethers@6.15.0)(hardhat@2.27.1)
+        version: 0.15.16(@nomicfoundation/hardhat-ethers@3.1.2)(@nomicfoundation/hardhat-ignition@0.15.15)(@nomicfoundation/ignition-core@0.15.14)(ethers@6.16.0)(hardhat@2.27.1)
       '@nomicfoundation/hardhat-network-helpers':
         specifier: ^1.1.2
         version: 1.1.2(hardhat@2.27.1)
       '@nomicfoundation/hardhat-toolbox':
         specifier: ^5.0.0
-        version: 5.0.0(@nomicfoundation/hardhat-chai-matchers@2.1.0)(@nomicfoundation/hardhat-ethers@3.1.2)(@nomicfoundation/hardhat-ignition-ethers@0.15.16)(@nomicfoundation/hardhat-network-helpers@1.1.2)(@nomicfoundation/hardhat-verify@2.1.3)(@typechain/ethers-v6@0.5.1)(@typechain/hardhat@9.1.0)(@types/chai@4.3.20)(@types/mocha@10.0.10)(@types/node@24.10.1)(chai@4.5.0)(ethers@6.15.0)(hardhat-gas-reporter@1.0.10)(hardhat@2.27.1)(solidity-coverage@0.8.16)(ts-node@10.9.2)(typechain@8.3.2)(typescript@5.9.3)
+        version: 5.0.0(@nomicfoundation/hardhat-chai-matchers@2.1.0)(@nomicfoundation/hardhat-ethers@3.1.2)(@nomicfoundation/hardhat-ignition-ethers@0.15.16)(@nomicfoundation/hardhat-network-helpers@1.1.2)(@nomicfoundation/hardhat-verify@2.1.3)(@typechain/ethers-v6@0.5.1)(@typechain/hardhat@9.1.0)(@types/chai@4.3.20)(@types/mocha@10.0.10)(@types/node@24.10.1)(chai@4.5.0)(ethers@6.16.0)(hardhat-gas-reporter@1.0.10)(hardhat@2.27.1)(solidity-coverage@0.8.16)(ts-node@10.9.2)(typechain@8.3.2)(typescript@5.9.3)
       '@nomicfoundation/hardhat-toolbox-viem':
         specifier: ^3.0.0
-        version: 3.0.0(@nomicfoundation/hardhat-ignition-viem@0.15.15)(@nomicfoundation/hardhat-network-helpers@1.1.2)(@nomicfoundation/hardhat-verify@2.1.3)(@nomicfoundation/hardhat-viem@2.1.3)(@types/chai-as-promised@7.1.8)(@types/chai@4.3.20)(@types/mocha@10.0.10)(@types/node@24.10.1)(chai@4.5.0)(hardhat-gas-reporter@1.0.10)(hardhat@2.27.1)(solidity-coverage@0.8.16)(ts-node@10.9.2)(typescript@5.9.3)(viem@2.40.3)
+        version: 3.0.0(@nomicfoundation/hardhat-ignition-viem@0.15.15)(@nomicfoundation/hardhat-network-helpers@1.1.2)(@nomicfoundation/hardhat-verify@2.1.3)(@nomicfoundation/hardhat-viem@2.1.3)(@types/chai-as-promised@7.1.8)(@types/chai@4.3.20)(@types/mocha@10.0.10)(@types/node@24.10.1)(chai@4.5.0)(hardhat-gas-reporter@1.0.10)(hardhat@2.27.1)(solidity-coverage@0.8.16)(ts-node@10.9.2)(typescript@5.9.3)(viem@2.41.2)
       '@nomicfoundation/hardhat-verify':
         specifier: ^2.1.3
         version: 2.1.3(hardhat@2.27.1)
       '@openzeppelin/hardhat-upgrades':
         specifier: ^3.9.1
-        version: 3.9.1(@nomicfoundation/hardhat-ethers@3.1.2)(@nomicfoundation/hardhat-verify@2.1.3)(ethers@6.15.0)(hardhat@2.27.1)
+        version: 3.9.1(@nomicfoundation/hardhat-ethers@3.1.2)(@nomicfoundation/hardhat-verify@2.1.3)(ethers@6.16.0)(hardhat@2.27.1)
       '@typechain/ethers-v6':
         specifier: ^0.5.1
-        version: 0.5.1(ethers@6.15.0)(typechain@8.3.2)(typescript@5.9.3)
+        version: 0.5.1(ethers@6.16.0)(typechain@8.3.2)(typescript@5.9.3)
       '@typechain/hardhat':
         specifier: ^9.1.0
-        version: 9.1.0(@typechain/ethers-v6@0.5.1)(ethers@6.15.0)(hardhat@2.27.1)(typechain@8.3.2)
+        version: 9.1.0(@typechain/ethers-v6@0.5.1)(ethers@6.16.0)(hardhat@2.27.1)(typechain@8.3.2)
       '@types/chai':
         specifier: ^4.3.20
         version: 4.3.20
@@ -73,8 +73,8 @@ importers:
         specifier: ^16.6.1
         version: 16.6.1
       ethers:
-        specifier: ^6.15.0
-        version: 6.15.0
+        specifier: ^6.16.0
+        version: 6.16.0
       hardhat:
         specifier: ^2.27.1
         version: 2.27.1(ts-node@10.9.2)(typescript@5.9.3)
@@ -94,8 +94,8 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
       viem:
-        specifier: ^2.40.3
-        version: 2.40.3(typescript@5.9.3)
+        specifier: ^2.41.2
+        version: 2.41.2(typescript@5.9.3)
 
   apps/web:
     dependencies:
@@ -268,23 +268,23 @@ packages:
       tslib: 2.8.1
     dev: true
 
-  /@aws-sdk/client-lambda@3.942.0:
-    resolution: {integrity: sha512-zRcbiYuvvLi+cHyMNz4q3VlyEZmnGCt0HzOVCicWA31ITz7+F8z9/tm0Sa/0clEOnllHPW2WQmjZepcHJ5/L6w==}
+  /@aws-sdk/client-lambda@3.943.0:
+    resolution: {integrity: sha512-AjhebQ7yBZ70NvEH7PY37lha6i9cK8BCK56YNN77zPETw3cjkVJFC+wHQz+oSLL5p7X35Ur4JYWKmVuqlgLSNw==}
     engines: {node: '>=18.0.0'}
     dependencies:
       '@aws-crypto/sha256-browser': 5.2.0
       '@aws-crypto/sha256-js': 5.2.0
-      '@aws-sdk/core': 3.940.0
-      '@aws-sdk/credential-provider-node': 3.940.0
+      '@aws-sdk/core': 3.943.0
+      '@aws-sdk/credential-provider-node': 3.943.0
       '@aws-sdk/middleware-host-header': 3.936.0
       '@aws-sdk/middleware-logger': 3.936.0
       '@aws-sdk/middleware-recursion-detection': 3.936.0
-      '@aws-sdk/middleware-user-agent': 3.940.0
+      '@aws-sdk/middleware-user-agent': 3.943.0
       '@aws-sdk/region-config-resolver': 3.936.0
       '@aws-sdk/types': 3.936.0
       '@aws-sdk/util-endpoints': 3.936.0
       '@aws-sdk/util-user-agent-browser': 3.936.0
-      '@aws-sdk/util-user-agent-node': 3.940.0
+      '@aws-sdk/util-user-agent-node': 3.943.0
       '@smithy/config-resolver': 4.4.3
       '@smithy/core': 3.18.6
       '@smithy/eventstream-serde-browser': 4.2.5
@@ -320,22 +320,22 @@ packages:
       - aws-crt
     dev: true
 
-  /@aws-sdk/client-sso@3.940.0:
-    resolution: {integrity: sha512-SdqJGWVhmIURvCSgkDditHRO+ozubwZk9aCX9MK8qxyOndhobCndW1ozl3hX9psvMAo9Q4bppjuqy/GHWpjB+A==}
+  /@aws-sdk/client-sso@3.943.0:
+    resolution: {integrity: sha512-kOTO2B8Ks2qX73CyKY8PAajtf5n39aMe2spoiOF5EkgSzGV7hZ/HONRDyADlyxwfsX39Q2F2SpPUaXzon32IGw==}
     engines: {node: '>=18.0.0'}
     dependencies:
       '@aws-crypto/sha256-browser': 5.2.0
       '@aws-crypto/sha256-js': 5.2.0
-      '@aws-sdk/core': 3.940.0
+      '@aws-sdk/core': 3.943.0
       '@aws-sdk/middleware-host-header': 3.936.0
       '@aws-sdk/middleware-logger': 3.936.0
       '@aws-sdk/middleware-recursion-detection': 3.936.0
-      '@aws-sdk/middleware-user-agent': 3.940.0
+      '@aws-sdk/middleware-user-agent': 3.943.0
       '@aws-sdk/region-config-resolver': 3.936.0
       '@aws-sdk/types': 3.936.0
       '@aws-sdk/util-endpoints': 3.936.0
       '@aws-sdk/util-user-agent-browser': 3.936.0
-      '@aws-sdk/util-user-agent-node': 3.940.0
+      '@aws-sdk/util-user-agent-node': 3.943.0
       '@smithy/config-resolver': 4.4.3
       '@smithy/core': 3.18.6
       '@smithy/fetch-http-handler': 5.3.6
@@ -366,8 +366,8 @@ packages:
       - aws-crt
     dev: true
 
-  /@aws-sdk/core@3.940.0:
-    resolution: {integrity: sha512-KsGD2FLaX5ngJao1mHxodIVU9VYd1E8810fcYiGwO1PFHDzf5BEkp6D9IdMeQwT8Q6JLYtiiT1Y/o3UCScnGoA==}
+  /@aws-sdk/core@3.943.0:
+    resolution: {integrity: sha512-8CBy2hI9ABF7RBVQuY1bgf/ue+WPmM/hl0adrXFlhnhkaQP0tFY5zhiy1Y+n7V+5f3/ORoHBmCCQmcHDDYJqJQ==}
     engines: {node: '>=18.0.0'}
     dependencies:
       '@aws-sdk/types': 3.936.0
@@ -385,22 +385,22 @@ packages:
       tslib: 2.8.1
     dev: true
 
-  /@aws-sdk/credential-provider-env@3.940.0:
-    resolution: {integrity: sha512-/G3l5/wbZYP2XEQiOoIkRJmlv15f1P3MSd1a0gz27lHEMrOJOGq66rF1Ca4OJLzapWt3Fy9BPrZAepoAX11kMw==}
+  /@aws-sdk/credential-provider-env@3.943.0:
+    resolution: {integrity: sha512-WnS5w9fK9CTuoZRVSIHLOMcI63oODg9qd1vXMYb7QGLGlfwUm4aG3hdu7i9XvYrpkQfE3dzwWLtXF4ZBuL1Tew==}
     engines: {node: '>=18.0.0'}
     dependencies:
-      '@aws-sdk/core': 3.940.0
+      '@aws-sdk/core': 3.943.0
       '@aws-sdk/types': 3.936.0
       '@smithy/property-provider': 4.2.5
       '@smithy/types': 4.9.0
       tslib: 2.8.1
     dev: true
 
-  /@aws-sdk/credential-provider-http@3.940.0:
-    resolution: {integrity: sha512-dOrc03DHElNBD6N9Okt4U0zhrG4Wix5QUBSZPr5VN8SvmjD9dkrrxOkkJaMCl/bzrW7kbQEp7LuBdbxArMmOZQ==}
+  /@aws-sdk/credential-provider-http@3.943.0:
+    resolution: {integrity: sha512-SA8bUcYDEACdhnhLpZNnWusBpdmj4Vl67Vxp3Zke7SvoWSYbuxa+tiDiC+c92Z4Yq6xNOuLPW912ZPb9/NsSkA==}
     engines: {node: '>=18.0.0'}
     dependencies:
-      '@aws-sdk/core': 3.940.0
+      '@aws-sdk/core': 3.943.0
       '@aws-sdk/types': 3.936.0
       '@smithy/fetch-http-handler': 5.3.6
       '@smithy/node-http-handler': 4.4.5
@@ -412,18 +412,18 @@ packages:
       tslib: 2.8.1
     dev: true
 
-  /@aws-sdk/credential-provider-ini@3.940.0:
-    resolution: {integrity: sha512-gn7PJQEzb/cnInNFTOaDoCN/hOKqMejNmLof1W5VW95Qk0TPO52lH8R4RmJPnRrwFMswOWswTOpR1roKNLIrcw==}
+  /@aws-sdk/credential-provider-ini@3.943.0:
+    resolution: {integrity: sha512-BcLDb8l4oVW+NkuqXMlO7TnM6lBOWW318ylf4FRED/ply5eaGxkQYqdGvHSqGSN5Rb3vr5Ek0xpzSjeYD7C8Kw==}
     engines: {node: '>=18.0.0'}
     dependencies:
-      '@aws-sdk/core': 3.940.0
-      '@aws-sdk/credential-provider-env': 3.940.0
-      '@aws-sdk/credential-provider-http': 3.940.0
-      '@aws-sdk/credential-provider-login': 3.940.0
-      '@aws-sdk/credential-provider-process': 3.940.0
-      '@aws-sdk/credential-provider-sso': 3.940.0
-      '@aws-sdk/credential-provider-web-identity': 3.940.0
-      '@aws-sdk/nested-clients': 3.940.0
+      '@aws-sdk/core': 3.943.0
+      '@aws-sdk/credential-provider-env': 3.943.0
+      '@aws-sdk/credential-provider-http': 3.943.0
+      '@aws-sdk/credential-provider-login': 3.943.0
+      '@aws-sdk/credential-provider-process': 3.943.0
+      '@aws-sdk/credential-provider-sso': 3.943.0
+      '@aws-sdk/credential-provider-web-identity': 3.943.0
+      '@aws-sdk/nested-clients': 3.943.0
       '@aws-sdk/types': 3.936.0
       '@smithy/credential-provider-imds': 4.2.5
       '@smithy/property-provider': 4.2.5
@@ -434,12 +434,12 @@ packages:
       - aws-crt
     dev: true
 
-  /@aws-sdk/credential-provider-login@3.940.0:
-    resolution: {integrity: sha512-fOKC3VZkwa9T2l2VFKWRtfHQPQuISqqNl35ZhcXjWKVwRwl/o7THPMkqI4XwgT2noGa7LLYVbWMwnsgSsBqglg==}
+  /@aws-sdk/credential-provider-login@3.943.0:
+    resolution: {integrity: sha512-9iCOVkiRW+evxiJE94RqosCwRrzptAVPhRhGWv4osfYDhjNAvUMyrnZl3T1bjqCoKNcETRKEZIU3dqYHnUkcwQ==}
     engines: {node: '>=18.0.0'}
     dependencies:
-      '@aws-sdk/core': 3.940.0
-      '@aws-sdk/nested-clients': 3.940.0
+      '@aws-sdk/core': 3.943.0
+      '@aws-sdk/nested-clients': 3.943.0
       '@aws-sdk/types': 3.936.0
       '@smithy/property-provider': 4.2.5
       '@smithy/protocol-http': 5.3.5
@@ -450,16 +450,16 @@ packages:
       - aws-crt
     dev: true
 
-  /@aws-sdk/credential-provider-node@3.940.0:
-    resolution: {integrity: sha512-M8NFAvgvO6xZjiti5kztFiAYmSmSlG3eUfr4ZHSfXYZUA/KUdZU/D6xJyaLnU8cYRWBludb6K9XPKKVwKfqm4g==}
+  /@aws-sdk/credential-provider-node@3.943.0:
+    resolution: {integrity: sha512-14eddaH/gjCWoLSAELVrFOQNyswUYwWphIt+PdsJ/FqVfP4ay2HsiZVEIYbQtmrKHaoLJhiZKwBQRjcqJDZG0w==}
     engines: {node: '>=18.0.0'}
     dependencies:
-      '@aws-sdk/credential-provider-env': 3.940.0
-      '@aws-sdk/credential-provider-http': 3.940.0
-      '@aws-sdk/credential-provider-ini': 3.940.0
-      '@aws-sdk/credential-provider-process': 3.940.0
-      '@aws-sdk/credential-provider-sso': 3.940.0
-      '@aws-sdk/credential-provider-web-identity': 3.940.0
+      '@aws-sdk/credential-provider-env': 3.943.0
+      '@aws-sdk/credential-provider-http': 3.943.0
+      '@aws-sdk/credential-provider-ini': 3.943.0
+      '@aws-sdk/credential-provider-process': 3.943.0
+      '@aws-sdk/credential-provider-sso': 3.943.0
+      '@aws-sdk/credential-provider-web-identity': 3.943.0
       '@aws-sdk/types': 3.936.0
       '@smithy/credential-provider-imds': 4.2.5
       '@smithy/property-provider': 4.2.5
@@ -470,11 +470,11 @@ packages:
       - aws-crt
     dev: true
 
-  /@aws-sdk/credential-provider-process@3.940.0:
-    resolution: {integrity: sha512-pILBzt5/TYCqRsJb7vZlxmRIe0/T+FZPeml417EK75060ajDGnVJjHcuVdLVIeKoTKm9gmJc9l45gon6PbHyUQ==}
+  /@aws-sdk/credential-provider-process@3.943.0:
+    resolution: {integrity: sha512-GIY/vUkthL33AdjOJ8r9vOosKf/3X+X7LIiACzGxvZZrtoOiRq0LADppdiKIB48vTL63VvW+eRIOFAxE6UDekw==}
     engines: {node: '>=18.0.0'}
     dependencies:
-      '@aws-sdk/core': 3.940.0
+      '@aws-sdk/core': 3.943.0
       '@aws-sdk/types': 3.936.0
       '@smithy/property-provider': 4.2.5
       '@smithy/shared-ini-file-loader': 4.4.0
@@ -482,13 +482,13 @@ packages:
       tslib: 2.8.1
     dev: true
 
-  /@aws-sdk/credential-provider-sso@3.940.0:
-    resolution: {integrity: sha512-q6JMHIkBlDCOMnA3RAzf8cGfup+8ukhhb50fNpghMs1SNBGhanmaMbZSgLigBRsPQW7fOk2l8jnzdVLS+BB9Uw==}
+  /@aws-sdk/credential-provider-sso@3.943.0:
+    resolution: {integrity: sha512-1c5G11syUrru3D9OO6Uk+ul5e2lX1adb+7zQNyluNaLPXP6Dina6Sy6DFGRLu7tM8+M7luYmbS3w63rpYpaL+A==}
     engines: {node: '>=18.0.0'}
     dependencies:
-      '@aws-sdk/client-sso': 3.940.0
-      '@aws-sdk/core': 3.940.0
-      '@aws-sdk/token-providers': 3.940.0
+      '@aws-sdk/client-sso': 3.943.0
+      '@aws-sdk/core': 3.943.0
+      '@aws-sdk/token-providers': 3.943.0
       '@aws-sdk/types': 3.936.0
       '@smithy/property-provider': 4.2.5
       '@smithy/shared-ini-file-loader': 4.4.0
@@ -498,12 +498,12 @@ packages:
       - aws-crt
     dev: true
 
-  /@aws-sdk/credential-provider-web-identity@3.940.0:
-    resolution: {integrity: sha512-9QLTIkDJHHaYL0nyymO41H8g3ui1yz6Y3GmAN1gYQa6plXisuFBnGAbmKVj7zNvjWaOKdF0dV3dd3AFKEDoJ/w==}
+  /@aws-sdk/credential-provider-web-identity@3.943.0:
+    resolution: {integrity: sha512-VtyGKHxICSb4kKGuaqotxso8JVM8RjCS3UYdIMOxUt9TaFE/CZIfZKtjTr+IJ7M0P7t36wuSUb/jRLyNmGzUUA==}
     engines: {node: '>=18.0.0'}
     dependencies:
-      '@aws-sdk/core': 3.940.0
-      '@aws-sdk/nested-clients': 3.940.0
+      '@aws-sdk/core': 3.943.0
+      '@aws-sdk/nested-clients': 3.943.0
       '@aws-sdk/types': 3.936.0
       '@smithy/property-provider': 4.2.5
       '@smithy/shared-ini-file-loader': 4.4.0
@@ -543,11 +543,11 @@ packages:
       tslib: 2.8.1
     dev: true
 
-  /@aws-sdk/middleware-user-agent@3.940.0:
-    resolution: {integrity: sha512-nJbLrUj6fY+l2W2rIB9P4Qvpiy0tnTdg/dmixRxrU1z3e8wBdspJlyE+AZN4fuVbeL6rrRrO/zxQC1bB3cw5IA==}
+  /@aws-sdk/middleware-user-agent@3.943.0:
+    resolution: {integrity: sha512-956n4kVEwFNXndXfhSAN5wO+KRgqiWEEY+ECwLvxmmO8uQ0NWOa8l6l65nTtyuiWzMX81c9BvlyNR5EgUeeUvA==}
     engines: {node: '>=18.0.0'}
     dependencies:
-      '@aws-sdk/core': 3.940.0
+      '@aws-sdk/core': 3.943.0
       '@aws-sdk/types': 3.936.0
       '@aws-sdk/util-endpoints': 3.936.0
       '@smithy/core': 3.18.6
@@ -556,22 +556,22 @@ packages:
       tslib: 2.8.1
     dev: true
 
-  /@aws-sdk/nested-clients@3.940.0:
-    resolution: {integrity: sha512-x0mdv6DkjXqXEcQj3URbCltEzW6hoy/1uIL+i8gExP6YKrnhiZ7SzuB4gPls2UOpK5UqLiqXjhRLfBb1C9i4Dw==}
+  /@aws-sdk/nested-clients@3.943.0:
+    resolution: {integrity: sha512-anFtB0p2FPuyUnbOULwGmKYqYKSq1M73c9uZ08jR/NCq6Trjq9cuF5TFTeHwjJyPRb4wMf2Qk859oiVfFqnQiw==}
     engines: {node: '>=18.0.0'}
     dependencies:
       '@aws-crypto/sha256-browser': 5.2.0
       '@aws-crypto/sha256-js': 5.2.0
-      '@aws-sdk/core': 3.940.0
+      '@aws-sdk/core': 3.943.0
       '@aws-sdk/middleware-host-header': 3.936.0
       '@aws-sdk/middleware-logger': 3.936.0
       '@aws-sdk/middleware-recursion-detection': 3.936.0
-      '@aws-sdk/middleware-user-agent': 3.940.0
+      '@aws-sdk/middleware-user-agent': 3.943.0
       '@aws-sdk/region-config-resolver': 3.936.0
       '@aws-sdk/types': 3.936.0
       '@aws-sdk/util-endpoints': 3.936.0
       '@aws-sdk/util-user-agent-browser': 3.936.0
-      '@aws-sdk/util-user-agent-node': 3.940.0
+      '@aws-sdk/util-user-agent-node': 3.943.0
       '@smithy/config-resolver': 4.4.3
       '@smithy/core': 3.18.6
       '@smithy/fetch-http-handler': 5.3.6
@@ -613,12 +613,12 @@ packages:
       tslib: 2.8.1
     dev: true
 
-  /@aws-sdk/token-providers@3.940.0:
-    resolution: {integrity: sha512-k5qbRe/ZFjW9oWEdzLIa2twRVIEx7p/9rutofyrRysrtEnYh3HAWCngAnwbgKMoiwa806UzcTRx0TjyEpnKcCg==}
+  /@aws-sdk/token-providers@3.943.0:
+    resolution: {integrity: sha512-cRKyIzwfkS+XztXIFPoWORuaxlIswP+a83BJzelX4S1gUZ7FcXB4+lj9Jxjn8SbQhR4TPU3Owbpu+S7pd6IRbQ==}
     engines: {node: '>=18.0.0'}
     dependencies:
-      '@aws-sdk/core': 3.940.0
-      '@aws-sdk/nested-clients': 3.940.0
+      '@aws-sdk/core': 3.943.0
+      '@aws-sdk/nested-clients': 3.943.0
       '@aws-sdk/types': 3.936.0
       '@smithy/property-provider': 4.2.5
       '@smithy/shared-ini-file-loader': 4.4.0
@@ -663,8 +663,8 @@ packages:
       tslib: 2.8.1
     dev: true
 
-  /@aws-sdk/util-user-agent-node@3.940.0:
-    resolution: {integrity: sha512-dlD/F+L/jN26I8Zg5x0oDGJiA+/WEQmnSE27fi5ydvYnpfQLwThtQo9SsNS47XSR/SOULaaoC9qx929rZuo74A==}
+  /@aws-sdk/util-user-agent-node@3.943.0:
+    resolution: {integrity: sha512-gn+ILprVRrgAgTIBk2TDsJLRClzIOdStQFeFTcN0qpL8Z4GBCqMFhw7O7X+MM55Stt5s4jAauQ/VvoqmCADnQg==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       aws-crt: '>=1.0.0'
@@ -672,7 +672,7 @@ packages:
       aws-crt:
         optional: true
     dependencies:
-      '@aws-sdk/middleware-user-agent': 3.940.0
+      '@aws-sdk/middleware-user-agent': 3.943.0
       '@aws-sdk/types': 3.936.0
       '@smithy/node-config-provider': 4.3.5
       '@smithy/types': 4.9.0
@@ -1898,7 +1898,7 @@ packages:
       '@nomicfoundation/edr-win32-x64-msvc': 0.12.0-next.16
     dev: true
 
-  /@nomicfoundation/hardhat-chai-matchers@2.1.0(@nomicfoundation/hardhat-ethers@3.1.2)(chai@4.5.0)(ethers@6.15.0)(hardhat@2.27.1):
+  /@nomicfoundation/hardhat-chai-matchers@2.1.0(@nomicfoundation/hardhat-ethers@3.1.2)(chai@4.5.0)(ethers@6.16.0)(hardhat@2.27.1):
     resolution: {integrity: sha512-GPhBNafh1fCnVD9Y7BYvoLnblnvfcq3j8YDbO1gGe/1nOFWzGmV7gFu5DkwFXF+IpYsS+t96o9qc/mPu3V3Vfw==}
     peerDependencies:
       '@nomicfoundation/hardhat-ethers': ^3.1.0
@@ -1906,31 +1906,31 @@ packages:
       ethers: ^6.14.0
       hardhat: ^2.26.0
     dependencies:
-      '@nomicfoundation/hardhat-ethers': 3.1.2(ethers@6.15.0)(hardhat@2.27.1)
+      '@nomicfoundation/hardhat-ethers': 3.1.2(ethers@6.16.0)(hardhat@2.27.1)
       '@types/chai-as-promised': 7.1.8
       chai: 4.5.0
       chai-as-promised: 7.1.2(chai@4.5.0)
       deep-eql: 4.1.4
-      ethers: 6.15.0
+      ethers: 6.16.0
       hardhat: 2.27.1(ts-node@10.9.2)(typescript@5.9.3)
       ordinal: 1.0.3
     dev: true
 
-  /@nomicfoundation/hardhat-ethers@3.1.2(ethers@6.15.0)(hardhat@2.27.1):
+  /@nomicfoundation/hardhat-ethers@3.1.2(ethers@6.16.0)(hardhat@2.27.1):
     resolution: {integrity: sha512-7xEaz2X8p47qWIAqtV2z03MmusheHm8bvY2mDlxo9JiT2BgSx59GSdv5+mzwOvsuKDbTij7oqDnwFyYOlHREEQ==}
     peerDependencies:
       ethers: ^6.14.0
       hardhat: ^2.26.0
     dependencies:
       debug: 4.4.3(supports-color@8.1.1)
-      ethers: 6.15.0
+      ethers: 6.16.0
       hardhat: 2.27.1(ts-node@10.9.2)(typescript@5.9.3)
       lodash.isequal: 4.5.0
     transitivePeerDependencies:
       - supports-color
     dev: true
 
-  /@nomicfoundation/hardhat-ignition-ethers@0.15.16(@nomicfoundation/hardhat-ethers@3.1.2)(@nomicfoundation/hardhat-ignition@0.15.15)(@nomicfoundation/ignition-core@0.15.14)(ethers@6.15.0)(hardhat@2.27.1):
+  /@nomicfoundation/hardhat-ignition-ethers@0.15.16(@nomicfoundation/hardhat-ethers@3.1.2)(@nomicfoundation/hardhat-ignition@0.15.15)(@nomicfoundation/ignition-core@0.15.14)(ethers@6.16.0)(hardhat@2.27.1):
     resolution: {integrity: sha512-OXC1jLX06YFgzFero9AjHUSwB39CLWPiBAJj5ZoDJiTnAbH1DvnQSt8sUJuZRrrL+WH8sQbcB4hjkPcR0B5hAA==}
     peerDependencies:
       '@nomicfoundation/hardhat-ethers': ^3.1.0
@@ -1939,14 +1939,14 @@ packages:
       ethers: ^6.14.0
       hardhat: ^2.26.0
     dependencies:
-      '@nomicfoundation/hardhat-ethers': 3.1.2(ethers@6.15.0)(hardhat@2.27.1)
+      '@nomicfoundation/hardhat-ethers': 3.1.2(ethers@6.16.0)(hardhat@2.27.1)
       '@nomicfoundation/hardhat-ignition': 0.15.15(@nomicfoundation/hardhat-verify@2.1.3)(hardhat@2.27.1)
       '@nomicfoundation/ignition-core': 0.15.14
-      ethers: 6.15.0
+      ethers: 6.16.0
       hardhat: 2.27.1(ts-node@10.9.2)(typescript@5.9.3)
     dev: true
 
-  /@nomicfoundation/hardhat-ignition-viem@0.15.15(@nomicfoundation/hardhat-ignition@0.15.15)(@nomicfoundation/hardhat-viem@2.1.3)(@nomicfoundation/ignition-core@0.15.14)(hardhat@2.27.1)(viem@2.40.3):
+  /@nomicfoundation/hardhat-ignition-viem@0.15.15(@nomicfoundation/hardhat-ignition@0.15.15)(@nomicfoundation/hardhat-viem@2.1.3)(@nomicfoundation/ignition-core@0.15.14)(hardhat@2.27.1)(viem@2.41.2):
     resolution: {integrity: sha512-YUL1avW+TEh+nQEzoKwp8SpK9O7gW/Q3vJs95Xhtmz6RJQynWrjSOXVK43xNfzpbS/C+kfPa+A6DF1Sr19H6kg==}
     peerDependencies:
       '@nomicfoundation/hardhat-ignition': ^0.15.15
@@ -1956,10 +1956,10 @@ packages:
       viem: ^2.7.6
     dependencies:
       '@nomicfoundation/hardhat-ignition': 0.15.15(@nomicfoundation/hardhat-verify@2.1.3)(hardhat@2.27.1)
-      '@nomicfoundation/hardhat-viem': 2.1.3(hardhat@2.27.1)(typescript@5.9.3)(viem@2.40.3)
+      '@nomicfoundation/hardhat-viem': 2.1.3(hardhat@2.27.1)(typescript@5.9.3)(viem@2.41.2)
       '@nomicfoundation/ignition-core': 0.15.14
       hardhat: 2.27.1(ts-node@10.9.2)(typescript@5.9.3)
-      viem: 2.40.3(typescript@5.9.3)
+      viem: 2.41.2(typescript@5.9.3)
     dev: true
 
   /@nomicfoundation/hardhat-ignition@0.15.15(@nomicfoundation/hardhat-verify@2.1.3)(hardhat@2.27.1):
@@ -1992,7 +1992,7 @@ packages:
       hardhat: 2.27.1(ts-node@10.9.2)(typescript@5.9.3)
     dev: true
 
-  /@nomicfoundation/hardhat-toolbox-viem@3.0.0(@nomicfoundation/hardhat-ignition-viem@0.15.15)(@nomicfoundation/hardhat-network-helpers@1.1.2)(@nomicfoundation/hardhat-verify@2.1.3)(@nomicfoundation/hardhat-viem@2.1.3)(@types/chai-as-promised@7.1.8)(@types/chai@4.3.20)(@types/mocha@10.0.10)(@types/node@24.10.1)(chai@4.5.0)(hardhat-gas-reporter@1.0.10)(hardhat@2.27.1)(solidity-coverage@0.8.16)(ts-node@10.9.2)(typescript@5.9.3)(viem@2.40.3):
+  /@nomicfoundation/hardhat-toolbox-viem@3.0.0(@nomicfoundation/hardhat-ignition-viem@0.15.15)(@nomicfoundation/hardhat-network-helpers@1.1.2)(@nomicfoundation/hardhat-verify@2.1.3)(@nomicfoundation/hardhat-viem@2.1.3)(@types/chai-as-promised@7.1.8)(@types/chai@4.3.20)(@types/mocha@10.0.10)(@types/node@24.10.1)(chai@4.5.0)(hardhat-gas-reporter@1.0.10)(hardhat@2.27.1)(solidity-coverage@0.8.16)(ts-node@10.9.2)(typescript@5.9.3)(viem@2.41.2):
     resolution: {integrity: sha512-cr+aRozCtTwaRz5qc9OVY1kegWrnVwyhHZonICmlcm21cvJ31uvJnuPG688tMbjUvwRDw8tpZYZK0kI5M+4CKg==}
     peerDependencies:
       '@nomicfoundation/hardhat-ignition-viem': ^0.15.0
@@ -2011,10 +2011,10 @@ packages:
       typescript: ^5.0.4
       viem: ^2.7.6
     dependencies:
-      '@nomicfoundation/hardhat-ignition-viem': 0.15.15(@nomicfoundation/hardhat-ignition@0.15.15)(@nomicfoundation/hardhat-viem@2.1.3)(@nomicfoundation/ignition-core@0.15.14)(hardhat@2.27.1)(viem@2.40.3)
+      '@nomicfoundation/hardhat-ignition-viem': 0.15.15(@nomicfoundation/hardhat-ignition@0.15.15)(@nomicfoundation/hardhat-viem@2.1.3)(@nomicfoundation/ignition-core@0.15.14)(hardhat@2.27.1)(viem@2.41.2)
       '@nomicfoundation/hardhat-network-helpers': 1.1.2(hardhat@2.27.1)
       '@nomicfoundation/hardhat-verify': 2.1.3(hardhat@2.27.1)
-      '@nomicfoundation/hardhat-viem': 2.1.3(hardhat@2.27.1)(typescript@5.9.3)(viem@2.40.3)
+      '@nomicfoundation/hardhat-viem': 2.1.3(hardhat@2.27.1)(typescript@5.9.3)(viem@2.41.2)
       '@types/chai': 4.3.20
       '@types/chai-as-promised': 7.1.8
       '@types/mocha': 10.0.10
@@ -2026,10 +2026,10 @@ packages:
       solidity-coverage: 0.8.16(hardhat@2.27.1)
       ts-node: 10.9.2(@types/node@24.10.1)(typescript@5.9.3)
       typescript: 5.9.3
-      viem: 2.40.3(typescript@5.9.3)
+      viem: 2.41.2(typescript@5.9.3)
     dev: true
 
-  /@nomicfoundation/hardhat-toolbox@5.0.0(@nomicfoundation/hardhat-chai-matchers@2.1.0)(@nomicfoundation/hardhat-ethers@3.1.2)(@nomicfoundation/hardhat-ignition-ethers@0.15.16)(@nomicfoundation/hardhat-network-helpers@1.1.2)(@nomicfoundation/hardhat-verify@2.1.3)(@typechain/ethers-v6@0.5.1)(@typechain/hardhat@9.1.0)(@types/chai@4.3.20)(@types/mocha@10.0.10)(@types/node@24.10.1)(chai@4.5.0)(ethers@6.15.0)(hardhat-gas-reporter@1.0.10)(hardhat@2.27.1)(solidity-coverage@0.8.16)(ts-node@10.9.2)(typechain@8.3.2)(typescript@5.9.3):
+  /@nomicfoundation/hardhat-toolbox@5.0.0(@nomicfoundation/hardhat-chai-matchers@2.1.0)(@nomicfoundation/hardhat-ethers@3.1.2)(@nomicfoundation/hardhat-ignition-ethers@0.15.16)(@nomicfoundation/hardhat-network-helpers@1.1.2)(@nomicfoundation/hardhat-verify@2.1.3)(@typechain/ethers-v6@0.5.1)(@typechain/hardhat@9.1.0)(@types/chai@4.3.20)(@types/mocha@10.0.10)(@types/node@24.10.1)(chai@4.5.0)(ethers@6.16.0)(hardhat-gas-reporter@1.0.10)(hardhat@2.27.1)(solidity-coverage@0.8.16)(ts-node@10.9.2)(typechain@8.3.2)(typescript@5.9.3):
     resolution: {integrity: sha512-FnUtUC5PsakCbwiVNsqlXVIWG5JIb5CEZoSXbJUsEBun22Bivx2jhF1/q9iQbzuaGpJKFQyOhemPB2+XlEE6pQ==}
     peerDependencies:
       '@nomicfoundation/hardhat-chai-matchers': ^2.0.0
@@ -2051,18 +2051,18 @@ packages:
       typechain: ^8.3.0
       typescript: '>=4.5.0'
     dependencies:
-      '@nomicfoundation/hardhat-chai-matchers': 2.1.0(@nomicfoundation/hardhat-ethers@3.1.2)(chai@4.5.0)(ethers@6.15.0)(hardhat@2.27.1)
-      '@nomicfoundation/hardhat-ethers': 3.1.2(ethers@6.15.0)(hardhat@2.27.1)
-      '@nomicfoundation/hardhat-ignition-ethers': 0.15.16(@nomicfoundation/hardhat-ethers@3.1.2)(@nomicfoundation/hardhat-ignition@0.15.15)(@nomicfoundation/ignition-core@0.15.14)(ethers@6.15.0)(hardhat@2.27.1)
+      '@nomicfoundation/hardhat-chai-matchers': 2.1.0(@nomicfoundation/hardhat-ethers@3.1.2)(chai@4.5.0)(ethers@6.16.0)(hardhat@2.27.1)
+      '@nomicfoundation/hardhat-ethers': 3.1.2(ethers@6.16.0)(hardhat@2.27.1)
+      '@nomicfoundation/hardhat-ignition-ethers': 0.15.16(@nomicfoundation/hardhat-ethers@3.1.2)(@nomicfoundation/hardhat-ignition@0.15.15)(@nomicfoundation/ignition-core@0.15.14)(ethers@6.16.0)(hardhat@2.27.1)
       '@nomicfoundation/hardhat-network-helpers': 1.1.2(hardhat@2.27.1)
       '@nomicfoundation/hardhat-verify': 2.1.3(hardhat@2.27.1)
-      '@typechain/ethers-v6': 0.5.1(ethers@6.15.0)(typechain@8.3.2)(typescript@5.9.3)
-      '@typechain/hardhat': 9.1.0(@typechain/ethers-v6@0.5.1)(ethers@6.15.0)(hardhat@2.27.1)(typechain@8.3.2)
+      '@typechain/ethers-v6': 0.5.1(ethers@6.16.0)(typechain@8.3.2)(typescript@5.9.3)
+      '@typechain/hardhat': 9.1.0(@typechain/ethers-v6@0.5.1)(ethers@6.16.0)(hardhat@2.27.1)(typechain@8.3.2)
       '@types/chai': 4.3.20
       '@types/mocha': 10.0.10
       '@types/node': 24.10.1
       chai: 4.5.0
-      ethers: 6.15.0
+      ethers: 6.16.0
       hardhat: 2.27.1(ts-node@10.9.2)(typescript@5.9.3)
       hardhat-gas-reporter: 1.0.10(hardhat@2.27.1)
       solidity-coverage: 0.8.16(hardhat@2.27.1)
@@ -2090,7 +2090,7 @@ packages:
       - supports-color
     dev: true
 
-  /@nomicfoundation/hardhat-viem@2.1.3(hardhat@2.27.1)(typescript@5.9.3)(viem@2.40.3):
+  /@nomicfoundation/hardhat-viem@2.1.3(hardhat@2.27.1)(typescript@5.9.3)(viem@2.41.2):
     resolution: {integrity: sha512-tjF5WE9lzUIWnPqPHy3yJUeRo1stMG3o3MQhmKnYMl6Ulg7WMy1zYk+LuFE6f0XER6c3A6+ukRIYxXV+RZFiCw==}
     peerDependencies:
       hardhat: ^2.26.0
@@ -2099,7 +2099,7 @@ packages:
       abitype: 0.9.10(typescript@5.9.3)
       hardhat: 2.27.1(ts-node@10.9.2)(typescript@5.9.3)
       lodash.memoize: 4.1.2
-      viem: 2.40.3(typescript@5.9.3)
+      viem: 2.41.2(typescript@5.9.3)
     transitivePeerDependencies:
       - typescript
       - zod
@@ -2112,7 +2112,7 @@ packages:
       '@nomicfoundation/solidity-analyzer': 0.1.2
       cbor: 9.0.2
       debug: 4.4.3(supports-color@8.1.1)
-      ethers: 6.15.0
+      ethers: 6.16.0
       fs-extra: 10.1.0
       immer: 10.0.2
       lodash: 4.17.21
@@ -2210,7 +2210,7 @@ packages:
   /@openzeppelin/defender-sdk-base-client@2.7.0:
     resolution: {integrity: sha512-J5IpvbFfdIJM4IadBcXfhCXVdX2yEpaZtRR1ecq87d8CdkmmEpniYfef/yVlG98yekvu125LaIRg0yXQOt9Bdg==}
     dependencies:
-      '@aws-sdk/client-lambda': 3.942.0
+      '@aws-sdk/client-lambda': 3.943.0
       amazon-cognito-identity-js: 6.3.16
       async-retry: 1.3.3
     transitivePeerDependencies:
@@ -2242,7 +2242,7 @@ packages:
       - encoding
     dev: true
 
-  /@openzeppelin/hardhat-upgrades@3.9.1(@nomicfoundation/hardhat-ethers@3.1.2)(@nomicfoundation/hardhat-verify@2.1.3)(ethers@6.15.0)(hardhat@2.27.1):
+  /@openzeppelin/hardhat-upgrades@3.9.1(@nomicfoundation/hardhat-ethers@3.1.2)(@nomicfoundation/hardhat-verify@2.1.3)(ethers@6.16.0)(hardhat@2.27.1):
     resolution: {integrity: sha512-pSDjlOnIpP+PqaJVe144dK6VVKZw2v6YQusyt0OOLiCsl+WUzfo4D0kylax7zjrOxqy41EK2ipQeIF4T+cCn2A==}
     hasBin: true
     peerDependencies:
@@ -2254,7 +2254,7 @@ packages:
       '@nomicfoundation/hardhat-verify':
         optional: true
     dependencies:
-      '@nomicfoundation/hardhat-ethers': 3.1.2(ethers@6.15.0)(hardhat@2.27.1)
+      '@nomicfoundation/hardhat-ethers': 3.1.2(ethers@6.16.0)(hardhat@2.27.1)
       '@nomicfoundation/hardhat-verify': 2.1.3(hardhat@2.27.1)
       '@openzeppelin/defender-sdk-base-client': 2.7.0
       '@openzeppelin/defender-sdk-deploy-client': 2.7.0(debug@4.4.3)
@@ -2263,7 +2263,7 @@ packages:
       chalk: 4.1.2
       debug: 4.4.3(supports-color@8.1.1)
       ethereumjs-util: 7.1.5
-      ethers: 6.15.0
+      ethers: 6.16.0
       hardhat: 2.27.1(ts-node@10.9.2)(typescript@5.9.3)
       proper-lockfile: 4.1.2
       undici: 6.22.0
@@ -4589,21 +4589,21 @@ packages:
     dev: true
     optional: true
 
-  /@typechain/ethers-v6@0.5.1(ethers@6.15.0)(typechain@8.3.2)(typescript@5.9.3):
+  /@typechain/ethers-v6@0.5.1(ethers@6.16.0)(typechain@8.3.2)(typescript@5.9.3):
     resolution: {integrity: sha512-F+GklO8jBWlsaVV+9oHaPh5NJdd6rAKN4tklGfInX1Q7h0xPgVLP39Jl3eCulPB5qexI71ZFHwbljx4ZXNfouA==}
     peerDependencies:
       ethers: 6.x
       typechain: ^8.3.2
       typescript: '>=4.7.0'
     dependencies:
-      ethers: 6.15.0
+      ethers: 6.16.0
       lodash: 4.17.21
       ts-essentials: 7.0.3(typescript@5.9.3)
       typechain: 8.3.2(typescript@5.9.3)
       typescript: 5.9.3
     dev: true
 
-  /@typechain/hardhat@9.1.0(@typechain/ethers-v6@0.5.1)(ethers@6.15.0)(hardhat@2.27.1)(typechain@8.3.2):
+  /@typechain/hardhat@9.1.0(@typechain/ethers-v6@0.5.1)(ethers@6.16.0)(hardhat@2.27.1)(typechain@8.3.2):
     resolution: {integrity: sha512-mtaUlzLlkqTlfPwB3FORdejqBskSnh+Jl8AIJGjXNAQfRQ4ofHADPl1+oU7Z3pAJzmZbUXII8MhOLQltcHgKnA==}
     peerDependencies:
       '@typechain/ethers-v6': ^0.5.1
@@ -4611,8 +4611,8 @@ packages:
       hardhat: ^2.9.9
       typechain: ^8.3.2
     dependencies:
-      '@typechain/ethers-v6': 0.5.1(ethers@6.15.0)(typechain@8.3.2)(typescript@5.9.3)
-      ethers: 6.15.0
+      '@typechain/ethers-v6': 0.5.1(ethers@6.16.0)(typechain@8.3.2)(typescript@5.9.3)
+      ethers: 6.16.0
       fs-extra: 9.1.0
       hardhat: 2.27.1(ts-node@10.9.2)(typescript@5.9.3)
       typechain: 8.3.2(typescript@5.9.3)
@@ -7879,8 +7879,8 @@ packages:
       - utf-8-validate
     dev: true
 
-  /ethers@6.15.0:
-    resolution: {integrity: sha512-Kf/3ZW54L4UT0pZtsY/rf+EkBU7Qi5nnhonjUb8yTXcxH3cdcWrV2cRyk0Xk/4jK6OoHhxxZHriyhje20If2hQ==}
+  /ethers@6.16.0:
+    resolution: {integrity: sha512-U1wulmetNymijEhpSEQ7Ct/P/Jw9/e7R1j5XIbPRydgV2DjLVMsULDlNksq3RQnFgKoLlZf88ijYtWEXcPa07A==}
     engines: {node: '>=14.0.0'}
     dependencies:
       '@adraffy/ens-normalize': 1.10.1
@@ -12132,8 +12132,8 @@ packages:
       - zod
     dev: false
 
-  /viem@2.40.3(typescript@5.9.3):
-    resolution: {integrity: sha512-feYfEpbgjRkZYQpwcgxqkWzjxHI5LSDAjcGetHHwDRuX9BRQHUdV8ohrCosCYpdEhus/RknD3/bOd4qLYVPPuA==}
+  /viem@2.41.2(typescript@5.9.3):
+    resolution: {integrity: sha512-LYliajglBe1FU6+EH9mSWozp+gRA/QcHfxeD9Odf83AdH5fwUS7DroH4gHvlv6Sshqi1uXrYFA2B/EOczxd15g==}
     peerDependencies:
       typescript: '>=5.0.4'
     peerDependenciesMeta:

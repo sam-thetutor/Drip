@@ -528,7 +528,7 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
                       </div>
                     </div>
                     <div className="flex gap-2 ml-4">
-                      {isCurrentUser && balance > 0n && (isActive || isPaused) && (
+                      {isCurrentUser && balance > 0n && (isActive || isPaused || isCompleted) && (
                         <Button
                           onClick={() => setWithdrawRecipient(recipient.recipient as `0x${string}`)}
                           size="sm"

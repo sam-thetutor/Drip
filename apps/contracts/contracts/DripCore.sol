@@ -205,7 +205,9 @@ contract DripCore is IDrip, Initializable, ReentrancyGuardUpgradeable, OwnableUp
         require(stream.streamId != 0, "DripCore: Stream does not exist");
         require(_isRecipient(stream, recipient), "DripCore: Not a recipient");
 
-        if (stream.status != StreamStatus.Active && stream.status != StreamStatus.Paused) {
+        // Allow balance calculation for Active, Paused, and Completed streams
+        // Completed streams may still have unwithdrawn funds that recipients should be able to claim
+        if (stream.status != StreamStatus.Active && stream.status != StreamStatus.Paused && stream.status != StreamStatus.Completed) {
             return 0;
         }
 
@@ -258,9 +260,22 @@ contract DripCore is IDrip, Initializable, ReentrancyGuardUpgradeable, OwnableUp
 
         uint256 recipientAccrued = ratePerSecond * elapsedTime;
 
-        // Calculate remaining deposit (considering all recipients)
-        uint256 totalDistributed = _calculateTotalDistributed(streamId, currentTime);
-        uint256 remainingDeposit = stream.deposit > totalDistributed ? stream.deposit - totalDistributed : 0;
+        // Calculate remaining deposit
+        // For expired streams, use actual withdrawals instead of theoretical distribution
+        // This ensures recipients can withdraw their unclaimed funds even after stream ends
+        uint256 remainingDeposit;
+        if (currentTime > stream.endTime) {
+            // Stream has expired - calculate based on actual withdrawals, not theoretical distribution
+            uint256 totalActualWithdrawn = 0;
+            for (uint256 i = 0; i < stream.recipients.length; i++) {
+                totalActualWithdrawn += _recipientTotalWithdrawn[streamId][stream.recipients[i]];
+            }
+            remainingDeposit = stream.deposit > totalActualWithdrawn ? stream.deposit - totalActualWithdrawn : 0;
+        } else {
+            // Stream not expired - use theoretical distribution
+            uint256 totalDistributed = _calculateTotalDistributed(streamId, currentTime);
+            remainingDeposit = stream.deposit > totalDistributed ? stream.deposit - totalDistributed : 0;
+        }
 
         // If stream has expired, distribute remaining deposit proportionally among recipients
         if (currentTime > stream.endTime && remainingDeposit > 0) {
@@ -353,8 +368,8 @@ contract DripCore is IDrip, Initializable, ReentrancyGuardUpgradeable, OwnableUp
         Stream storage stream = _streams[streamId];
         require(stream.streamId != 0, "DripCore: Stream does not exist");
         require(
-            stream.status == StreamStatus.Active || stream.status == StreamStatus.Paused,
-            "DripCore: Stream not active or paused"
+            stream.status == StreamStatus.Active || stream.status == StreamStatus.Paused || stream.status == StreamStatus.Completed,
+            "DripCore: Stream not active, paused, or completed"
         );
         require(_isRecipient(stream, recipient), "DripCore: Not a recipient");
         require(msg.sender == recipient, "DripCore: Only recipient can withdraw");
