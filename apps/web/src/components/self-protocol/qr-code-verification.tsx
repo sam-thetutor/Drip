@@ -3,12 +3,22 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useSelfProtocol } from "@/lib/self-protocol/hooks/useSelfProtocol";
+
+// Only import if we need the hook as fallback
 import { QrCode, Loader2, RefreshCw, Clock, CheckCircle2, XCircle } from "lucide-react";
 import { getTimeUntilExpiry } from "@/lib/self-protocol/utils";
-import { useEffect, useState, type ComponentType } from "react";
+import { useEffect, useState, useCallback, type ComponentType } from "react";
 
 // QR Code Wrapper Component - uses SelfQRcodeWrapper when available
-function QRCodeWrapper({ selfApp }: { selfApp: any }) {
+function QRCodeWrapper({ 
+  selfApp, 
+  onVerified,
+  handleVerificationCallback 
+}: { 
+  selfApp: any; 
+  onVerified?: (proof: any, sessionId: string) => void;
+  handleVerificationCallback?: (sessionId: string, proof: any) => void;
+}) {
   const [QRCodeComponent, setQRCodeComponent] = useState<ComponentType<any> | null>(null);
 
   useEffect(() => {
@@ -27,6 +37,18 @@ function QRCodeWrapper({ selfApp }: { selfApp: any }) {
       });
   }, [selfApp]);
 
+  // Handle verification callback from SelfQRcodeWrapper
+  const handleVerified = useCallback((proof: any, sessionId?: string) => {
+    console.log("Self Protocol verification callback received:", { proof, sessionId });
+    if (onVerified) {
+      onVerified(proof, sessionId || '');
+    }
+    // Also call the hook's callback handler
+    if (handleVerificationCallback && sessionId) {
+      handleVerificationCallback(sessionId, proof);
+    }
+  }, [onVerified, handleVerificationCallback]);
+
   if (!selfApp) {
     return (
       <div className="w-64 h-64 flex items-center justify-center bg-muted rounded-lg">
@@ -36,8 +58,17 @@ function QRCodeWrapper({ selfApp }: { selfApp: any }) {
   }
 
   if (QRCodeComponent) {
-    // SelfQRcodeWrapper typically takes the SelfApp instance as a prop
-    return <QRCodeComponent selfApp={selfApp} />;
+    // SelfQRcodeWrapper typically takes the SelfApp instance and callback props
+    // Common prop names: onVerified, onSuccess, callback, onProof
+    return (
+      <QRCodeComponent 
+        selfApp={selfApp} 
+        onVerified={handleVerified}
+        onSuccess={handleVerified}
+        callback={handleVerified}
+        onProof={handleVerified}
+      />
+    );
   }
 
   // Fallback: try to get QR code URL from selfApp
@@ -62,18 +93,39 @@ function QRCodeWrapper({ selfApp }: { selfApp: any }) {
 
 interface QRCodeVerificationProps {
   onVerified?: () => void;
+  qrCodeState?: any;
+  qrCodeData?: any;
+  verificationStatus?: any;
+  generateQRCode?: () => void;
+  resetVerification?: () => void;
+  isReady?: boolean;
+  selfApp?: any;
+  handleVerificationCallback?: (sessionId: string, proof: any) => void;
 }
 
-export function QRCodeVerification({ onVerified }: QRCodeVerificationProps) {
-  const {
-    qrCodeState,
-    qrCodeData,
-    verificationStatus,
-    generateQRCode,
-    resetVerification,
-    isReady,
-    selfApp,
-  } = useSelfProtocol();
+export function QRCodeVerification({ 
+  onVerified,
+  qrCodeState: propQrCodeState,
+  qrCodeData: propQrCodeData,
+  verificationStatus: propVerificationStatus,
+  generateQRCode: propGenerateQRCode,
+  resetVerification: propResetVerification,
+  isReady: propIsReady,
+  selfApp: propSelfApp,
+  handleVerificationCallback: propHandleVerificationCallback,
+}: QRCodeVerificationProps) {
+  // Always call hook (React rules), but use props if provided
+  const hookValues = useSelfProtocol();
+  
+  // Use props if provided, otherwise fall back to hook values
+  const qrCodeState = propQrCodeState ?? hookValues.qrCodeState;
+  const qrCodeData = propQrCodeData ?? hookValues.qrCodeData;
+  const verificationStatus = propVerificationStatus ?? hookValues.verificationStatus;
+  const generateQRCode = propGenerateQRCode ?? hookValues.generateQRCode;
+  const resetVerification = propResetVerification ?? hookValues.resetVerification;
+  const isReady = propIsReady ?? hookValues.isReady;
+  const selfApp = propSelfApp ?? hookValues.selfApp;
+  const handleVerificationCallback = propHandleVerificationCallback ?? hookValues.handleVerificationCallback;
   const [timeRemaining, setTimeRemaining] = useState<string>("");
 
   // Update time remaining
@@ -207,7 +259,13 @@ export function QRCodeVerification({ onVerified }: QRCodeVerificationProps) {
           <div className="p-4 bg-white rounded-lg mb-4">
             {/* QR Code - using SelfQRcodeWrapper with SelfApp instance */}
             {typeof window !== "undefined" && selfApp ? (
-              <QRCodeWrapper selfApp={selfApp} />
+              <QRCodeWrapper 
+                selfApp={selfApp} 
+                handleVerificationCallback={handleVerificationCallback}
+                onVerified={(proof, sessionId) => {
+                  console.log("QR Code verification completed:", { proof, sessionId });
+                }}
+              />
             ) : qrCodeData?.qrCodeUrl ? (
               <img
                 src={qrCodeData.qrCodeUrl}

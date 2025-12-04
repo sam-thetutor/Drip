@@ -55,7 +55,7 @@ This document outlines the phased implementation plan for integrating Self Proto
      - Generate QR codes for verification
      - Handle verification state (pending, verified, error)
      - Manage universal links
-     - Handle callbacks after verification
+     - Handle cayemtns, diellbacks after verification
 
 2. **QR Code Component**
    - [ ] Create `apps/web/src/components/self-protocol/qr-code-verification.tsx`

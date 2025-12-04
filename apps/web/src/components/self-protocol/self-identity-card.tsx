@@ -13,8 +13,14 @@ export function SelfIdentityCard() {
   const {
     verificationStatus,
     qrCodeState,
+    qrCodeData,
     checkVerificationStatus,
+    generateQRCode,
+    resetVerification,
     isReady,
+    isInitializing,
+    selfApp,
+    handleVerificationCallback,
   } = useSelfProtocol();
 
   if (!isConnected || !address) {
@@ -28,7 +34,7 @@ export function SelfIdentityCard() {
     );
   }
 
-  const isLoading = verificationStatus.isLoading || !isReady;
+  const isLoading = verificationStatus.isLoading || isInitializing;
   const isVerified = verificationStatus.isVerified;
 
   return (
@@ -69,22 +75,52 @@ export function SelfIdentityCard() {
             </div>
           </div>
         ) : isVerified ? (
-          <div className="p-4 rounded-lg bg-green/10 border border-green/20">
-            <div className="flex items-start gap-3">
-              <CheckCircle2 className="h-5 w-5 text-green flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-green mb-1">Verified</p>
-                <p className="text-xs text-muted-foreground">
-                  Your identity has been verified using Self Protocol
-                  {verificationStatus.verifiedAt && (
-                    <> on {verificationStatus.verifiedAt.toLocaleDateString()}</>
-                  )}
-                </p>
-                {verificationStatus.proofId && (
-                  <p className="text-xs text-muted-foreground mt-1 font-mono">
-                    Proof ID: {verificationStatus.proofId.substring(0, 16)}...
+          <div className="space-y-4">
+            {/* Success Message */}
+            <div className="p-4 rounded-lg bg-green/10 border border-green/20">
+              <div className="flex items-start gap-3">
+                <CheckCircle2 className="h-5 w-5 text-green flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-green mb-1">Identity Verified ✓</p>
+                  <p className="text-xs text-muted-foreground">
+                    Your identity has been successfully verified using Self Protocol's zero-knowledge proof system.
                   </p>
-                )}
+                </div>
+              </div>
+            </div>
+
+            {/* Verification Details */}
+            <div className="p-4 rounded-lg bg-muted/30 border border-white/10 space-y-3">
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Verified On</p>
+                <p className="text-sm">
+                  {verificationStatus.verifiedAt 
+                    ? verificationStatus.verifiedAt.toLocaleDateString('en-US', { 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                      })
+                    : 'Recently'}
+                </p>
+              </div>
+              
+              {verificationStatus.proofId && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Proof ID</p>
+                  <p className="text-sm font-mono text-green break-all">
+                    {verificationStatus.proofId}
+                  </p>
+                </div>
+              )}
+
+              {/* Benefits */}
+              <div className="pt-2 border-t border-white/10">
+                <p className="text-xs text-muted-foreground mb-2">What this means:</p>
+                <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
+                  <li>Your identity is verified without exposing personal data</li>
+                  <li>Sybil-resistant verification using zero-knowledge proofs</li>
+                  <li>Privacy-first approach protects your information</li>
+                </ul>
               </div>
             </div>
           </div>
@@ -102,7 +138,16 @@ export function SelfIdentityCard() {
             </div>
 
             {/* QR Code Verification Component */}
-            <QRCodeVerification />
+            <QRCodeVerification 
+              qrCodeState={qrCodeState}
+              qrCodeData={qrCodeData}
+              verificationStatus={verificationStatus}
+              generateQRCode={generateQRCode}
+              resetVerification={resetVerification}
+              isReady={isReady}
+              selfApp={selfApp}
+              handleVerificationCallback={handleVerificationCallback}
+            />
           </>
         )}
 

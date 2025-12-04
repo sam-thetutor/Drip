@@ -8,7 +8,11 @@
 export const DEFAULT_SELF_CONFIG = {
   appName: process.env.NEXT_PUBLIC_SELF_APP_NAME || "Drip - Programmable Payments",
   scope: process.env.NEXT_PUBLIC_SELF_SCOPE || "drip-payments",
-  endpoint: process.env.NEXT_PUBLIC_SELF_ENDPOINT || "/api/self/verify",
+  // Endpoint must be a full URL for Self Protocol to work
+  endpoint: process.env.NEXT_PUBLIC_SELF_ENDPOINT || 
+    (typeof window !== 'undefined' 
+      ? `${window.location.origin}/api/self/verify`
+      : "/api/self/verify"),
   disclosures: {
     date_of_birth: true,
     minimumAge: 18,
@@ -49,10 +53,32 @@ export function getSelfConfig(userId: string): {
     minimumAge: number;
   };
 } {
+  // Ensure endpoint is a full URL (required by Self Protocol)
+  let endpoint = process.env.NEXT_PUBLIC_SELF_ENDPOINT;
+  
+  // If endpoint is not set or is relative, convert to full URL
+  if (!endpoint || endpoint.startsWith('/')) {
+    if (typeof window !== 'undefined') {
+      // Client-side: use current origin
+      endpoint = `${window.location.origin}${endpoint || '/api/self/verify'}`;
+    } else {
+      // Server-side: use environment variable or default
+      const publicUrl = process.env.NEXT_PUBLIC_APP_URL || 
+        (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+        'http://localhost:3000';
+      endpoint = `${publicUrl}${endpoint || '/api/self/verify'}`;
+    }
+  }
+  
+  // Ensure endpoint is HTTPS in production
+  if (process.env.NODE_ENV === 'production' && endpoint.startsWith('http://')) {
+    console.warn('Self Protocol endpoint should use HTTPS in production');
+  }
+  
   return {
     appName: process.env.NEXT_PUBLIC_SELF_APP_NAME || DEFAULT_SELF_CONFIG.appName,
     scope: process.env.NEXT_PUBLIC_SELF_SCOPE || DEFAULT_SELF_CONFIG.scope,
-    endpoint: process.env.NEXT_PUBLIC_SELF_ENDPOINT || DEFAULT_SELF_CONFIG.endpoint,
+    endpoint,
     userId,
     disclosures: {
       date_of_birth: true,

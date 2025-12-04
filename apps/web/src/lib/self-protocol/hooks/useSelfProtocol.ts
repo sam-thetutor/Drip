@@ -33,6 +33,7 @@ export function useSelfProtocol() {
   const [qrCodeState, setQrCodeState] = useState<QRCodeState>("idle");
   const [qrCodeData, setQrCodeData] = useState<QRCodeData | null>(null);
   const [selfApp, setSelfApp] = useState<any>(null); // SelfApp instance
+  const [isInitializing, setIsInitializing] = useState(true);
   const sessionIdRef = useRef<string | null>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -44,12 +45,20 @@ export function useSelfProtocol() {
     }
 
     const initializeSelfApp = async () => {
+      setIsInitializing(true);
       try {
         // Dynamic import to avoid SSR issues
         // SelfAppBuilder is from @selfxyz/qrcode, not @selfxyz/core
         const { SelfAppBuilder } = await import("@selfxyz/qrcode");
         
         const config = getSelfConfig(address);
+        console.log("Initializing SelfApp with config:", {
+          appName: config.appName,
+          scope: config.scope,
+          endpoint: config.endpoint,
+          userId: config.userId,
+          userIdType: "hex",
+        });
         const app = new SelfAppBuilder({
           version: 2,
           appName: config.appName,
@@ -71,6 +80,8 @@ export function useSelfProtocol() {
           ...prev,
           error: error instanceof Error ? error : new Error("Failed to initialize Self Protocol"),
         }));
+      } finally {
+        setIsInitializing(false);
       }
     };
 
@@ -79,8 +90,12 @@ export function useSelfProtocol() {
 
   // Check if user is already verified (from localStorage or backend)
   const checkVerificationStatus = useCallback(async () => {
-    if (!address) return;
+    if (!address) {
+      console.log("checkVerificationStatus: No address, skipping");
+      return;
+    }
 
+    console.log("checkVerificationStatus: Starting check for", address);
     setVerificationStatus((prev) => ({ ...prev, isLoading: true }));
 
     try {
@@ -100,43 +115,63 @@ export function useSelfProtocol() {
         }
       }
 
-      // Optionally check backend for verification status
-      // This would be implemented in Phase 3
-      const config = getSelfConfig(address);
-      const response = await fetch(`${config.endpoint}/status?userId=${address}`);
-      if (response.ok) {
-        const result = await response.json();
-        if (result.verified) {
-          setVerificationStatus({
-            isVerified: true,
-            verifiedAt: result.verifiedAt ? new Date(result.verifiedAt) : new Date(),
-            proofId: result.proofId || null,
-            isLoading: false,
-            error: null,
-          });
-          // Cache the result
-          localStorage.setItem(
-            `${SELF_VERIFICATION_SESSION_KEY}-${address}`,
-            JSON.stringify({
+      // Check backend for verification status using the status endpoint
+      const statusEndpoint = typeof window !== 'undefined'
+        ? `${window.location.origin}/api/self/verify/status`
+        : '/api/self/verify/status';
+      
+      try {
+        // Add timeout to prevent hanging
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        
+        const response = await fetch(`${statusEndpoint}?userId=${address}`, {
+          signal: controller.signal,
+        });
+        
+        clearTimeout(timeoutId);
+        if (response.ok) {
+          const result = await response.json();
+          if (result.verified || result.isVerified) {
+            setVerificationStatus({
               isVerified: true,
-              verifiedAt: result.verifiedAt || new Date().toISOString(),
-              proofId: result.proofId,
-            })
-          );
-          return;
+              verifiedAt: result.verifiedAt ? new Date(result.verifiedAt) : new Date(),
+              proofId: result.proofId || null,
+              isLoading: false,
+              error: null,
+            });
+            // Cache the result
+            localStorage.setItem(
+              `${SELF_VERIFICATION_SESSION_KEY}-${address}`,
+              JSON.stringify({
+                isVerified: true,
+                verifiedAt: result.verifiedAt || new Date().toISOString(),
+                proofId: result.proofId,
+              })
+            );
+            return;
+          }
+        } else {
+          // Response not ok, but not an error - user just not verified yet
+          console.log("User not verified yet, status:", response.status);
         }
+      } catch (fetchError) {
+        console.error("Failed to fetch verification status:", fetchError);
+        // Don't throw, just continue - might be network issue
       }
 
+      console.log("checkVerificationStatus: User not verified, clearing loading state");
       setVerificationStatus((prev) => ({
         ...prev,
         isLoading: false,
       }));
     } catch (error) {
-      console.error("Failed to check verification status:", error);
+      console.error("checkVerificationStatus: Error occurred:", error);
       // Don't set error here, just log it - verification might not be set up yet
       setVerificationStatus((prev) => ({
         ...prev,
         isLoading: false,
+        error: null, // Clear any previous errors
       }));
     }
   }, [address]);
@@ -150,12 +185,19 @@ export function useSelfProtocol() {
 
     const poll = async () => {
       try {
-        const config = getSelfConfig(address!);
-        const response = await fetch(`${config.endpoint}/status?sessionId=${sessionId}`);
+        if (!address) return;
+        
+        // Use the status endpoint, not the verify endpoint
+        const statusEndpoint = typeof window !== 'undefined'
+          ? `${window.location.origin}/api/self/verify/status`
+          : '/api/self/verify/status';
+        
+        // Check by userId (address) since Self Protocol doesn't return the same sessionId
+        const response = await fetch(`${statusEndpoint}?userId=${address}`);
 
         if (response.ok) {
           const result = await response.json();
-          if (result.verified) {
+          if (result.verified || result.isVerified) {
             // Verification successful
             setVerificationStatus({
               isVerified: true,
@@ -271,7 +313,10 @@ export function useSelfProtocol() {
 
     try {
       const config = getSelfConfig(address);
-      const response = await fetch(config.endpoint, {
+      const endpoint = config.endpoint.startsWith('/') 
+        ? `${window.location.origin}${config.endpoint}` 
+        : config.endpoint;
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -340,10 +385,19 @@ export function useSelfProtocol() {
 
   // Check verification status on mount
   useEffect(() => {
-    if (isConnected && address) {
-      checkVerificationStatus();
+    // Only check verification status after initialization is complete
+    if (isConnected && address && !isInitializing && selfApp) {
+      console.log("Checking verification status for:", address);
+      checkVerificationStatus().catch((error) => {
+        console.error("Error checking verification status:", error);
+        // Ensure loading state is cleared even on error
+        setVerificationStatus((prev) => ({
+          ...prev,
+          isLoading: false,
+        }));
+      });
     }
-  }, [isConnected, address, checkVerificationStatus]);
+  }, [isConnected, address, isInitializing, selfApp]); // Removed checkVerificationStatus from deps to avoid infinite loops
 
   // Cleanup polling on unmount
   useEffect(() => {
@@ -373,7 +427,8 @@ export function useSelfProtocol() {
     verificationStatus,
     qrCodeState,
     qrCodeData,
-    isReady: !!selfApp,
+    isInitializing,
+    isReady: !isInitializing && !!selfApp,
     generateQRCode,
     checkVerificationStatus,
     handleVerificationCallback,
