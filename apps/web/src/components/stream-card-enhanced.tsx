@@ -66,13 +66,14 @@ export function StreamCardEnhanced({
     isUserRecipient ? address : undefined
   );
 
-  // Poll for balance updates every 5 seconds for active/paused/expired streams
+  // Poll for balance updates every 15 seconds for active/paused/expired streams
+  // Reduced from 5 seconds to improve performance
   useEffect(() => {
     if (!isUserRecipient || !canWithdraw) return;
 
     const interval = setInterval(() => {
       refetchBalance();
-    }, 5000);
+    }, 15000); // Increased from 5000ms to 15000ms
 
     return () => clearInterval(interval);
   }, [isUserRecipient, canWithdraw, refetchBalance]);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useAccount, useChainId, useReadContract } from "wagmi";
-import { useMemo, useEffect } from "react";
+import { useMemo } from "react";
 import { getContractAddress } from "../config";
 import { DRIP_CORE_ABI } from "../abis";
 
@@ -21,23 +21,19 @@ export function useUserSentStreams(userAddress: `0x${string}` | undefined) {
     args: userAddress ? [userAddress] : undefined,
     query: {
       enabled: !!userAddress && !!contractAddress,
-      refetchInterval: 10000, // Refetch every 10 seconds for real-time updates
-      // Force refetch when address changes
+      // Reduce polling to 30 seconds for better performance
+      refetchInterval: 30000,
+      // Only refetch on mount if data is stale
       refetchOnMount: true,
-      refetchOnWindowFocus: true,
+      // Don't refetch on window focus to reduce unnecessary calls
+      refetchOnWindowFocus: false,
+      // Cache for 20 seconds
+      staleTime: 20 * 1000,
     },
   });
 
-  // Refetch when address changes - this ensures fresh data when wallet switches
-  useEffect(() => {
-    if (userAddress && contractAddress) {
-      // Small delay to ensure the query is properly set up
-      const timeoutId = setTimeout(() => {
-        refetch();
-      }, 100);
-      return () => clearTimeout(timeoutId);
-    }
-  }, [userAddress, contractAddress, refetch]);
+  // React Query automatically refetches when query key changes (userAddress/contractAddress)
+  // No need for manual refetch - this reduces unnecessary calls
 
   return { streams, isLoading, error, refetch };
 }
@@ -58,23 +54,19 @@ export function useUserReceivedStreams(userAddress: `0x${string}` | undefined) {
     args: userAddress ? [userAddress] : undefined,
     query: {
       enabled: !!userAddress && !!contractAddress,
-      refetchInterval: 10000, // Refetch every 10 seconds for real-time updates
-      // Force refetch when address changes
+      // Reduce polling to 30 seconds for better performance
+      refetchInterval: 30000,
+      // Only refetch on mount if data is stale
       refetchOnMount: true,
-      refetchOnWindowFocus: true,
+      // Don't refetch on window focus to reduce unnecessary calls
+      refetchOnWindowFocus: false,
+      // Cache for 20 seconds
+      staleTime: 20 * 1000,
     },
   });
 
-  // Refetch when address changes - this ensures fresh data when wallet switches
-  useEffect(() => {
-    if (userAddress && contractAddress) {
-      // Small delay to ensure the query is properly set up
-      const timeoutId = setTimeout(() => {
-        refetch();
-      }, 100);
-      return () => clearTimeout(timeoutId);
-    }
-  }, [userAddress, contractAddress, refetch]);
+  // React Query automatically refetches when query key changes (userAddress/contractAddress)
+  // No need for manual refetch - this reduces unnecessary calls
 
   return { streams, isLoading, error, refetch };
 }

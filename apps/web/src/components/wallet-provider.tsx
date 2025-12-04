@@ -58,7 +58,25 @@ const wagmiConfig = createConfig({
   ssr: true,
 });
 
-const queryClient = new QueryClient();
+// Optimized QueryClient configuration for better performance
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Cache data for 30 seconds before considering it stale
+      staleTime: 30 * 1000,
+      // Keep unused data in cache for 5 minutes
+      gcTime: 5 * 60 * 1000, // Previously cacheTime
+      // Retry failed requests 2 times
+      retry: 2,
+      // Refetch on window focus only if data is stale
+      refetchOnWindowFocus: false,
+      // Don't refetch on reconnect by default (can be overridden per query)
+      refetchOnReconnect: false,
+      // Reduce network requests by not refetching on mount if data exists
+      refetchOnMount: false,
+    },
+  },
+});
 
 // Custom RainbowKit theme with green accent color matching Create Stream button
 const customTheme = darkTheme({

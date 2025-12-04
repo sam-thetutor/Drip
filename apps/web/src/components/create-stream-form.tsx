@@ -254,7 +254,10 @@ export function CreateStreamForm() {
         quarterly: 90 * 24 * 60 * 60,
       };
 
-      const periodSeconds = cadenceToSeconds[data.cadence];
+      // Calculate total stream duration: period duration * number of periods
+      const periodDuration = cadenceToSeconds[data.cadence];
+      const totalPeriods = parseInt(data.totalPeriods || "1");
+      const periodSeconds = periodDuration * totalPeriods;
       const recipients = data.recipients.map((r) => r.address as `0x${string}`);
       const amountsPerPeriod = data.recipients.map((r) => r.amountPerPeriod);
 
