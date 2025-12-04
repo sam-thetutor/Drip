@@ -62,7 +62,6 @@ export function useClaimSDK() {
       setIsInitializing(true);
       try {
         const sdk = await ClaimSDK.init({
-          account: address,
           publicClient,
           walletClient,
           identitySDK,
@@ -110,8 +109,9 @@ export function useClaimSDK() {
       const result = await claimSDK.checkEntitlement();
       
       // Handle undefined or null entitlement
-      const entitlementAmount = result?.entitlement ?? 0n;
-      const altClaimAvailable = result?.altClaimAvailable ?? false;
+      // The result might be the entitlement directly or an object
+      const entitlementAmount = (result as any)?.entitlement ?? (typeof result === 'bigint' ? result : 0n);
+      const altClaimAvailable = (result as any)?.altClaimAvailable ?? false;
       
       const entitlementData = createClaimEntitlement(
         entitlementAmount,

@@ -50,7 +50,9 @@ export function FaceVerification() {
       toast.success("Verification link generated. Opening in new tab...");
       
       // Open in new tab
-      window.open(link, "_blank", "noopener,noreferrer");
+      if (link) {
+        window.open(link, "_blank", "noopener,noreferrer");
+      }
     } catch (error) {
       console.error("Failed to generate verification link:", error);
       toast.error(

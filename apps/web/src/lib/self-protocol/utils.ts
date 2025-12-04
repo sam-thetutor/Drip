@@ -88,10 +88,11 @@ export function getVerificationErrorMessage(result: SelfVerificationResult): str
  */
 export function storeVerificationSession(sessionId: string, data: unknown): void {
   try {
+    const dataObj = typeof data === 'object' && data !== null ? data : {};
     localStorage.setItem(
       `self-session-${sessionId}`,
       JSON.stringify({
-        ...data,
+        ...dataObj,
         createdAt: new Date().toISOString(),
       })
     );

@@ -122,11 +122,22 @@ export function useIdentitySDK() {
         expiryData.authPeriod
       );
 
+      // Convert bigint timestamp to Date if needed
+      const expiryTimestamp = typeof expiry === 'object' && expiry !== null && 'expiryTimestamp' in expiry
+        ? (typeof expiry.expiryTimestamp === 'bigint' 
+            ? new Date(Number(expiry.expiryTimestamp) * 1000)
+            : expiry.expiryTimestamp as Date)
+        : new Date(Number(expiryData.lastAuthenticated + expiryData.authPeriod) * 1000);
+      
+      const isExpired = typeof expiry === 'object' && expiry !== null && 'isExpired' in expiry
+        ? expiry.isExpired as boolean
+        : expiryTimestamp < new Date();
+
       setIdentityExpiry({
         lastAuthenticated: expiryData.lastAuthenticated,
         authPeriod: expiryData.authPeriod,
-        expiryTimestamp: expiry.expiryTimestamp,
-        isExpired: expiry.isExpired,
+        expiryTimestamp,
+        isExpired,
       });
 
       return expiry;
