@@ -3,7 +3,7 @@
 import { useAccount } from "wagmi";
 import { useTreasury } from "@/lib/contracts/hooks/useTreasury";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, BarChart3, Settings } from "lucide-react";
+import { Loader2, BarChart3, Settings, Shield } from "lucide-react";
 import { formatUnits } from "viem";
 import { TreasuryOverview } from "@/components/treasury-overview";
 import { TokenBalances } from "@/components/token-balances";
@@ -14,6 +14,10 @@ import { ExportData } from "@/components/export-data";
 import { TreasuryActivityLog } from "@/components/treasury-activity-log";
 import { BudgetControls } from "@/components/budget-controls";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { IdentityStatus } from "@/components/gooddollar/identity-status";
+import { FaceVerification } from "@/components/gooddollar/face-verification";
+import { UbiClaimCard } from "@/components/gooddollar/ubi-claim-card";
+import { SelfIdentityCard } from "@/components/self-protocol/self-identity-card";
 
 export default function TreasuryPage() {
   const { address, isConnected } = useAccount();
@@ -81,7 +85,7 @@ export default function TreasuryPage() {
 
         {/* Tabs */}
         <Tabs defaultValue="dashboard" className="w-full">
-          <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsList className="grid w-full max-w-2xl grid-cols-3">
             <TabsTrigger value="dashboard" className="flex items-center gap-2">
               <BarChart3 className="h-4 w-4" />
               Dashboard
@@ -89,6 +93,10 @@ export default function TreasuryPage() {
             <TabsTrigger value="management" className="flex items-center gap-2">
               <Settings className="h-4 w-4" />
               Management
+            </TabsTrigger>
+            <TabsTrigger value="identity" className="flex items-center gap-2">
+              <Shield className="h-4 w-4" />
+              Identity
             </TabsTrigger>
           </TabsList>
 
@@ -100,6 +108,8 @@ export default function TreasuryPage() {
               activeSubscriptionsCount={activeSubscriptionsCount}
               totalActivePayments={analytics.activePayments}
             />
+
+            {/* Good Dollar UBI Claim Card - Floating (removed from here, now floating) */}
 
             {/* Token Balances */}
             <TokenBalances tokenBalances={tokenBalances} />
@@ -127,6 +137,20 @@ export default function TreasuryPage() {
 
             {/* Budget Controls */}
             <BudgetControls />
+          </TabsContent>
+
+          {/* Identity Tab */}
+          <TabsContent value="identity" className="space-y-6 mt-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Good Dollar Identity Card */}
+              <div className="space-y-4">
+                <IdentityStatus />
+                <FaceVerification />
+              </div>
+
+              {/* Self Protocol Identity Card */}
+              <SelfIdentityCard />
+            </div>
           </TabsContent>
         </Tabs>
       </div>
