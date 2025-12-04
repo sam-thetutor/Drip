@@ -23,12 +23,14 @@ export function useTreasury() {
   const error = streamsError || subscriptionsError;
 
   // Calculate active streams count
+  // Contract enum: 0 = Pending, 1 = Active, 2 = Paused, 3 = Cancelled, 4 = Completed
   const activeStreamsCount = useMemo(() => {
     if (!streams || !Array.isArray(streams)) return 0;
-    return streams.filter((s: any) => Number(s.status ?? 0) === 0).length;
+    return streams.filter((s: any) => Number(s.status ?? 0) === 1).length;
   }, [streams]);
 
   // Calculate active subscriptions count
+  // Subscription enum: 0 = Active, 1 = Paused, 2 = Cancelled (different from streams)
   const activeSubscriptionsCount = useMemo(() => {
     if (!subscriptions || !Array.isArray(subscriptions)) return 0;
     return subscriptions.filter((s: any) => Number(s.status ?? 0) === 0).length;
@@ -52,8 +54,9 @@ export function useTreasury() {
         const deposit = stream.deposit ? BigInt(stream.deposit) : 0n;
         
         // Only count active or paused streams (completed/cancelled have no escrow)
+        // Contract enum: 0 = Pending, 1 = Active, 2 = Paused, 3 = Cancelled, 4 = Completed
         const status = Number(stream.status ?? 0);
-        if (status !== 0 && status !== 1) return; // 0 = Active, 1 = Paused
+        if (status !== 1 && status !== 2) return; // 1 = Active, 2 = Paused
 
         if (!balances[token]) {
           const tokenInfo = getTokenByAddress(token as `0x${string}`, chainId) || {
@@ -102,7 +105,8 @@ export function useTreasury() {
     // Calculate from streams
     if (streams && Array.isArray(streams)) {
       streams.forEach((stream: any) => {
-        if (Number(stream.status ?? 0) !== 0) return; // Only active streams
+        // Contract enum: 0 = Pending, 1 = Active, 2 = Paused, 3 = Cancelled, 4 = Completed
+        if (Number(stream.status ?? 0) !== 1) return; // Only active streams
 
         const token = stream.token as string;
         const periodSeconds = Number(stream.periodSeconds ?? 0);
@@ -227,7 +231,8 @@ export function useTreasury() {
 
     if (streams && Array.isArray(streams)) {
       streams.forEach((stream: any) => {
-        if (Number(stream.status ?? 0) !== 0) return;
+        // Contract enum: 0 = Pending, 1 = Active, 2 = Paused, 3 = Cancelled, 4 = Completed
+        if (Number(stream.status ?? 0) !== 1) return;
         const token = stream.token as string;
         const tokenInfo = getTokenByAddress(token as `0x${string}`, chainId) || {
           decimals: 18,

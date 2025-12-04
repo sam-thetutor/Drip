@@ -75,7 +75,8 @@ export function ExportData() {
         deposit: formatUnits(stream.deposit || 0n, tokenInfo.decimals),
         startTime: new Date(Number(stream.startTime || 0n) * 1000).toISOString(),
         endTime: new Date(Number(stream.endTime || 0n) * 1000).toISOString(),
-        status: ["Active", "Paused", "Completed", "Cancelled"][Number(stream.status ?? 0)],
+        // Contract enum: 0 = Pending, 1 = Active, 2 = Paused, 3 = Cancelled, 4 = Completed
+        status: ["Pending", "Active", "Paused", "Cancelled", "Completed"][Number(stream.status ?? 0)],
         title: stream.title || "",
         description: stream.description || "",
       };

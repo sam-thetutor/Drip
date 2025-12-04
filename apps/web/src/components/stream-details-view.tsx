@@ -107,10 +107,12 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
   const symbol = tokenInfo?.symbol || "Token";
 
   const status = Number(streamData.status);
-  const isPaused = status === 1;
-  const isActive = status === 0;
-  const isCompleted = status === 2;
+  // Contract enum: 0 = Pending, 1 = Active, 2 = Paused, 3 = Cancelled, 4 = Completed
+  const isStreamPending = status === 0;
+  const isActive = status === 1;
+  const isPaused = status === 2;
   const isCancelled = status === 3;
+  const isCompleted = status === 4;
 
   const startTime = Number(streamData.startTime);
   const endTime = Number(streamData.endTime);

@@ -21,7 +21,7 @@ interface StreamCardEnhancedProps {
   token: string;
   startTime: bigint;
   endTime: bigint;
-  status: number; // 0 = Active, 1 = Paused, 2 = Completed, 3 = Cancelled
+  status: number; // 0 = Pending, 1 = Active, 2 = Paused, 3 = Cancelled, 4 = Completed
   title?: string;
   userRole?: "sender" | "recipient" | "both";
 }
@@ -42,10 +42,12 @@ export function StreamCardEnhanced({
   const { pauseStream, resumeStream, cancelStream, withdrawFromStream, isPending } = useDrip();
   const rateLockStatus = useStreamRateLockStatus(streamId);
 
-  const isPaused = status === 1;
-  const isActive = status === 0;
-  const isCompleted = status === 2;
+  // Contract enum: 0 = Pending, 1 = Active, 2 = Paused, 3 = Cancelled, 4 = Completed
+  const isStreamPending = status === 0;
+  const isActive = status === 1;
+  const isPaused = status === 2;
   const isCancelled = status === 3;
+  const isCompleted = status === 4;
 
   const tokenInfo = getTokenByAddress(token as `0x${string}`, chainId);
   const decimals = tokenInfo?.decimals || 18;

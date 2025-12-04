@@ -19,7 +19,7 @@ interface Stream {
   deposit: bigint;
   startTime: bigint;
   endTime: bigint;
-  status: number; // 0 = Active, 1 = Paused, 2 = Completed, 3 = Cancelled
+  status: number; // 0 = Pending, 1 = Active, 2 = Paused, 3 = Cancelled, 4 = Completed
   title: string;
   description: string;
   userRole?: "sender" | "recipient" | "both";
@@ -47,10 +47,12 @@ export function StreamsDashboard() {
 
     streams.forEach((stream: any) => {
       const status = stream.status;
-      if (status === 0) grouped.active.push(stream);
-      else if (status === 1) grouped.paused.push(stream);
-      else if (status === 2) grouped.completed.push(stream);
+      // Contract enum: 0 = Pending, 1 = Active, 2 = Paused, 3 = Cancelled, 4 = Completed
+      if (status === 1) grouped.active.push(stream);
+      else if (status === 2) grouped.paused.push(stream);
+      else if (status === 4) grouped.completed.push(stream);
       else if (status === 3) grouped.cancelled.push(stream);
+      // Note: status === 0 (Pending) streams are not shown in any group
     });
 
     return grouped;

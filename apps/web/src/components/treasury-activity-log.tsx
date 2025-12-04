@@ -32,7 +32,8 @@ export function TreasuryActivityLog() {
           title: stream.title || `Stream #${stream.streamId}`,
           description: stream.description || "",
           status: Number(stream.status ?? 0),
-          statusLabel: ["Active", "Paused", "Completed", "Cancelled"][Number(stream.status ?? 0)],
+          // Contract enum: 0 = Pending, 1 = Active, 2 = Paused, 3 = Cancelled, 4 = Completed
+          statusLabel: ["Pending", "Active", "Paused", "Cancelled", "Completed"][Number(stream.status ?? 0)],
           createdAt: Number(stream.startTime || 0n) * 1000,
           token: stream.token,
           amount: stream.deposit,
@@ -167,7 +168,15 @@ export function TreasuryActivityLog() {
                         </span>
                         <span
                           className={`text-xs px-2 py-1 rounded ${
-                            activity.status === 0
+                            // For streams: 0 = Pending, 1 = Active, 2 = Paused, 3 = Cancelled, 4 = Completed
+                            // For subscriptions: 0 = Active, 1 = Paused, 2 = Cancelled
+                            activity.type === "stream"
+                              ? activity.status === 1
+                                ? "bg-green-100 text-green-800"
+                                : activity.status === 2
+                                ? "bg-yellow-100 text-yellow-800"
+                                : "bg-gray-100 text-gray-800"
+                              : activity.status === 0
                               ? "bg-green-100 text-green-800"
                               : activity.status === 1
                               ? "bg-yellow-100 text-yellow-800"
