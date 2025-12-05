@@ -122,6 +122,8 @@ export function useTreasury() {
         // Calculate total amount per period (sum of all recipients)
         let totalAmountPerPeriod = 0n;
         recipients.forEach((recipient: any) => {
+          // Skip if recipient or amountPerPeriod is missing
+          if (!recipient || recipient.amountPerPeriod == null) return;
           totalAmountPerPeriod += (recipient.amountPerPeriod as bigint) || 0n;
         });
 
@@ -240,6 +242,9 @@ export function useTreasury() {
         };
         const recipients = stream.recipients || [];
         recipients.forEach((recipient: any) => {
+          // Skip if amountPerPeriod is missing or undefined
+          if (!recipient || recipient.amountPerPeriod == null) return;
+          
           const amount = Number(
             formatUnits(recipient.amountPerPeriod as bigint, tokenInfo.decimals)
           );
