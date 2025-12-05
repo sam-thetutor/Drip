@@ -288,12 +288,8 @@ export function CreateStreamForm() {
         data.description || ""
       );
 
-      toast.success("Stream created! Transaction submitted.", { id: "create-stream" });
-      
-      // Wait for confirmation
-      if (hash) {
-        toast.info("Waiting for confirmation...", { id: "confirm-stream" });
-      }
+      // Transaction submitted - wait for confirmation
+      toast.loading("Waiting for confirmation...", { id: "create-stream" });
     } catch (error: any) {
       const errorMessage = error?.message || "Failed to create stream";
       if (errorMessage.includes("Insufficient token approval")) {
@@ -306,12 +302,14 @@ export function CreateStreamForm() {
   };
 
   // Watch for transaction confirmation
-  if (isConfirmed && hash) {
-    toast.success("Stream created successfully!", { id: "confirm-stream" });
-    setTimeout(() => {
-      router.push("/streams");
-    }, 2000);
-  }
+  useEffect(() => {
+    if (isConfirmed && hash) {
+      toast.success("Stream created successfully!", { id: "create-stream" });
+      setTimeout(() => {
+        router.push("/streams");
+      }, 2000);
+    }
+  }, [isConfirmed, hash, router]);
 
   if (!isConnected) {
     return (

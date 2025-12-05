@@ -5,7 +5,7 @@ import { useRecipientBalance } from "@/lib/contracts";
 import { useDrip } from "@/lib/contracts";
 import { formatEther, formatUnits, parseEther, parseUnits } from "viem";
 import { formatTokenAmount } from "@/lib/utils/format";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,15 +33,24 @@ export function WithdrawModal({ streamId, recipient, token, onClose }: WithdrawM
   const { address } = useAccount();
   const chainId = useChainId();
   const { balance, isLoading: balanceLoading } = useRecipientBalance(streamId, recipient);
-  const { withdrawFromStream, isPending, isConfirming } = useDrip();
+  const { withdrawFromStream, isPending, isConfirming, isConfirmed } = useDrip();
   const [amount, setAmount] = useState<string>("");
   const [withdrawAll, setWithdrawAll] = useState(true);
+  const [hasSubmitted, setHasSubmitted] = useState(false);
 
   // Get token info for formatting
   const tokenInfo = getTokenByAddress(token, chainId) || { decimals: 18, symbol: "CELO" };
 
   const maxAmount = (typeof balance === 'bigint' ? balance : 0n);
   const formattedMax = formatTokenAmount(maxAmount, tokenInfo.decimals);
+
+  // Watch for transaction confirmation
+  useEffect(() => {
+    if (hasSubmitted && isConfirmed) {
+      toast.success("Withdrawal successful!", { id: "withdraw" });
+      onClose();
+    }
+  }, [isConfirmed, hasSubmitted, onClose]);
 
   const handleWithdraw = async () => {
     if (!address || address.toLowerCase() !== recipient.toLowerCase()) {
@@ -69,12 +78,13 @@ export function WithdrawModal({ streamId, recipient, token, onClose }: WithdrawM
         }
       }
 
-      toast.loading("Processing withdrawal...", { id: "withdraw" });
+      toast.loading("Submitting transaction...", { id: "withdraw" });
+      setHasSubmitted(true);
       await withdrawFromStream(streamId, recipient, withdrawAmount);
-      toast.success("Withdrawal successful!", { id: "withdraw" });
-      onClose();
+      toast.loading("Waiting for confirmation...", { id: "withdraw" });
     } catch (error: any) {
       toast.error(error?.message || "Failed to withdraw", { id: "withdraw" });
+      setHasSubmitted(false);
     }
   };
 

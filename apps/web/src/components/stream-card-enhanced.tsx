@@ -10,7 +10,7 @@ import { useDrip, useRecipientBalance, useStreamRateLockStatus } from "@/lib/con
 import { getTokenByAddress } from "@/components/token-selector";
 import { useChainId } from "wagmi";
 import { toast } from "sonner";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Tooltip } from "@/components/ui/tooltip";
 
@@ -39,8 +39,9 @@ export function StreamCardEnhanced({
 }: StreamCardEnhancedProps) {
   const { address } = useAccount();
   const chainId = useChainId();
-  const { pauseStream, resumeStream, cancelStream, withdrawFromStream, isPending } = useDrip();
+  const { pauseStream, resumeStream, cancelStream, withdrawFromStream, isPending, isConfirming, isConfirmed } = useDrip();
   const rateLockStatus = useStreamRateLockStatus(streamId);
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
 
   // Contract enum: 0 = Pending, 1 = Active, 2 = Paused, 3 = Cancelled, 4 = Completed
   const isStreamPending = status === 0;
@@ -80,6 +81,29 @@ export function StreamCardEnhanced({
     return () => clearInterval(interval);
   }, [isUserRecipient, canWithdraw, refetchBalance]);
 
+  // Watch for transaction confirmation
+  useEffect(() => {
+    if (pendingAction && isConfirmed) {
+      switch (pendingAction) {
+        case "pause":
+          toast.success("Stream paused", { id: "pause-stream" });
+          break;
+        case "resume":
+          toast.success("Stream resumed", { id: "resume-stream" });
+          break;
+        case "cancel":
+          toast.success("Stream cancelled. All accrued funds were sent to recipients.", { id: "cancel-stream" });
+          break;
+        case "withdraw":
+          toast.success("Withdrawal successful", { id: "withdraw-stream" });
+          // Refetch balance after withdrawal
+          setTimeout(() => refetchBalance(), 2000);
+          break;
+      }
+      setPendingAction(null);
+    }
+  }, [isConfirmed, pendingAction, refetchBalance]);
+
   const formatAddress = (addr: string) => {
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   };
@@ -105,11 +129,13 @@ export function StreamCardEnhanced({
     e.preventDefault();
     e.stopPropagation();
     try {
-      toast.loading("Pausing stream...", { id: "pause-stream" });
+      toast.loading("Submitting transaction...", { id: "pause-stream" });
+      setPendingAction("pause");
       await pauseStream(streamId);
-      toast.success("Stream paused", { id: "pause-stream" });
+      toast.loading("Waiting for confirmation...", { id: "pause-stream" });
     } catch (error: any) {
       toast.error(error?.message || "Failed to pause stream", { id: "pause-stream" });
+      setPendingAction(null);
     }
   };
 
@@ -117,11 +143,13 @@ export function StreamCardEnhanced({
     e.preventDefault();
     e.stopPropagation();
     try {
-      toast.loading("Resuming stream...", { id: "resume-stream" });
+      toast.loading("Submitting transaction...", { id: "resume-stream" });
+      setPendingAction("resume");
       await resumeStream(streamId);
-      toast.success("Stream resumed", { id: "resume-stream" });
+      toast.loading("Waiting for confirmation...", { id: "resume-stream" });
     } catch (error: any) {
       toast.error(error?.message || "Failed to resume stream", { id: "resume-stream" });
+      setPendingAction(null);
     }
   };
 
@@ -131,11 +159,13 @@ export function StreamCardEnhanced({
     if (!confirm("Are you sure you want to cancel this stream? All accrued funds will be automatically sent to recipients, and any remaining deposit will be refunded to you.")) return;
     
     try {
-      toast.loading("Cancelling stream...", { id: "cancel-stream" });
+      toast.loading("Submitting transaction...", { id: "cancel-stream" });
+      setPendingAction("cancel");
       await cancelStream(streamId);
-      toast.success("Stream cancelled. All accrued funds were sent to recipients.", { id: "cancel-stream" });
+      toast.loading("Waiting for confirmation...", { id: "cancel-stream" });
     } catch (error: any) {
       toast.error(error?.message || "Failed to cancel stream", { id: "cancel-stream" });
+      setPendingAction(null);
     }
   };
 
@@ -145,14 +175,14 @@ export function StreamCardEnhanced({
     if (!address) return;
     
     try {
-      toast.loading("Withdrawing...", { id: "withdraw-stream" });
+      toast.loading("Submitting transaction...", { id: "withdraw-stream" });
+      setPendingAction("withdraw");
       // Withdraw maximum available (0 means withdraw all)
       await withdrawFromStream(streamId, address);
-      toast.success("Withdrawal successful", { id: "withdraw-stream" });
-      // Refetch balance after withdrawal
-      setTimeout(() => refetchBalance(), 2000);
+      toast.loading("Waiting for confirmation...", { id: "withdraw-stream" });
     } catch (error: any) {
       toast.error(error?.message || "Failed to withdraw", { id: "withdraw-stream" });
+      setPendingAction(null);
     }
   };
 
@@ -257,7 +287,7 @@ export function StreamCardEnhanced({
                   variant="outline"
                   size="sm"
                   onClick={handlePause}
-                  disabled={isPending}
+                  disabled={isPending || isConfirming}
                   className="flex-1"
                 >
                   <Pause className="h-4 w-4 mr-2" />
@@ -268,7 +298,7 @@ export function StreamCardEnhanced({
                   variant="outline"
                   size="sm"
                   onClick={handleResume}
-                  disabled={isPending}
+                  disabled={isPending || isConfirming}
                   className="flex-1"
                 >
                   <Play className="h-4 w-4 mr-2" />
@@ -279,7 +309,7 @@ export function StreamCardEnhanced({
                 variant="destructive"
                 size="sm"
                 onClick={handleCancel}
-                disabled={isPending}
+                disabled={isPending || isConfirming}
                 className="flex-1"
               >
                 <X className="h-4 w-4 mr-2" />
@@ -292,7 +322,7 @@ export function StreamCardEnhanced({
               variant="default"
               size="sm"
               onClick={handleWithdraw}
-              disabled={isPending}
+              disabled={isPending || isConfirming}
               className="flex-1"
             >
               <Download className="h-4 w-4 mr-2" />
