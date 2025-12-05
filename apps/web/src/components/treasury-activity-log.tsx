@@ -26,6 +26,9 @@ export function TreasuryActivityLog() {
     // Add streams
     if (streams && Array.isArray(streams)) {
       streams.forEach((stream: any) => {
+        // Skip if streamId is missing or undefined
+        if (!stream.streamId) return;
+        
         allActivities.push({
           id: stream.streamId.toString(),
           type: "stream",
@@ -45,6 +48,9 @@ export function TreasuryActivityLog() {
     // Add subscriptions
     if (subscriptions && Array.isArray(subscriptions)) {
       subscriptions.forEach((sub: any) => {
+        // Skip if subscriptionId is missing or undefined
+        if (!sub.subscriptionId) return;
+        
         allActivities.push({
           id: sub.subscriptionId.toString(),
           type: "subscription",

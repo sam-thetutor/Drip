@@ -155,14 +155,16 @@ export function StreamsDashboard() {
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {groupedStreams.active.map((stream: any) => (
-              <Link
-                key={Number(stream.streamId)}
-                href={`/streams/${stream.streamId.toString()}`}
-                className="block w-full"
-              >
-                <StreamCardEnhanced
-                  streamId={stream.streamId}
+            {groupedStreams.active
+              .filter((stream: any) => stream.streamId != null)
+              .map((stream: any) => (
+                <Link
+                  key={Number(stream.streamId)}
+                  href={`/streams/${stream.streamId.toString()}`}
+                  className="block w-full"
+                >
+                  <StreamCardEnhanced
+                    streamId={stream.streamId}
                   sender={stream.sender}
                   recipients={stream.recipients}
                   token={stream.token}
@@ -189,14 +191,16 @@ export function StreamsDashboard() {
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {groupedStreams.paused.map((stream: any) => (
-              <Link
-                key={Number(stream.streamId)}
-                href={`/streams/${stream.streamId.toString()}`}
-                className="block"
-              >
-                <StreamCardEnhanced
-                  streamId={stream.streamId}
+            {groupedStreams.paused
+              .filter((stream: any) => stream.streamId != null)
+              .map((stream: any) => (
+                <Link
+                  key={Number(stream.streamId)}
+                  href={`/streams/${stream.streamId.toString()}`}
+                  className="block"
+                >
+                  <StreamCardEnhanced
+                    streamId={stream.streamId}
                   sender={stream.sender}
                   recipients={stream.recipients}
                   token={stream.token}
@@ -223,14 +227,16 @@ export function StreamsDashboard() {
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[...groupedStreams.completed, ...groupedStreams.cancelled].map((stream: any) => (
-              <Link
-                key={Number(stream.streamId)}
-                href={`/streams/${stream.streamId.toString()}`}
-                className="block w-full"
-              >
-                <StreamCardEnhanced
-                  streamId={stream.streamId}
+            {[...groupedStreams.completed, ...groupedStreams.cancelled]
+              .filter((stream: any) => stream.streamId != null)
+              .map((stream: any) => (
+                <Link
+                  key={Number(stream.streamId)}
+                  href={`/streams/${stream.streamId.toString()}`}
+                  className="block w-full"
+                >
+                  <StreamCardEnhanced
+                    streamId={stream.streamId}
                   sender={stream.sender}
                   recipients={stream.recipients}
                   token={stream.token}

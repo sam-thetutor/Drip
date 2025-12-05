@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createPublicClient, http, decodeEventLog, type Chain } from "viem";
+import { createPublicClient, http, decodeEventLog, type Chain, defineChain } from "viem";
 import { celo } from "viem/chains";
 import {
   celoSepolia,
@@ -34,12 +34,35 @@ export async function GET(req: NextRequest) {
       "https://forno.celo-sepolia.celo-testnet.org";
 
     if (network === "mainnet") {
-      chain = celo;
       chainId = CELO_MAINNET_ID;
+      // Use the public RPC endpoint for mainnet
+      // Prioritize CELO_MAINNET_RPC_URL, then default to mainnet URL
+      // Don't use generic CELO_RPC_URL as it might be set to testnet
       rpcUrl =
-        process.env.CELO_MAINNET_RPC_URL ??
-        process.env.CELO_RPC_URL ??
-        "https://forno.celo.org";
+        process.env.CELO_MAINNET_RPC_URL ?? "https://forno.celo.org";
+      console.log(`[Leaderboard Sync] Using RPC URL: ${rpcUrl}`);
+      
+      // Create custom chain definition to ensure correct RPC
+      chain = defineChain({
+        id: CELO_MAINNET_ID,
+        name: "Celo",
+        nativeCurrency: {
+          decimals: 18,
+          name: "CELO",
+          symbol: "CELO",
+        },
+        rpcUrls: {
+          default: {
+            http: [rpcUrl],
+          },
+        },
+        blockExplorers: {
+          default: {
+            name: "CeloScan",
+            url: "https://celoscan.io",
+          },
+        },
+      });
     }
 
     if (!rpcUrl) {
@@ -57,6 +80,15 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    // For mainnet, also check implementation address if it's a proxy
+    // Mainnet proxy: 0x5530975fDe062FE6706298fF3945E3d1a17A310a
+    // Mainnet implementation: 0x8F4C50979efb901C50e79e11DdC2a45FD1451eE3
+    const implementationAddress = 
+      network === "mainnet" && dripCoreAddress === "0x5530975fDe062FE6706298fF3945E3d1a17A310a"
+        ? ("0x8F4C50979efb901C50e79e11DdC2a45FD1451eE3" as `0x${string}`)
+        : null;
+
+    // Create client with explicit RPC URL to ensure correct network
     const client = createPublicClient({
       chain,
       transport: http(rpcUrl),
@@ -65,7 +97,42 @@ export async function GET(req: NextRequest) {
     // 1. Load last processed block (per network)
     const stateId = network === "mainnet" ? 2 : 1;
     let state = await prisma.indexerState.findUnique({ where: { id: stateId } });
-    const latestBlock = await client.getBlockNumber();
+    
+    // Get latest block - try direct RPC call first to ensure accuracy
+    let latestBlock: bigint;
+    try {
+      const response = await fetch(rpcUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          method: "eth_blockNumber",
+          params: [],
+          id: 1,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(`RPC request failed: ${response.status} ${response.statusText}`);
+      }
+      const data = await response.json();
+      if (data.error) {
+        throw new Error(`RPC error: ${JSON.stringify(data.error)}`);
+      }
+      if (data.result) {
+        // Parse hex string to bigint (remove 0x prefix if present)
+        const hexValue = data.result.startsWith('0x') ? data.result : `0x${data.result}`;
+        latestBlock = BigInt(hexValue);
+        console.log(`[Leaderboard Sync] Got latest block from direct RPC: ${latestBlock.toString()} (hex: ${data.result})`);
+      } else {
+        console.error(`[Leaderboard Sync] RPC response error:`, data);
+        throw new Error(`No result from RPC: ${JSON.stringify(data)}`);
+      }
+    } catch (error) {
+      console.error(`[Leaderboard Sync] Direct RPC failed, using client:`, error);
+      // Fallback to client method
+      latestBlock = await client.getBlockNumber();
+      console.log(`[Leaderboard Sync] Got latest block from client: ${latestBlock.toString()}`);
+    }
 
     const MAX_RANGE = 5000n;
     let fromBlock: bigint;
@@ -109,11 +176,27 @@ export async function GET(req: NextRequest) {
 
     // 2. Fetch events
     // Fetch all logs for DripCore in the range; we'll decode events manually
-    const rawLogs = await client.getLogs({
+    // For proxy contracts, events are emitted from the proxy address
+    console.log(`[Leaderboard Sync] Fetching logs from block ${fromBlock} to ${toBlock} for address ${dripCoreAddress}`);
+    
+    let rawLogs = await client.getLogs({
       address: dripCoreAddress,
       fromBlock,
       toBlock,
     });
+
+    // Also check implementation address if it's a proxy (events might be there)
+    if (implementationAddress) {
+      console.log(`[Leaderboard Sync] Also checking implementation address ${implementationAddress}`);
+      const implLogs = await client.getLogs({
+        address: implementationAddress,
+        fromBlock,
+        toBlock,
+      });
+      rawLogs = [...rawLogs, ...implLogs];
+    }
+
+    console.log(`[Leaderboard Sync] Found ${rawLogs.length} total raw logs`);
 
     let createdCount = 0;
     let withdrawnCount = 0;
@@ -213,8 +296,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       message: "Sync complete",
       network,
+      contractAddress: dripCoreAddress,
       fromBlock: fromBlock.toString(),
       toBlock: toBlock.toString(),
+      rawLogsCount: rawLogs.length,
       processed: {
         streamCreated: createdCount,
         streamWithdrawn: withdrawnCount,
