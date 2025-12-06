@@ -380,12 +380,11 @@ export function useDrip() {
   };
 
   /**
-   * Withdraw from a stream (as recipient)
+   * Withdraw all available balance from a stream (as recipient)
    * @param streamId Stream ID
    * @param recipient Recipient address
-   * @param amount Amount to withdraw (0 for maximum available)
    */
-  const withdrawFromStream = async (streamId: bigint, recipient: `0x${string}`, amount: bigint = 0n) => {
+  const withdrawFromStream = async (streamId: bigint, recipient: `0x${string}`) => {
     if (!contractAddress) {
       throw new Error("DripCore contract not deployed on this network");
     }
@@ -394,7 +393,7 @@ export function useDrip() {
       address: contractAddress,
       abi: DRIP_CORE_ABI,
       functionName: "withdrawFromStream",
-      args: [streamId, recipient, amount],
+      args: [streamId, recipient],
     });
   };
 

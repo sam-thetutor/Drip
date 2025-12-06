@@ -354,16 +354,14 @@ contract DripCore is IDrip, Initializable, ReentrancyGuardUpgradeable, OwnableUp
     }
 
     /**
-     * @notice Withdraw available balance from a stream (for a specific recipient)
+     * @notice Withdraw all available balance from a stream (for a specific recipient)
      * @param streamId The stream identifier
      * @param recipient The recipient address withdrawing
-     * @param amount The amount to withdraw (0 for maximum available)
      * @return withdrawn The amount actually withdrawn
      */
     function withdrawFromStream(
         uint256 streamId,
-        address recipient,
-        uint256 amount
+        address recipient
     ) external nonReentrant returns (uint256 withdrawn) {
         Stream storage stream = _streams[streamId];
         require(stream.streamId != 0, "DripCore: Stream does not exist");
@@ -377,12 +375,8 @@ contract DripCore is IDrip, Initializable, ReentrancyGuardUpgradeable, OwnableUp
         uint256 availableBalance = this.getRecipientBalance(streamId, recipient);
         require(availableBalance > 0, "DripCore: No balance available");
 
-        if (amount == 0) {
-            withdrawn = availableBalance;
-        } else {
-            require(amount <= availableBalance, "DripCore: Insufficient balance");
-            withdrawn = amount;
-        }
+        // Always withdraw the full available balance
+        withdrawn = availableBalance;
 
         // Update recipient tracking
         _recipientTotalWithdrawn[streamId][recipient] += withdrawn;

@@ -303,12 +303,12 @@ export function CreateStreamForm() {
 
   // Watch for transaction confirmation
   useEffect(() => {
-    if (isConfirmed && hash) {
+  if (isConfirmed && hash) {
       toast.success("Stream created successfully!", { id: "create-stream" });
-      setTimeout(() => {
-        router.push("/streams");
-      }, 2000);
-    }
+    setTimeout(() => {
+      router.push("/streams");
+    }, 2000);
+  }
   }, [isConfirmed, hash, router]);
 
   if (!isConnected) {

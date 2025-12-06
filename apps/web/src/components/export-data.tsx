@@ -63,13 +63,13 @@ export function ExportData() {
     const exportData = streams
       .filter((stream: any) => stream.streamId != null) // Filter out streams without streamId
       .map((stream: any) => {
-        const tokenInfo = getTokenByAddress(stream.token as `0x${string}`, chainId) || {
-          decimals: 18,
-          symbol: "CELO",
-        };
+      const tokenInfo = getTokenByAddress(stream.token as `0x${string}`, chainId) || {
+        decimals: 18,
+        symbol: "CELO",
+      };
 
-        return {
-          streamId: stream.streamId.toString(),
+      return {
+        streamId: stream.streamId.toString(),
         sender: stream.sender,
         recipients: stream.recipients?.join("; ") || "",
         token: stream.token,

@@ -158,13 +158,13 @@ export function StreamsDashboard() {
             {groupedStreams.active
               .filter((stream: any) => stream.streamId != null)
               .map((stream: any) => (
-                <Link
-                  key={Number(stream.streamId)}
-                  href={`/streams/${stream.streamId.toString()}`}
-                  className="block w-full"
-                >
-                  <StreamCardEnhanced
-                    streamId={stream.streamId}
+              <Link
+                key={Number(stream.streamId)}
+                href={`/streams/${stream.streamId.toString()}`}
+                className="block w-full"
+              >
+                <StreamCardEnhanced
+                  streamId={stream.streamId}
                   sender={stream.sender}
                   recipients={stream.recipients}
                   token={stream.token}
@@ -194,13 +194,13 @@ export function StreamsDashboard() {
             {groupedStreams.paused
               .filter((stream: any) => stream.streamId != null)
               .map((stream: any) => (
-                <Link
-                  key={Number(stream.streamId)}
-                  href={`/streams/${stream.streamId.toString()}`}
-                  className="block"
-                >
-                  <StreamCardEnhanced
-                    streamId={stream.streamId}
+              <Link
+                key={Number(stream.streamId)}
+                href={`/streams/${stream.streamId.toString()}`}
+                className="block"
+              >
+                <StreamCardEnhanced
+                  streamId={stream.streamId}
                   sender={stream.sender}
                   recipients={stream.recipients}
                   token={stream.token}
@@ -230,13 +230,13 @@ export function StreamsDashboard() {
             {[...groupedStreams.completed, ...groupedStreams.cancelled]
               .filter((stream: any) => stream.streamId != null)
               .map((stream: any) => (
-                <Link
-                  key={Number(stream.streamId)}
-                  href={`/streams/${stream.streamId.toString()}`}
-                  className="block w-full"
-                >
-                  <StreamCardEnhanced
-                    streamId={stream.streamId}
+              <Link
+                key={Number(stream.streamId)}
+                href={`/streams/${stream.streamId.toString()}`}
+                className="block w-full"
+              >
+                <StreamCardEnhanced
+                  streamId={stream.streamId}
                   sender={stream.sender}
                   recipients={stream.recipients}
                   token={stream.token}

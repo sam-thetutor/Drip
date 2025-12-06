@@ -115,14 +115,14 @@ export function CreateSubscriptionForm() {
 
   // Watch for transaction confirmation
   useEffect(() => {
-    if (isConfirmed && hash) {
-      toast.success("Subscription created successfully!", {
+  if (isConfirmed && hash) {
+    toast.success("Subscription created successfully!", {
         id: "create-subscription",
-      });
-      setTimeout(() => {
-        router.push("/subscriptions");
-      }, 2000);
-    }
+    });
+    setTimeout(() => {
+      router.push("/subscriptions");
+    }, 2000);
+  }
   }, [isConfirmed, hash, router]);
 
   if (!isConnected) {

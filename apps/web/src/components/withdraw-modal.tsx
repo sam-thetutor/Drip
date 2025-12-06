@@ -3,13 +3,10 @@
 import { useAccount } from "wagmi";
 import { useRecipientBalance } from "@/lib/contracts";
 import { useDrip } from "@/lib/contracts";
-import { formatEther, formatUnits, parseEther, parseUnits } from "viem";
 import { formatTokenAmount } from "@/lib/utils/format";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -32,10 +29,8 @@ interface WithdrawModalProps {
 export function WithdrawModal({ streamId, recipient, token, onClose }: WithdrawModalProps) {
   const { address } = useAccount();
   const chainId = useChainId();
-  const { balance, isLoading: balanceLoading } = useRecipientBalance(streamId, recipient);
+  const { balance, isLoading: balanceLoading, refetch: refetchBalance } = useRecipientBalance(streamId, recipient);
   const { withdrawFromStream, isPending, isConfirming, isConfirmed } = useDrip();
-  const [amount, setAmount] = useState<string>("");
-  const [withdrawAll, setWithdrawAll] = useState(true);
   const [hasSubmitted, setHasSubmitted] = useState(false);
 
   // Get token info for formatting
@@ -48,9 +43,18 @@ export function WithdrawModal({ streamId, recipient, token, onClose }: WithdrawM
   useEffect(() => {
     if (hasSubmitted && isConfirmed) {
       toast.success("Withdrawal successful!", { id: "withdraw" });
-      onClose();
+      // Refetch balance after withdrawal to show updated balance
+      // Add a small delay to ensure the transaction is fully processed on-chain
+      setTimeout(() => {
+        refetchBalance();
+        // Close modal after refetching balance (user can see updated balance if they reopen)
+        // Or keep it open for a moment to show the updated balance
+        setTimeout(() => {
+          onClose();
+        }, 1000);
+      }, 2000);
     }
-  }, [isConfirmed, hasSubmitted, onClose]);
+  }, [isConfirmed, hasSubmitted, onClose, refetchBalance]);
 
   const handleWithdraw = async () => {
     if (!address || address.toLowerCase() !== recipient.toLowerCase()) {
@@ -58,29 +62,16 @@ export function WithdrawModal({ streamId, recipient, token, onClose }: WithdrawM
       return;
     }
 
-    try {
-      let withdrawAmount = 0n;
-      
-      if (withdrawAll) {
-        withdrawAmount = 0n; // 0 means withdraw all
-      } else {
-        if (!amount || parseFloat(amount) <= 0) {
-          toast.error("Please enter a valid amount");
-          return;
-        }
-        withdrawAmount = tokenInfo.decimals === 18
-          ? parseEther(amount)
-          : parseUnits(amount, tokenInfo.decimals);
-        
-        if (withdrawAmount > maxAmount) {
-          toast.error("Amount exceeds available balance");
-          return;
-        }
-      }
+    if (maxAmount === 0n) {
+      toast.error("No balance available to withdraw");
+      return;
+    }
 
+    try {
       toast.loading("Submitting transaction...", { id: "withdraw" });
       setHasSubmitted(true);
-      await withdrawFromStream(streamId, recipient, withdrawAmount);
+      // Always withdraw all available balance
+      await withdrawFromStream(streamId, recipient);
       toast.loading("Waiting for confirmation...", { id: "withdraw" });
     } catch (error: any) {
       toast.error(error?.message || "Failed to withdraw", { id: "withdraw" });
@@ -110,45 +101,10 @@ export function WithdrawModal({ streamId, recipient, token, onClose }: WithdrawM
             </div>
           </div>
 
-          <div className="space-y-2">
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="withdraw-all"
-                checked={withdrawAll}
-                onChange={(e) => {
-                  setWithdrawAll(e.target.checked);
-                  if (e.target.checked) setAmount("");
-                }}
-                className="rounded border-gray-300"
-              />
-              <Label htmlFor="withdraw-all" className="cursor-pointer">
-                Withdraw all available balance
-              </Label>
-            </div>
-
-            {!withdrawAll && (
-              <div className="space-y-2">
-                <Label htmlFor="amount">Amount ({tokenInfo.symbol})</Label>
-                <Input
-                  id="amount"
-                  type="number"
-                  step="0.000001"
-                  placeholder="0.0"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  max={formattedMax}
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setAmount(formattedMax)}
-                  className="w-full"
-                >
-                  Use Maximum
-                </Button>
-              </div>
-            )}
+          <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+            <p className="text-sm text-blue-900 dark:text-blue-100">
+              <strong>Note:</strong> This will withdraw all available balance ({formattedMax} {tokenInfo.symbol}). Partial withdrawals are not supported.
+            </p>
           </div>
         </div>
 

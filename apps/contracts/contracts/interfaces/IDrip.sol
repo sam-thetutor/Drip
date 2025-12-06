@@ -159,10 +159,9 @@ interface IDrip {
      * @notice Withdraw available balance from a stream (for a specific recipient)
      * @param streamId The stream identifier
      * @param recipient The recipient address withdrawing
-     * @param amount The amount to withdraw (0 for maximum available)
-     * @return withdrawn The amount actually withdrawn
+     * @return withdrawn The amount actually withdrawn (always the full available balance)
      */
-    function withdrawFromStream(uint256 streamId, address recipient, uint256 amount) external returns (uint256 withdrawn);
+    function withdrawFromStream(uint256 streamId, address recipient) external returns (uint256 withdrawn);
 
     /**
      * @notice Get detailed information about a specific recipient in a stream
