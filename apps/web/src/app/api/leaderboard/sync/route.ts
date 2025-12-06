@@ -174,7 +174,7 @@ export async function GET(req: NextRequest) {
         if (network === "mainnet") {
           fromBlock = MAINNET_STARTING_BLOCK;
         } else {
-          fromBlock = latestBlock > MAX_RANGE ? latestBlock - MAX_RANGE : 0n;
+        fromBlock = latestBlock > MAX_RANGE ? latestBlock - MAX_RANGE : 0n;
         }
         // Set state to block before starting point so next sync starts from fromBlock
         const stateBlock = fromBlock > 0n ? fromBlock - 1n : 0n;
@@ -218,10 +218,10 @@ export async function GET(req: NextRequest) {
     let rawLogs: any[] = [];
     try {
       rawLogs = await client.getLogs({
-        address: dripCoreAddress,
-        fromBlock,
-        toBlock,
-      });
+      address: dripCoreAddress,
+      fromBlock,
+      toBlock,
+    });
       console.log(`[Leaderboard Sync] Found ${rawLogs.length} logs from proxy address`);
     } catch (error: any) {
       console.error(`[Leaderboard Sync] Error fetching logs from proxy:`, error?.message || error);
@@ -295,39 +295,39 @@ export async function GET(req: NextRequest) {
         console.log(`[Leaderboard Sync] Processing StreamCreated: sender=${sender}, deposit=${deposit.toString()}, streamId=${decoded.args.streamId?.toString() || 'N/A'}`);
 
         try {
-          await prisma.userStats.upsert({
-            where: { address: sender },
-            create: {
-              address: sender,
-              streamsCreated: 1,
-              withdrawalsClaimed: 0,
-              totalDeposited: deposit.toString(),
-              totalWithdrawn: "0",
-              points: STREAM_CREATED_POINTS,
-            },
-            update: {
-              streamsCreated: { increment: 1 },
-              totalDeposited: { increment: deposit.toString() },
-            },
-          });
+        await prisma.userStats.upsert({
+          where: { address: sender },
+          create: {
+            address: sender,
+            streamsCreated: 1,
+            withdrawalsClaimed: 0,
+            totalDeposited: deposit.toString(),
+            totalWithdrawn: "0",
+            points: STREAM_CREATED_POINTS,
+          },
+          update: {
+            streamsCreated: { increment: 1 },
+            totalDeposited: { increment: deposit.toString() },
+          },
+        });
 
-          const stats = await prisma.userStats.findUnique({
+        const stats = await prisma.userStats.findUnique({
+          where: { address: sender },
+        });
+        if (stats) {
+          const points =
+            stats.streamsCreated * STREAM_CREATED_POINTS +
+            stats.withdrawalsClaimed * WITHDRAWAL_POINTS;
+          await prisma.userStats.update({
             where: { address: sender },
+            data: { points },
           });
-          if (stats) {
-            const points =
-              stats.streamsCreated * STREAM_CREATED_POINTS +
-              stats.withdrawalsClaimed * WITHDRAWAL_POINTS;
-            await prisma.userStats.update({
-              where: { address: sender },
-              data: { points },
-            });
             console.log(`[Leaderboard Sync] Updated stats for ${sender}: streamsCreated=${stats.streamsCreated}, points=${points}`);
           } else {
             console.error(`[Leaderboard Sync] Failed to find stats after upsert for ${sender}`);
-          }
+        }
 
-          createdCount++;
+        createdCount++;
         } catch (error: any) {
           console.error(`[Leaderboard Sync] Error processing StreamCreated for ${sender}:`, error?.message || error);
         }
@@ -339,7 +339,7 @@ export async function GET(req: NextRequest) {
         console.log(`[Leaderboard Sync] Processing StreamWithdrawn: recipient=${recipient}, amount=${amount.toString()}, streamId=${decoded.args.streamId?.toString() || 'N/A'}`);
 
         try {
-          await prisma.userStats.upsert({
+        await prisma.userStats.upsert({
           where: { address: recipient },
           create: {
             address: recipient,
@@ -355,23 +355,23 @@ export async function GET(req: NextRequest) {
           },
         });
 
-          const stats = await prisma.userStats.findUnique({
+        const stats = await prisma.userStats.findUnique({
+          where: { address: recipient },
+        });
+        if (stats) {
+          const points =
+            stats.streamsCreated * STREAM_CREATED_POINTS +
+            stats.withdrawalsClaimed * WITHDRAWAL_POINTS;
+          await prisma.userStats.update({
             where: { address: recipient },
+            data: { points },
           });
-          if (stats) {
-            const points =
-              stats.streamsCreated * STREAM_CREATED_POINTS +
-              stats.withdrawalsClaimed * WITHDRAWAL_POINTS;
-            await prisma.userStats.update({
-              where: { address: recipient },
-              data: { points },
-            });
             console.log(`[Leaderboard Sync] Updated stats for ${recipient}: withdrawalsClaimed=${stats.withdrawalsClaimed}, points=${points}`);
           } else {
             console.error(`[Leaderboard Sync] Failed to find stats after upsert for ${recipient}`);
-          }
+        }
 
-          withdrawnCount++;
+        withdrawnCount++;
         } catch (error: any) {
           console.error(`[Leaderboard Sync] Error processing StreamWithdrawn for ${recipient}:`, error?.message || error);
         }

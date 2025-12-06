@@ -30,7 +30,7 @@ export function WithdrawModal({ streamId, recipient, token, onClose }: WithdrawM
   const { address } = useAccount();
   const chainId = useChainId();
   const { balance, isLoading: balanceLoading, refetch: refetchBalance } = useRecipientBalance(streamId, recipient);
-  const { withdrawFromStream, isPending, isConfirming, isConfirmed } = useDrip();
+  const { withdrawFromStream, isPending, isConfirming, isConfirmed, hash, error } = useDrip();
   const [hasSubmitted, setHasSubmitted] = useState(false);
 
   // Get token info for formatting
@@ -39,10 +39,18 @@ export function WithdrawModal({ streamId, recipient, token, onClose }: WithdrawM
   const maxAmount = (typeof balance === 'bigint' ? balance : 0n);
   const formattedMax = formatTokenAmount(maxAmount, tokenInfo.decimals);
 
+  // Watch for transaction hash (MetaMask should open when hash is set)
+  useEffect(() => {
+    if (hash && hasSubmitted) {
+      toast.loading("Waiting for confirmation...", { id: "withdraw" });
+    }
+  }, [hash, hasSubmitted]);
+
   // Watch for transaction confirmation
   useEffect(() => {
     if (hasSubmitted && isConfirmed) {
       toast.success("Withdrawal successful!", { id: "withdraw" });
+      setHasSubmitted(false);
       // Refetch balance after withdrawal to show updated balance
       // Add a small delay to ensure the transaction is fully processed on-chain
       setTimeout(() => {
@@ -56,6 +64,16 @@ export function WithdrawModal({ streamId, recipient, token, onClose }: WithdrawM
     }
   }, [isConfirmed, hasSubmitted, onClose, refetchBalance]);
 
+  // Handle errors from the hook
+  useEffect(() => {
+    if (error && hasSubmitted) {
+      console.error("Transaction error:", error);
+      const errorMessage = (error as Error)?.message || (error as any)?.shortMessage || "Failed to withdraw. Please check that MetaMask is open and try again.";
+      toast.error(errorMessage, { id: "withdraw", duration: 5000 });
+      setHasSubmitted(false);
+    }
+  }, [error, hasSubmitted]);
+
   const handleWithdraw = async () => {
     if (!address || address.toLowerCase() !== recipient.toLowerCase()) {
       toast.error("You can only withdraw your own balance");
@@ -68,13 +86,23 @@ export function WithdrawModal({ streamId, recipient, token, onClose }: WithdrawM
     }
 
     try {
-      toast.loading("Submitting transaction...", { id: "withdraw" });
+      toast.loading("Opening MetaMask...", { id: "withdraw" });
       setHasSubmitted(true);
+      
       // Always withdraw all available balance
+      // writeContract should trigger MetaMask popup
+      // If MetaMask doesn't open, writeContract will throw an error
       await withdrawFromStream(streamId, recipient);
-      toast.loading("Waiting for confirmation...", { id: "withdraw" });
     } catch (error: any) {
-      toast.error(error?.message || "Failed to withdraw", { id: "withdraw" });
+      console.error("Error in handleWithdraw:", error);
+      // Extract error message from various possible error formats
+      const errorMessage = 
+        error?.message || 
+        error?.reason || 
+        error?.shortMessage || 
+        (error?.cause && typeof error.cause === 'object' && error.cause?.message) ||
+        "Failed to withdraw. Please check that MetaMask is open and your wallet is connected.";
+      toast.error(errorMessage, { id: "withdraw", duration: 5000 });
       setHasSubmitted(false);
     }
   };
@@ -101,11 +129,11 @@ export function WithdrawModal({ streamId, recipient, token, onClose }: WithdrawM
             </div>
           </div>
 
-          <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+          {/* <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
             <p className="text-sm text-blue-900 dark:text-blue-100">
               <strong>Note:</strong> This will withdraw all available balance ({formattedMax} {tokenInfo.symbol}). Partial withdrawals are not supported.
             </p>
-          </div>
+          </div> */}
         </div>
 
         <DialogFooter>

@@ -376,7 +376,7 @@ contract DripCore is IDrip, Initializable, ReentrancyGuardUpgradeable, OwnableUp
         require(availableBalance > 0, "DripCore: No balance available");
 
         // Always withdraw the full available balance
-        withdrawn = availableBalance;
+            withdrawn = availableBalance;
 
         // Update recipient tracking
         _recipientTotalWithdrawn[streamId][recipient] += withdrawn;

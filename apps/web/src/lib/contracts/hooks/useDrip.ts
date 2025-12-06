@@ -385,16 +385,33 @@ export function useDrip() {
    * @param recipient Recipient address
    */
   const withdrawFromStream = async (streamId: bigint, recipient: `0x${string}`) => {
+    if (!isConnected || !address) {
+      throw new Error("Wallet not connected. Please connect your wallet first.");
+    }
+
     if (!contractAddress) {
       throw new Error("DripCore contract not deployed on this network");
     }
 
-    return writeContract({
-      address: contractAddress,
-      abi: DRIP_CORE_ABI,
-      functionName: "withdrawFromStream",
-      args: [streamId, recipient],
-    });
+    if (address.toLowerCase() !== recipient.toLowerCase()) {
+      throw new Error("You can only withdraw your own balance");
+    }
+
+    try {
+      return await writeContract({
+        address: contractAddress,
+        abi: DRIP_CORE_ABI,
+        functionName: "withdrawFromStream",
+        args: [streamId, recipient],
+      });
+    } catch (error: any) {
+      console.error("Error in withdrawFromStream:", error);
+      // Re-throw with a more user-friendly message if possible
+      if (error?.message) {
+        throw error;
+      }
+      throw new Error("Failed to initiate withdrawal. Please check that MetaMask is open and try again.");
+    }
   };
 
   /**
