@@ -269,7 +269,7 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
         streamData,
         allRecipients, // Use allRecipients for export (not filtered)
         analytics,
-        tokenInfo,
+        tokenInfo ? { symbol: tokenInfo.symbol, decimals: tokenInfo.decimals } : null,
         chainId,
         contractAddress || "",
         explorerUrl,

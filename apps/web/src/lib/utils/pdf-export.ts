@@ -12,10 +12,10 @@ import { formatDate } from "./csv-export";
  * PDF styling configuration
  */
 const PDF_CONFIG = {
-  primaryColor: [16, 185, 129], // #10B981 - Green
-  secondaryColor: [15, 23, 42], // Dark background
-  textColor: [30, 41, 59], // Slate
-  lightGray: [241, 245, 249],
+  primaryColor: [16, 185, 129] as [number, number, number], // #10B981 - Green
+  secondaryColor: [15, 23, 42] as [number, number, number], // Dark background
+  textColor: [30, 41, 59] as [number, number, number], // Slate
+  lightGray: [241, 245, 249] as [number, number, number],
   pageMargin: 20,
   headerHeight: 40,
   footerHeight: 20,
@@ -26,7 +26,7 @@ const PDF_CONFIG = {
  */
 function addHeader(doc: jsPDF, title: string, subtitle?: string) {
   // Header background
-  doc.setFillColor(...PDF_CONFIG.primaryColor);
+  doc.setFillColor(PDF_CONFIG.primaryColor[0], PDF_CONFIG.primaryColor[1], PDF_CONFIG.primaryColor[2]);
   doc.rect(0, 0, doc.internal.pageSize.getWidth(), PDF_CONFIG.headerHeight, "F");
 
   // Title
@@ -43,7 +43,7 @@ function addHeader(doc: jsPDF, title: string, subtitle?: string) {
   }
 
   // Reset text color
-  doc.setTextColor(...PDF_CONFIG.textColor);
+  doc.setTextColor(PDF_CONFIG.textColor[0], PDF_CONFIG.textColor[1], PDF_CONFIG.textColor[2]);
 }
 
 /**
@@ -84,7 +84,7 @@ function addSummarySection(
   // Section title
   doc.setFontSize(16);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(...PDF_CONFIG.textColor);
+  doc.setTextColor(PDF_CONFIG.textColor[0], PDF_CONFIG.textColor[1], PDF_CONFIG.textColor[2]);
   doc.text("Summary Statistics", PDF_CONFIG.pageMargin, yPos);
   yPos += 10;
 
@@ -127,8 +127,8 @@ function addSummarySection(
       body: tokenData.map((row) => [row.Token, row["Total Deposits"], row["Total Distributed"]]),
       theme: "striped",
       headStyles: {
-        fillColor: PDF_CONFIG.primaryColor,
-        textColor: [255, 255, 255],
+        fillColor: PDF_CONFIG.primaryColor as [number, number, number],
+        textColor: [255, 255, 255] as [number, number, number],
         fontStyle: "bold",
       },
       styles: {
@@ -149,11 +149,11 @@ function addSummarySection(
  */
 function addStatBox(doc: jsPDF, x: number, y: number, width: number, height: number, label: string, value: string) {
   // Box background
-  doc.setFillColor(...PDF_CONFIG.lightGray);
+  doc.setFillColor(PDF_CONFIG.lightGray[0], PDF_CONFIG.lightGray[1], PDF_CONFIG.lightGray[2]);
   doc.roundedRect(x, y, width, height, 3, 3, "F");
 
   // Border
-  doc.setDrawColor(...PDF_CONFIG.primaryColor);
+  doc.setDrawColor(PDF_CONFIG.primaryColor[0], PDF_CONFIG.primaryColor[1], PDF_CONFIG.primaryColor[2]);
   doc.setLineWidth(0.5);
   doc.roundedRect(x, y, width, height, 3, 3, "S");
 
@@ -166,7 +166,7 @@ function addStatBox(doc: jsPDF, x: number, y: number, width: number, height: num
   // Value
   doc.setFontSize(18);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(...PDF_CONFIG.primaryColor);
+  doc.setTextColor(PDF_CONFIG.primaryColor[0], PDF_CONFIG.primaryColor[1], PDF_CONFIG.primaryColor[2]);
   doc.text(value, x + 5, y + 20);
 }
 
@@ -204,8 +204,8 @@ function addStreamsSummaryTable(doc: jsPDF, streamsData: StreamExportData[], sta
     body: tableData,
     theme: "striped",
     headStyles: {
-      fillColor: PDF_CONFIG.primaryColor,
-      textColor: [255, 255, 255],
+      fillColor: PDF_CONFIG.primaryColor as [number, number, number],
+      textColor: [255, 255, 255] as [number, number, number],
       fontStyle: "bold",
     },
     styles: {
@@ -227,7 +227,8 @@ function addStreamsSummaryTable(doc: jsPDF, streamsData: StreamExportData[], sta
     didDrawPage: (data) => {
       // Add header and footer to each page
       addHeader(doc, "Streams Analytics Report", "Comprehensive stream data and analytics");
-      addFooter(doc, data.pageNumber, data.totalPages);
+      const totalPages = (doc as any).internal.getNumberOfPages();
+      addFooter(doc, data.pageNumber, totalPages);
     },
   });
 
@@ -251,7 +252,7 @@ function addStreamDetails(doc: jsPDF, streamData: StreamExportData, startY: numb
   // Stream title
   doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(...PDF_CONFIG.textColor);
+  doc.setTextColor(PDF_CONFIG.textColor[0], PDF_CONFIG.textColor[1], PDF_CONFIG.textColor[2]);
   doc.text(`Stream #${streamData.stream.id}`, PDF_CONFIG.pageMargin, yPos);
   yPos += 8;
 
@@ -278,8 +279,8 @@ function addStreamDetails(doc: jsPDF, streamData: StreamExportData, startY: numb
     body: streamInfo,
     theme: "plain",
     headStyles: {
-      fillColor: PDF_CONFIG.primaryColor,
-      textColor: [255, 255, 255],
+      fillColor: PDF_CONFIG.primaryColor as [number, number, number],
+      textColor: [255, 255, 255] as [number, number, number],
       fontStyle: "bold",
     },
     styles: {
@@ -310,8 +311,8 @@ function addStreamDetails(doc: jsPDF, streamData: StreamExportData, startY: numb
     body: analyticsInfo,
     theme: "plain",
     headStyles: {
-      fillColor: PDF_CONFIG.primaryColor,
-      textColor: [255, 255, 255],
+      fillColor: PDF_CONFIG.primaryColor as [number, number, number],
+      textColor: [255, 255, 255] as [number, number, number],
       fontStyle: "bold",
     },
     styles: {
@@ -355,8 +356,8 @@ function addStreamDetails(doc: jsPDF, streamData: StreamExportData, startY: numb
       body: recipientData,
       theme: "striped",
       headStyles: {
-        fillColor: PDF_CONFIG.primaryColor,
-        textColor: [255, 255, 255],
+        fillColor: PDF_CONFIG.primaryColor as [number, number, number],
+        textColor: [255, 255, 255] as [number, number, number],
         fontStyle: "bold",
       },
       styles: {
@@ -411,7 +412,7 @@ export function generateStreamsPDF(
   // Add streams summary table
   doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(...PDF_CONFIG.textColor);
+  doc.setTextColor(PDF_CONFIG.textColor[0], PDF_CONFIG.textColor[1], PDF_CONFIG.textColor[2]);
   doc.text("All Streams Summary", PDF_CONFIG.pageMargin, yPos);
   yPos += 8;
 
