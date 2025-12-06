@@ -195,16 +195,17 @@ contract DripCore is IDrip, Initializable, ReentrancyGuardUpgradeable, OwnableUp
     }
 
     /**
-     * @notice Get the current balance available for withdrawal for a specific recipient
+     * @notice Internal function to calculate recipient balance (used internally to avoid external calls)
+     * @param stream The stream data
      * @param streamId The stream identifier
      * @param recipient The recipient address
      * @return balance The amount available for withdrawal
      */
-    function getRecipientBalance(uint256 streamId, address recipient) external view returns (uint256 balance) {
-        Stream memory stream = _streams[streamId];
-        require(stream.streamId != 0, "DripCore: Stream does not exist");
-        require(_isRecipient(stream, recipient), "DripCore: Not a recipient");
-
+    function _getRecipientBalanceInternal(
+        Stream memory stream,
+        uint256 streamId,
+        address recipient
+    ) internal view returns (uint256 balance) {
         // Allow balance calculation for Active, Paused, and Completed streams
         // Completed streams may still have unwithdrawn funds that recipients should be able to claim
         if (stream.status != StreamStatus.Active && stream.status != StreamStatus.Paused && stream.status != StreamStatus.Completed) {
@@ -354,6 +355,19 @@ contract DripCore is IDrip, Initializable, ReentrancyGuardUpgradeable, OwnableUp
     }
 
     /**
+     * @notice Get the current balance available for withdrawal for a specific recipient
+     * @param streamId The stream identifier
+     * @param recipient The recipient address
+     * @return balance The amount available for withdrawal
+     */
+    function getRecipientBalance(uint256 streamId, address recipient) external view returns (uint256 balance) {
+        Stream memory stream = _streams[streamId];
+        require(stream.streamId != 0, "DripCore: Stream does not exist");
+        require(_isRecipient(stream, recipient), "DripCore: Not a recipient");
+        return _getRecipientBalanceInternal(stream, streamId, recipient);
+    }
+
+    /**
      * @notice Withdraw all available balance from a stream (for a specific recipient)
      * @param streamId The stream identifier
      * @param recipient The recipient address withdrawing
@@ -372,7 +386,7 @@ contract DripCore is IDrip, Initializable, ReentrancyGuardUpgradeable, OwnableUp
         require(_isRecipient(stream, recipient), "DripCore: Not a recipient");
         require(msg.sender == recipient, "DripCore: Only recipient can withdraw");
 
-        uint256 availableBalance = this.getRecipientBalance(streamId, recipient);
+        uint256 availableBalance = _getRecipientBalanceInternal(stream, streamId, recipient);
         require(availableBalance > 0, "DripCore: No balance available");
 
         // Always withdraw the full available balance
@@ -422,7 +436,7 @@ contract DripCore is IDrip, Initializable, ReentrancyGuardUpgradeable, OwnableUp
             ratePerSecond: _recipientRates[streamId][recipient],
             totalWithdrawn: _recipientTotalWithdrawn[streamId][recipient],
             lastWithdrawTime: lastWithdraw,
-            currentAccrued: this.getRecipientBalance(streamId, recipient)
+            currentAccrued: _getRecipientBalanceInternal(_streams[streamId], streamId, recipient)
         });
 
         return info;
@@ -972,7 +986,7 @@ contract DripCore is IDrip, Initializable, ReentrancyGuardUpgradeable, OwnableUp
         uint256 streamId,
         address recipient
     ) internal returns (uint256) {
-        uint256 availableBalance = this.getRecipientBalance(streamId, recipient);
+        uint256 availableBalance = _getRecipientBalanceInternal(stream, streamId, recipient);
         if (availableBalance == 0) {
             return 0;
         }

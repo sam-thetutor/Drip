@@ -18,6 +18,12 @@ import { EditRecipientModal } from "@/components/edit-recipient-modal";
 import { LockStreamRateModal } from "@/components/lock-stream-rate-modal";
 import { ExtendStreamModal } from "@/components/extend-stream-modal";
 import { Tooltip } from "@/components/ui/tooltip";
+import {
+  prepareStreamDataForExport,
+  generateStreamCSV,
+  generateStreamExportFilename,
+} from "@/lib/utils/stream-export";
+import { downloadCSV } from "@/lib/utils/csv-export";
 
 interface StreamDetailsViewProps {
   streamId: bigint;
@@ -36,6 +42,7 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
   const [showLockRateModal, setShowLockRateModal] = useState(false);
   const [showExtendStreamModal, setShowExtendStreamModal] = useState(false);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   // Watch for transaction confirmation - MUST be before any conditional returns
   useEffect(() => {
@@ -219,6 +226,77 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
     ? `https://alfajores.celoscan.io/address/${contractAddress}`
     : `https://celoscan.io/address/${contractAddress}`;
 
+  const handleExportStream = async () => {
+    if (!address || !isUserSender) {
+      toast.error("Only the stream owner can export stream data");
+      return;
+    }
+
+    if (!streamData || !recipientsInfo) {
+      toast.error("Stream data not available. Please wait for data to load.");
+      return;
+    }
+
+    try {
+      setIsExporting(true);
+      toast.loading("Preparing export...", { id: "export-stream" });
+
+      // Calculate analytics for export (always use all recipients, not filtered)
+      const exportTotalWithdrawn = allRecipients.reduce((sum: bigint, r: any) => {
+        return sum + (r.totalWithdrawn || 0n);
+      }, 0n);
+      const exportTotalAccrued = allRecipients.reduce((sum: bigint, r: any) => {
+        return sum + (r.currentAccrued || 0n);
+      }, 0n);
+      const exportTotalDistributed = exportTotalWithdrawn + exportTotalAccrued;
+      const exportRemainingDeposit = totalDeposit > exportTotalDistributed 
+        ? totalDeposit - exportTotalDistributed 
+        : 0n;
+
+      // Prepare analytics data for export
+      const analytics = {
+        totalDeposit,
+        totalDistributed: exportTotalDistributed,
+        totalAccrued: exportTotalAccrued,
+        remainingDeposit: exportRemainingDeposit,
+        periodSeconds,
+        elapsed,
+        remaining: isActive || isPaused ? remaining : undefined,
+      };
+
+      // Prepare export data
+      const exportData = prepareStreamDataForExport(
+        streamData,
+        allRecipients, // Use allRecipients for export (not filtered)
+        analytics,
+        tokenInfo,
+        chainId,
+        contractAddress || "",
+        explorerUrl,
+        address
+      );
+
+      // Generate CSV
+      const csvContent = generateStreamCSV(exportData);
+
+      // Generate filename
+      const filename = generateStreamExportFilename(streamId, true);
+
+      // Download CSV
+      downloadCSV(csvContent, filename);
+
+      toast.success("Stream data exported successfully!", { id: "export-stream" });
+    } catch (error: any) {
+      console.error("Error exporting stream:", error);
+      toast.error(
+        error?.message || "Failed to export stream data. Please try again.",
+        { id: "export-stream", duration: 5000 }
+      );
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Stream Header */}
@@ -234,6 +312,27 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
               )}
             </div>
             <div className="flex items-center gap-2 flex-wrap">
+              {isUserSender && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExportStream}
+                  disabled={isExporting || streamLoading || recipientsLoading}
+                  className="flex items-center gap-2"
+                >
+                  {isExporting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Exporting...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="h-4 w-4" />
+                      Export CSV
+                    </>
+                  )}
+                </Button>
+              )}
               {isActive && !isPaused && (
                 <span className="px-3 py-1 text-sm font-medium bg-green-100 text-green-800 rounded-full">
                   Active

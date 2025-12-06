@@ -3,11 +3,12 @@
 import { useAccount } from "wagmi";
 import { useTreasury } from "@/lib/contracts/hooks/useTreasury";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, BarChart3, Settings, Shield } from "lucide-react";
+import { Loader2, BarChart3, Settings, Shield, Wallet } from "lucide-react";
 import { formatUnits } from "viem";
 import { TreasuryOverview } from "@/components/treasury-overview";
 import { TokenBalances } from "@/components/token-balances";
 import { FinancialAnalytics } from "@/components/financial-analytics";
+import { StreamsAnalyticsDashboard } from "@/components/streams-analytics-dashboard";
 import { BulkStreamCreation } from "@/components/bulk-stream-creation";
 import { BatchSubscriptionManagement } from "@/components/batch-subscription-management";
 import { ExportData } from "@/components/export-data";
@@ -90,9 +91,9 @@ export default function TreasuryPage() {
               <BarChart3 className="h-4 w-4" />
               Dashboard
             </TabsTrigger>
-            <TabsTrigger value="management" className="flex items-center gap-2">
-              <Settings className="h-4 w-4" />
-              Management
+            <TabsTrigger value="wallet" className="flex items-center gap-2">
+              <Wallet className="h-4 w-4" />
+              Wallet
             </TabsTrigger>
             <TabsTrigger value="identity" className="flex items-center gap-2">
               <Shield className="h-4 w-4" />
@@ -102,6 +103,12 @@ export default function TreasuryPage() {
 
           {/* Dashboard Tab */}
           <TabsContent value="dashboard" className="space-y-6 mt-6">
+            {/* Streams Analytics Dashboard - First Section */}
+            <StreamsAnalyticsDashboard />
+          </TabsContent>
+
+          {/* Wallet Tab */}
+          <TabsContent value="wallet" className="space-y-6 mt-6">
             {/* Overview Cards */}
             <TreasuryOverview
               activeStreamsCount={activeStreamsCount}
@@ -121,23 +128,18 @@ export default function TreasuryPage() {
             />
           </TabsContent>
 
-          {/* Management Tab */}
-          <TabsContent value="management" className="space-y-6 mt-6">
-            {/* Bulk Operations */}
+          {/* Management Tab - Disabled for now */}
+          {/* <TabsContent value="management" className="space-y-6 mt-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <BulkStreamCreation />
               <BatchSubscriptionManagement />
             </div>
-
-            {/* Export & Activity */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <ExportData />
               <TreasuryActivityLog />
             </div>
-
-            {/* Budget Controls */}
             <BudgetControls />
-          </TabsContent>
+          </TabsContent> */}
 
           {/* Identity Tab */}
           <TabsContent value="identity" className="space-y-6 mt-6">
