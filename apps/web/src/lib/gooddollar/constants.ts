@@ -23,21 +23,31 @@ export const SUPPORTED_CHAIN_IDS = {
 
 /**
  * Get the appropriate Good Dollar environment based on chain ID
+ * 
+ * Note: The demo app uses "development" environment, which has different
+ * contract addresses and UBI pools than "staging" or "production".
+ * 
+ * To match the demo app, set NEXT_PUBLIC_GOODDOLLAR_ENV=development
  */
 export function getGoodDollarEnvForChain(chainId: number): GoodDollarEnv {
-  // If explicitly set, use that
+  // If explicitly set, use that (allows overriding to "development" to match demo)
   if (process.env.NEXT_PUBLIC_GOODDOLLAR_ENV) {
-    return process.env.NEXT_PUBLIC_GOODDOLLAR_ENV as GoodDollarEnv;
+    const env = process.env.NEXT_PUBLIC_GOODDOLLAR_ENV as GoodDollarEnv;
+    console.log(`[GoodDollar] Using environment from env var: ${env}`);
+    return env;
   }
 
   // Otherwise, determine based on chain ID
   if (chainId === SUPPORTED_CHAIN_IDS.CELO_MAINNET) {
+    console.log(`[GoodDollar] Using production environment for mainnet (chainId: ${chainId})`);
     return "production";
   } else if (chainId === SUPPORTED_CHAIN_IDS.CELO_SEPOLIA) {
+    console.log(`[GoodDollar] Using staging environment for Sepolia (chainId: ${chainId})`);
     return "staging";
   }
 
   // Default to staging for safety
+  console.log(`[GoodDollar] Using default staging environment (chainId: ${chainId})`);
   return "staging";
 }
 

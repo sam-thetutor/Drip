@@ -5,7 +5,7 @@ import { useIdentitySDK } from "@/lib/gooddollar/hooks/useIdentitySDK";
 import { useAccount, useChainId } from "wagmi";
 import { Button } from "@/components/ui/button";
 import { Loader2, ExternalLink, Shield } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { isSupportedChain } from "@/lib/gooddollar/utils";
 import { GOODDOLLAR_DOCS } from "@/lib/gooddollar/constants";
@@ -14,9 +14,23 @@ import { UbiClaimCard } from "./ubi-claim-card";
 export function FaceVerification() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
-  const { identityStatus, generateFaceVerificationLink, isReady } = useIdentitySDK();
+  const { identityStatus, generateFaceVerificationLink, isReady, checkWhitelistStatus } = useIdentitySDK();
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
   const [verificationLink, setVerificationLink] = useState<string | null>(null);
+
+  // Auto-refresh status when component mounts (in case user just returned from verification)
+  useEffect(() => {
+    if (isReady && address) {
+      // Check if we're returning from verification
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('verification') === 'complete' || urlParams.get('fv') === 'success') {
+        // Status will be refreshed by useIdentitySDK hook, but we can also trigger it here
+        setTimeout(() => {
+          checkWhitelistStatus();
+        }, 1000);
+      }
+    }
+  }, [isReady, address, checkWhitelistStatus]);
 
   if (!isConnected || !address) {
     return null;
@@ -39,7 +53,7 @@ export function FaceVerification() {
 
     setIsGeneratingLink(true);
     try {
-      const callbackUrl = `${window.location.origin}${window.location.pathname}`;
+      const callbackUrl = `${window.location.origin}${window.location.pathname}?verification=complete`;
       const link = await generateFaceVerificationLink({
         popupMode: false,
         callbackUrl,
@@ -47,6 +61,12 @@ export function FaceVerification() {
       });
 
       setVerificationLink(link);
+      
+      // Set flag in localStorage to indicate verification in progress
+      if (address && typeof window !== 'undefined') {
+        localStorage.setItem(`gd_verification_${address}`, 'in_progress');
+      }
+      
       toast.success("Verification link generated. Opening in new tab...");
       
       // Open in new tab
@@ -111,11 +131,12 @@ export function FaceVerification() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => {
+                  onClick={async () => {
                     setVerificationLink(null);
                     toast.info("Refreshing identity status...");
-                    // Trigger a refresh by updating the component
-                    window.location.reload();
+                    // Refresh identity status without page reload
+                    await checkWhitelistStatus();
+                    toast.success("Status refreshed!");
                   }}
                 >
                   Refresh Status

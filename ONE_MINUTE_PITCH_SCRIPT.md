@@ -106,3 +106,5 @@ Add: "We're targeting a $150 trillion addressable market with strong unit econom
 - [ ] Time yourself multiple times
 - [ ] Prepare for Q&A after the pitch
 
+
+

@@ -40,7 +40,7 @@ export function useClaimSDK() {
     transactionHash: null,
   });
 
-  // Initialize ClaimSDK when IdentitySDK is ready
+  // Initialize ClaimSDK when IdentitySDK is ready and user is whitelisted
   useEffect(() => {
     if (!isConnected || !address || !publicClient || !walletClient || !identitySDK) {
       setClaimSDK(null);
@@ -54,11 +54,24 @@ export function useClaimSDK() {
 
     // Only initialize if identity is verified
     if (!identityStatus.isWhitelisted) {
-      setClaimSDK(null);
+      // Clear ClaimSDK if user is not whitelisted
+      if (claimSDK) {
+        setClaimSDK(null);
+      }
+      return;
+    }
+
+    // If ClaimSDK already exists and user is whitelisted, don't re-initialize
+    if (claimSDK && identityStatus.isWhitelisted) {
       return;
     }
 
     const initializeSDK = async () => {
+      // Prevent duplicate initialization
+      if (isInitializing) {
+        return;
+      }
+
       setIsInitializing(true);
       try {
         const sdk = await ClaimSDK.init({
@@ -83,6 +96,7 @@ export function useClaimSDK() {
       }
     };
 
+    // Initialize when identity is ready and user is whitelisted
     if (isIdentityReady && identityStatus.isWhitelisted) {
       initializeSDK();
     }
@@ -95,6 +109,8 @@ export function useClaimSDK() {
     chainId,
     identityStatus.isWhitelisted,
     isIdentityReady,
+    claimSDK,
+    isInitializing,
   ]);
 
   // Check entitlement
@@ -108,10 +124,34 @@ export function useClaimSDK() {
     try {
       const result = await claimSDK.checkEntitlement();
       
-      // Handle undefined or null entitlement
-      // The result might be the entitlement directly or an object
-      const entitlementAmount = (result as any)?.entitlement ?? (typeof result === 'bigint' ? result : 0n);
-      const altClaimAvailable = (result as any)?.altClaimAvailable ?? false;
+      // Log the result to debug
+      console.log("checkEntitlement result:", result);
+      
+      // Handle different return formats
+      // The result might be:
+      // 1. A bigint directly
+      // 2. An object with { entitlement: bigint, altClaimAvailable?: boolean }
+      // 3. An object with just the entitlement property
+      let entitlementAmount: bigint = 0n;
+      let altClaimAvailable = false;
+      
+      if (typeof result === 'bigint') {
+        entitlementAmount = result;
+      } else if (result && typeof result === 'object') {
+        // Check for entitlement property
+        if ('entitlement' in result && typeof result.entitlement === 'bigint') {
+          entitlementAmount = result.entitlement;
+        } else if ('amount' in result && typeof result.amount === 'bigint') {
+          entitlementAmount = result.amount;
+        } else if ('value' in result && typeof result.value === 'bigint') {
+          entitlementAmount = result.value;
+        }
+        
+        // Check for altClaimAvailable
+        if ('altClaimAvailable' in result && typeof result.altClaimAvailable === 'boolean') {
+          altClaimAvailable = result.altClaimAvailable;
+        }
+      }
       
       const entitlementData = createClaimEntitlement(
         entitlementAmount,
@@ -139,7 +179,28 @@ export function useClaimSDK() {
 
     try {
       const status = await claimSDK.getWalletClaimStatus();
+      
+      // Log the status to debug
+      console.log("getWalletClaimStatus result:", status);
+      
       setWalletClaimStatus(status);
+      
+      // IMPORTANT: Use entitlement from walletClaimStatus if it's available
+      // This is the authoritative source for claimable amount
+      if (status && 'entitlement' in status && typeof status.entitlement === 'bigint') {
+        const statusEntitlement = status.entitlement;
+        
+        // Update entitlement from wallet claim status if it's different or if current entitlement is 0
+        if (statusEntitlement > 0n) {
+          const altClaimAvailable = (status as any)?.altClaimAvailable ?? false;
+          const entitlementData = createClaimEntitlement(
+            statusEntitlement,
+            altClaimAvailable
+          );
+          setEntitlement(entitlementData);
+        }
+      }
+      
       return status;
     } catch (error) {
       console.error("Failed to get wallet claim status:", error);
@@ -208,11 +269,15 @@ export function useClaimSDK() {
   );
 
   // Auto-check entitlement when SDK is ready
+  // IMPORTANT: getWalletClaimStatus should be called first as it contains the authoritative entitlement
   useEffect(() => {
     if (claimSDK && !isInitializing) {
-      checkEntitlement();
-      getWalletClaimStatus();
-      getNextClaimTime();
+      // Call getWalletClaimStatus first - it will update entitlement
+      getWalletClaimStatus().then(() => {
+        // Then call checkEntitlement as a fallback/verification
+        checkEntitlement();
+        getNextClaimTime();
+      });
     }
   }, [claimSDK, isInitializing, checkEntitlement, getWalletClaimStatus, getNextClaimTime]);
 
@@ -239,7 +304,9 @@ export function useClaimSDK() {
 
     // Helpers
     isReady: !!claimSDK && !isInitializing,
-    canClaim: entitlement?.canClaim ?? false,
+    // canClaim should check both entitlement state and walletClaimStatus
+    canClaim: (walletClaimStatus?.entitlement && walletClaimStatus.entitlement > 0n && walletClaimStatus.status === "can_claim") || 
+              (entitlement?.canClaim ?? false),
     isWhitelisted: identityStatus.isWhitelisted,
   };
 }

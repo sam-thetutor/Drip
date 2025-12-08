@@ -109,6 +109,77 @@ export function useIdentitySDK() {
     }
   }, [identitySDK, address, isInitializing, checkWhitelistStatus]);
 
+  // Detect verification callback from URL parameters and auto-refresh
+  useEffect(() => {
+    if (typeof window === 'undefined' || !identitySDK || !address) {
+      return;
+    }
+
+    // Check for verification callback parameters in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const verificationComplete = urlParams.get('verification') === 'complete' || 
+                                 urlParams.get('fv') === 'success' ||
+                                 urlParams.has('verified');
+
+    if (verificationComplete) {
+      // Clean up URL parameters
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
+      
+      // Wait a bit for blockchain state to update, then check status
+      const timeoutId = setTimeout(() => {
+        checkWhitelistStatus();
+      }, 2000);
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [identitySDK, address, checkWhitelistStatus]);
+
+  // Poll for identity status changes after verification callback (limited time)
+  useEffect(() => {
+    if (!identitySDK || !address || identityStatus.isWhitelisted) {
+      return;
+    }
+
+    // Check if we just returned from verification (URL params or localStorage flag)
+    const urlParams = new URLSearchParams(window.location.search);
+    const hasVerificationCallback = urlParams.get('verification') === 'complete' || 
+                                     urlParams.get('fv') === 'success' ||
+                                     urlParams.has('verified');
+    
+    // Also check localStorage for verification in progress flag
+    const verificationInProgress = typeof window !== 'undefined' && 
+                                   localStorage.getItem(`gd_verification_${address}`) === 'in_progress';
+
+    // Only poll if we have indication that verification might be in progress
+    if (!hasVerificationCallback && !verificationInProgress) {
+      return;
+    }
+
+    // Poll for up to 2 minutes after verification callback
+    let pollCount = 0;
+    const maxPolls = 12; // 12 polls * 10 seconds = 2 minutes
+    const pollInterval = setInterval(() => {
+      pollCount++;
+      checkWhitelistStatus();
+      
+      // Stop polling if user becomes whitelisted or max polls reached
+      if (pollCount >= maxPolls) {
+        clearInterval(pollInterval);
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem(`gd_verification_${address}`);
+        }
+      }
+    }, 10000); // Poll every 10 seconds
+
+    return () => {
+      clearInterval(pollInterval);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(`gd_verification_${address}`);
+      }
+    };
+  }, [identitySDK, address, identityStatus.isWhitelisted, checkWhitelistStatus]);
+
   // Get identity expiry information
   const getExpiryInfo = useCallback(async () => {
     if (!identitySDK || !address) {

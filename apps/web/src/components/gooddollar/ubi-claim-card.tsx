@@ -15,7 +15,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
-import { isSupportedChain } from "@/lib/gooddollar/utils";
+import { isSupportedChain, formatEntitlement } from "@/lib/gooddollar/utils";
 import { getTimeUntilNextClaim } from "@/lib/gooddollar/utils";
 import { GOODDOLLAR_DOCS } from "@/lib/gooddollar/constants";
 import { useState } from "react";
@@ -171,7 +171,6 @@ export function UbiClaimCard() {
           !isLoading &&
           !hasError &&
           !isSuccess &&
-          entitlement &&
           walletClaimStatus && (
             <>
               {/* Claimable Amount */}
@@ -185,9 +184,12 @@ export function UbiClaimCard() {
                   )}
                 </div>
                 <p className="text-3xl font-bold text-green">
-                  {entitlement.entitlementFormatted} G$
+                  {/* Use entitlement from walletClaimStatus if available, otherwise fallback to entitlement state */}
+                  {walletClaimStatus.entitlement && walletClaimStatus.entitlement > 0n
+                    ? formatEntitlement(walletClaimStatus.entitlement)
+                    : entitlement?.entitlementFormatted || "0"} G$
                 </p>
-                {entitlement.altClaimAvailable && (
+                {entitlement?.altClaimAvailable && (
                   <p className="text-xs text-muted-foreground mt-1">
                     Alternative claim available
                   </p>
