@@ -21,6 +21,7 @@ const deploymentFolders = {
   '42220': 'chain-42220', // Celo Mainnet
   '11142220': 'chain-11142220', // Celo Sepolia
   '44787': 'chain-44787', // Celo Alfajores
+  '1135': 'chain-1135', // Lisk Mainnet
 };
 
 const deploymentFolder = deploymentFolders[chainId];
@@ -93,6 +94,8 @@ if (chainId === '42220') {
   chainIdConstant = 'CELO_MAINNET_ID';
 } else if (chainId === '11142220') {
   chainIdConstant = 'CELO_SEPOLIA_ID';
+} else if (chainId === '1135') {
+  chainIdConstant = 'LISK_MAINNET_ID';
 } else {
   console.error(`Unsupported chain ID: ${chainId}`);
   process.exit(1);

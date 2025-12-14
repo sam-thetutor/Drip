@@ -43,6 +43,12 @@ const config: HardhatUserConfig = {
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
       chainId: 11142220,
     },
+    // Lisk Mainnet
+    lisk: {
+      url: process.env.LISK_RPC_URL || "https://rpc.api.lisk.com",
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      chainId: 1135,
+    },
     // Local development
     localhost: {
       url: "http://127.0.0.1:8545",

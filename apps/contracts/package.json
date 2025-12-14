@@ -17,6 +17,8 @@
     "deploy:proxy:sepolia": "hardhat run scripts/deploy-proxy.ts --network sepolia",
     "deploy:proxy:celo": "hardhat run scripts/deploy-proxy.ts --network celo",
     "deploy:proxy:celo:mainnet": "hardhat run scripts/deploy-proxy.ts --network celo && node update-frontend-config.js 42220",
+    "deploy:proxy:lisk": "hardhat run scripts/deploy-proxy.ts --network lisk",
+    "deploy:proxy:lisk:mainnet": "hardhat run scripts/deploy-proxy.ts --network lisk && node update-frontend-config.js 1135",
     "deploy:gdollar:sepolia": "hardhat run scripts/deploy-test-gdollar.ts --network sepolia",
     "mint:gdollar:sepolia": "hardhat run scripts/mint-gdollar.ts --network sepolia",
     "upgrade": "hardhat run scripts/upgrade-proxy.ts",
