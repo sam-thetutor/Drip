@@ -11,17 +11,18 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { celo } from "wagmi/chains";
-import { celoSepolia } from "@/lib/contracts/config";
+import { celoSepolia, liskMainnet, LISK_MAINNET_ID } from "@/lib/contracts/config";
 import { formatEther } from "viem";
 import { ChevronDown, LogOut } from "lucide-react";
 
-// Support Mainnet, Sepolia testnet, and Alfajores testnet
+// Support Mainnet, Sepolia testnet, Alfajores testnet, and Lisk mainnet
 import { celoAlfajores } from "wagmi/chains";
 
 const CHAINS = [
   { id: celo.id, name: "Celo Mainnet" },
   { id: celoSepolia.id, name: "Celo Sepolia" },
   { id: celoAlfajores.id, name: "Celo Alfajores" },
+  { id: liskMainnet.id, name: "Lisk Mainnet" },
 ];
 
 interface WalletButtonProps {
@@ -88,8 +89,8 @@ export function WalletButton({ className }: WalletButtonProps) {
             {balanceLoading
               ? "Loading..."
               : celoBalance
-              ? `${parseFloat(formatEther(celoBalance.value)).toFixed(4)} CELO`
-              : "0.0000 CELO"}
+              ? `${parseFloat(formatEther(celoBalance.value)).toFixed(4)} ${chainId === LISK_MAINNET_ID ? "ETH" : "CELO"}`
+              : `0.0000 ${chainId === LISK_MAINNET_ID ? "ETH" : "CELO"}`}
           </span>
         </DropdownMenuItem>
         

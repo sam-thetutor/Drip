@@ -9,6 +9,7 @@ import { WagmiProvider, createConfig, http, useConnect } from "wagmi";
 import { celo, celoAlfajores } from "wagmi/chains";
 import { defineChain } from "viem";
 import { ConnectButton } from "./connect-button";
+import { liskMainnet } from "@/lib/contracts/config";
 
 // Define Celo Sepolia manually if not exported from wagmi/chains
 const celoSepolia = defineChain({
@@ -46,14 +47,15 @@ const connectors = connectorsForWallets(
   }
 );
 
-// Support Mainnet, Sepolia testnet, and Alfajores testnet
+// Support Mainnet, Sepolia testnet, Alfajores testnet, and Lisk mainnet
 const wagmiConfig = createConfig({
-  chains: [celo, celoSepolia, celoAlfajores],
+  chains: [celo, celoSepolia, celoAlfajores, liskMainnet],
   connectors,
   transports: {
     [celo.id]: http(),
     [celoSepolia.id]: http(),
     [celoAlfajores.id]: http(),
+    [liskMainnet.id]: http(),
   },
   ssr: true,
 });
