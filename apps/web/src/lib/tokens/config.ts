@@ -1,4 +1,4 @@
-import { CELO_MAINNET_ID, CELO_SEPOLIA_ID, CELO_ALFAJORES_ID } from "@/lib/contracts/config";
+import { CELO_MAINNET_ID, CELO_SEPOLIA_ID, CELO_ALFAJORES_ID, LISK_MAINNET_ID } from "@/lib/contracts/config";
 
 /**
  * Token interface for token configuration
@@ -11,13 +11,14 @@ export interface Token {
 }
 
 /**
- * Centralized token configuration for all Celo networks
+ * Centralized token configuration for all networks (Celo and Lisk)
  * 
- * Token addresses verified from official Celo documentation:
- * - Mainnet: https://docs.celo.org/developer-guide/celo-for-eth-devs
- * - Sepolia: Celo Sepolia testnet
- * - Alfajores: Celo Alfajores testnet (sunset after Sep 2025, but still supported)
+ * Token addresses verified from official documentation:
+ * - Celo Mainnet: https://docs.celo.org/developer-guide/celo-for-eth-devs
+ * - Celo Sepolia: Celo Sepolia testnet
+ * - Celo Alfajores: Celo Alfajores testnet (sunset after Sep 2025, but still supported)
  * - Good Dollar: https://docs.gooddollar.org/
+ * - Lisk Mainnet: https://docs.lisk.com/about-lisk/deployed-tokens
  */
 export const TOKENS_BY_NETWORK: Record<number, Token[]> = {
   // Celo Mainnet (chainId: 42220)
@@ -45,6 +46,15 @@ export const TOKENS_BY_NETWORK: Record<number, Token[]> = {
     { symbol: "USDC", address: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", decimals: 6, name: "USD Coin" },
     { symbol: "USDT", address: "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", decimals: 6, name: "Tether USD" },
   ],
+  // Lisk Mainnet (chainId: 1135)
+  // Token addresses from official Lisk documentation: https://docs.lisk.com/about-lisk/deployed-tokens
+  // Note: Native currency is ETH, LSK is an ERC20 token
+  [LISK_MAINNET_ID]: [
+    { symbol: "ETH", address: "0x0000000000000000000000000000000000000000", decimals: 18, name: "Ethereum" },
+    { symbol: "LSK", address: "0xac485391EB2d7D88253a7F1eF18C37f4242D1A24", decimals: 18, name: "Lisk" },
+    { symbol: "USDC", address: "0xF242275d3a6527d877f2c927a82D9b057609cc71", decimals: 6, name: "USD Coin (Bridged)" },
+    { symbol: "USDT", address: "0x05D032ac25d322df992303dCa074EE7392C117b9", decimals: 6, name: "Tether USD" },
+  ],
 };
 
 /**
@@ -54,6 +64,7 @@ export function getTokenByAddress(
   address: `0x${string}`,
   chainId: number
 ): Token | undefined {
+  // Try current network first, then fallback to Celo Sepolia
   const tokens = TOKENS_BY_NETWORK[chainId] || TOKENS_BY_NETWORK[CELO_SEPOLIA_ID];
   return tokens.find(
     (t) => t.address.toLowerCase() === address.toLowerCase()
@@ -64,6 +75,7 @@ export function getTokenByAddress(
  * Get all tokens for a specific network
  */
 export function getTokensForNetwork(chainId: number): Token[] {
+  // Return tokens for the specified network, fallback to Celo Sepolia if not found
   return TOKENS_BY_NETWORK[chainId] || TOKENS_BY_NETWORK[CELO_SEPOLIA_ID];
 }
 
@@ -74,6 +86,7 @@ export function getTokenAddressBySymbol(
   symbol: string,
   chainId: number
 ): `0x${string}` | undefined {
+  // Get tokens for the specified network, fallback to Celo Sepolia if not found
   const tokens = TOKENS_BY_NETWORK[chainId] || TOKENS_BY_NETWORK[CELO_SEPOLIA_ID];
   const token = tokens.find((t) => t.symbol.toUpperCase() === symbol.toUpperCase());
   return token?.address;
