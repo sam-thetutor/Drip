@@ -77,8 +77,8 @@ export const liskMainnet = defineChain({
  */
 export const CONTRACT_ADDRESSES = {
   [CELO_MAINNET_ID]: {
-    DripCore: "0x5530975fDe062FE6706298fF3945E3d1a17A310a" as `0x${string}`,
-    SubscriptionManager: "0xBE3e232657233224F14b7b2a5625f69aF8F95054" as `0x${string}`,
+    DripCore: "0x19a05b5bCD18A2A14c620F86356C44ecD5946203" as `0x${string}`,
+    SubscriptionManager: "0x3b247FACa2E9DF6c3e9660705176A841933Ae695" as `0x${string}`,
   },
   [CELO_SEPOLIA_ID]: {
     DripCore: "0xfAaB5005f7844eC5499cF258F52dE29EDc74aa31" as `0x${string}`,
@@ -89,6 +89,33 @@ export const CONTRACT_ADDRESSES = {
     SubscriptionManager: "0x009AB24eC563d05cfD3345E6128cBaFAb8b62299" as `0x${string}`,
   },
 } as const;
+
+/**
+ * Engagement Rewards contract addresses by network and environment
+ */
+export const ENGAGEMENT_REWARDS_CONTRACTS = {
+  [CELO_MAINNET_ID]: {
+    DEV: "0xb44fC3A592aDaA257AECe1Ae8956019EA53d0465" as `0x${string}`,
+    PRODUCTION: "0x25db74CF4E7BA120526fd87e159CF656d94bAE43" as `0x${string}`,
+  },
+  [CELO_SEPOLIA_ID]: {
+    DEV: "0xb44fC3A592aDaA257AECe1Ae8956019EA53d0465" as `0x${string}`,
+    PRODUCTION: "0x25db74CF4E7BA120526fd87e159CF656d94bAE43" as `0x${string}`,
+  },
+} as const;
+
+/**
+ * Get engagement rewards contract address for current network and environment
+ */
+export function getEngagementRewardsAddress(
+  chainId: number,
+  env: "DEV" | "PRODUCTION" = "DEV"
+): `0x${string}` | null {
+  const contracts = ENGAGEMENT_REWARDS_CONTRACTS[chainId as keyof typeof ENGAGEMENT_REWARDS_CONTRACTS];
+  if (!contracts) return null;
+  
+  return contracts[env];
+}
 
 /**
  * Get contract address for current network
@@ -106,4 +133,22 @@ export function getContractAddress(
   
   return address;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

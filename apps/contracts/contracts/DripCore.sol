@@ -6,6 +6,7 @@ import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "./interfaces/IDrip.sol";
 import "./interfaces/IERC20.sol";
+import "./interfaces/IEngagementRewards.sol";
 import "./utils/TokenHelper.sol";
 
 /**
@@ -62,6 +63,21 @@ contract DripCore is IDrip, Initializable, ReentrancyGuardUpgradeable, OwnableUp
     /// @notice Platform fee recipient
     address public platformFeeRecipient;
 
+    /// @notice Engagement Rewards contract address
+    IEngagementRewards public engagementRewards;
+
+    /// @notice Whether engagement rewards are enabled
+    bool public engagementRewardsEnabled;
+
+    /// @notice Mapping to track if user has claimed reward for first stream creation
+    mapping(address => bool) public hasClaimedFirstStreamCreation;
+
+    /// @notice Mapping to track if user has claimed reward for first stream received
+    mapping(address => bool) public hasClaimedFirstStreamReceived;
+
+    /// @notice Mapping to track inviter for each user
+    mapping(address => address) public userInviter;
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
@@ -81,6 +97,7 @@ contract DripCore is IDrip, Initializable, ReentrancyGuardUpgradeable, OwnableUp
         
         platformFeeRecipient = _platformFeeRecipient;
         platformFeeBps = 50; // 0.5% default - must be set in initializer for upgradeable contracts
+        engagementRewardsEnabled = false; // Disabled by default, enable via setter after deployment
     }
 
     /**
@@ -92,6 +109,9 @@ contract DripCore is IDrip, Initializable, ReentrancyGuardUpgradeable, OwnableUp
      * @param deposit Total amount to deposit
      * @param title Optional title for the stream
      * @param description Optional description
+     * @param inviter Optional inviter address for engagement rewards (can be address(0))
+     * @param validUntilBlock Block number until which signature is valid (for engagement rewards)
+     * @param signature User signature for engagement rewards (can be empty bytes)
      * @return streamId Unique identifier for the created stream
      */
     function createStream(
@@ -101,8 +121,40 @@ contract DripCore is IDrip, Initializable, ReentrancyGuardUpgradeable, OwnableUp
         uint256 periodSeconds,
         uint256 deposit,
         string calldata title,
-        string calldata description
+        string calldata description,
+        address inviter,
+        uint256 validUntilBlock,
+        bytes memory signature
     ) external payable nonReentrant returns (uint256 streamId) {
+        return _createStreamInternal(
+            recipients,
+            token,
+            amountsPerPeriod,
+            periodSeconds,
+            deposit,
+            title,
+            description,
+            inviter,
+            validUntilBlock,
+            signature
+        );
+    }
+
+    /**
+     * @notice Internal function to create a stream (used by both overloaded functions)
+     */
+    function _createStreamInternal(
+        address[] calldata recipients,
+        address token,
+        uint256[] calldata amountsPerPeriod,
+        uint256 periodSeconds,
+        uint256 deposit,
+        string calldata title,
+        string calldata description,
+        address inviter,
+        uint256 validUntilBlock,
+        bytes memory signature
+    ) internal returns (uint256 streamId) {
         require(recipients.length > 0, "DripCore: At least one recipient required");
         require(recipients.length == amountsPerPeriod.length, "DripCore: Mismatched arrays");
         require(deposit > 0, "DripCore: Invalid deposit");
@@ -191,7 +243,52 @@ contract DripCore is IDrip, Initializable, ReentrancyGuardUpgradeable, OwnableUp
 
         emit StreamCreated(streamId, msg.sender, recipientsArray, token, streamDeposit, startTime, endTime, title, description);
 
+        // Try to claim engagement reward on every stream creation (non-blocking)
+        if (engagementRewardsEnabled && address(engagementRewards) != address(0)) {
+            address inviterAddress = inviter != address(0) ? inviter : userInviter[msg.sender];
+            _tryClaimEngagementReward(
+                msg.sender,
+                inviterAddress,
+                validUntilBlock,
+                signature
+            );
+        }
+
         return streamId;
+    }
+
+    /**
+     * @notice Create a new payment stream with multiple recipients (backward compatible overload)
+     * @param recipients Array of addresses that will receive the streamed payments
+     * @param token ERC20 token address (address(0) for native CELO)
+     * @param amountsPerPeriod Array of amounts per period for each recipient
+     * @param periodSeconds Duration of the period in seconds
+     * @param deposit Total amount to deposit
+     * @param title Optional title for the stream
+     * @param description Optional description
+     * @return streamId Unique identifier for the created stream
+     */
+    function createStream(
+        address[] calldata recipients,
+        address token,
+        uint256[] calldata amountsPerPeriod,
+        uint256 periodSeconds,
+        uint256 deposit,
+        string calldata title,
+        string calldata description
+    ) external payable nonReentrant returns (uint256 streamId) {
+        return _createStreamInternal(
+            recipients,
+            token,
+            amountsPerPeriod,
+            periodSeconds,
+            deposit,
+            title,
+            description,
+            address(0), // inviter
+            0, // validUntilBlock
+            "" // signature
+        );
     }
 
     /**
@@ -371,12 +468,37 @@ contract DripCore is IDrip, Initializable, ReentrancyGuardUpgradeable, OwnableUp
      * @notice Withdraw all available balance from a stream (for a specific recipient)
      * @param streamId The stream identifier
      * @param recipient The recipient address withdrawing
+     * @param inviter Optional inviter address for engagement rewards (can be address(0))
+     * @param validUntilBlock Block number until which signature is valid (for engagement rewards)
+     * @param signature User signature for engagement rewards (can be empty bytes)
      * @return withdrawn The amount actually withdrawn
      */
     function withdrawFromStream(
         uint256 streamId,
-        address recipient
+        address recipient,
+        address inviter,
+        uint256 validUntilBlock,
+        bytes memory signature
     ) external nonReentrant returns (uint256 withdrawn) {
+        return _withdrawFromStreamInternal(
+            streamId,
+            recipient,
+            inviter,
+            validUntilBlock,
+            signature
+        );
+    }
+
+    /**
+     * @notice Internal function to withdraw from stream (used by both overloaded functions)
+     */
+    function _withdrawFromStreamInternal(
+        uint256 streamId,
+        address recipient,
+        address inviter,
+        uint256 validUntilBlock,
+        bytes memory signature
+    ) internal returns (uint256 withdrawn) {
         Stream storage stream = _streams[streamId];
         require(stream.streamId != 0, "DripCore: Stream does not exist");
         require(
@@ -412,7 +534,37 @@ contract DripCore is IDrip, Initializable, ReentrancyGuardUpgradeable, OwnableUp
 
         emit StreamWithdrawn(streamId, recipient, withdrawn);
 
+        // Try to claim engagement reward on every withdrawal (non-blocking)
+        if (engagementRewardsEnabled && address(engagementRewards) != address(0)) {
+            address inviterAddress = inviter != address(0) ? inviter : userInviter[recipient];
+            _tryClaimEngagementReward(
+                recipient,
+                inviterAddress,
+                validUntilBlock,
+                signature
+            );
+        }
+
         return withdrawn;
+    }
+
+    /**
+     * @notice Withdraw all available balance from a stream (backward compatible overload)
+     * @param streamId The stream identifier
+     * @param recipient The recipient address withdrawing
+     * @return withdrawn The amount actually withdrawn
+     */
+    function withdrawFromStream(
+        uint256 streamId,
+        address recipient
+    ) external nonReentrant returns (uint256 withdrawn) {
+        return _withdrawFromStreamInternal(
+            streamId,
+            recipient,
+            address(0), // inviter
+            0, // validUntilBlock
+            "" // signature
+        );
     }
 
     /**
@@ -959,6 +1111,77 @@ contract DripCore is IDrip, Initializable, ReentrancyGuardUpgradeable, OwnableUp
     }
 
     /**
+     * @notice Set the Engagement Rewards contract address (owner only)
+     * @param _engagementRewards Address of the Engagement Rewards contract
+     */
+    function setEngagementRewards(address _engagementRewards) external onlyOwner {
+        require(_engagementRewards != address(0), "DripCore: Invalid address");
+        engagementRewards = IEngagementRewards(_engagementRewards);
+        emit EngagementRewardsContractSet(_engagementRewards);
+    }
+
+    /**
+     * @notice Enable or disable engagement rewards (owner only)
+     * @param _enabled Whether to enable engagement rewards
+     */
+    function setEngagementRewardsEnabled(bool _enabled) external onlyOwner {
+        engagementRewardsEnabled = _enabled;
+        emit EngagementRewardsEnabledSet(_enabled);
+    }
+
+    /**
+     * @notice Set inviter address for the caller
+     * @param inviter Address of the inviter
+     */
+    function setInviter(address inviter) external {
+        require(inviter != address(0), "DripCore: Invalid inviter");
+        require(inviter != msg.sender, "DripCore: Cannot invite self");
+        require(userInviter[msg.sender] == address(0), "DripCore: Inviter already set");
+        userInviter[msg.sender] = inviter;
+        emit InviterSet(msg.sender, inviter);
+    }
+
+    /**
+     * @notice Internal function to attempt engagement reward claim (non-blocking)
+     * @param user Address of the user claiming the reward
+     * @param inviter Address of the inviter (can be address(0))
+     * @param validUntilBlock Block number until which signature is valid
+     * @param signature User signature (can be empty bytes for subsequent claims)
+     */
+    function _tryClaimEngagementReward(
+        address user,
+        address inviter,
+        uint256 validUntilBlock,
+        bytes memory signature
+    ) internal {
+        if (address(engagementRewards) == address(0)) return;
+        if (!engagementRewardsEnabled) return;
+        
+        // If validUntilBlock is 0, skip claiming (frontend didn't provide it)
+        if (validUntilBlock == 0) return;
+        
+        // If validUntilBlock is in the past, skip claiming
+        if (validUntilBlock < block.number) return;
+
+        try engagementRewards.appClaim(
+            user,
+            inviter,
+            validUntilBlock,
+            signature
+        ) returns (bool success) {
+            if (success) {
+                emit EngagementRewardClaimed(user, inviter, true);
+            } else {
+                emit EngagementRewardClaimed(user, inviter, false);
+            }
+        } catch Error(string memory reason) {
+            emit EngagementRewardClaimFailed(user, reason);
+        } catch {
+            emit EngagementRewardClaimFailed(user, "Unknown error");
+        }
+    }
+
+    /**
      * @notice Get the contract's total balance for a specific token
      * @dev Useful for checking contract's total escrow for a token type
      * @param token Token address (address(0) for native CELO)
@@ -1197,4 +1420,11 @@ contract DripCore is IDrip, Initializable, ReentrancyGuardUpgradeable, OwnableUp
     receive() external payable {
         // Allow contract to receive native CELO
     }
+
+    // Engagement Rewards Events
+    event EngagementRewardClaimed(address indexed user, address indexed inviter, bool success);
+    event EngagementRewardClaimFailed(address indexed user, string reason);
+    event EngagementRewardsContractSet(address indexed contractAddress);
+    event EngagementRewardsEnabledSet(bool enabled);
+    event InviterSet(address indexed user, address indexed inviter);
 }

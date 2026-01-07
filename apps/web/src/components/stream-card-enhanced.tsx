@@ -7,6 +7,7 @@ import { Pause, Play, X, Download, ExternalLink, Lock } from "lucide-react";
 import { formatEther, formatUnits } from "viem";
 import { formatTokenAmount } from "@/lib/utils/format";
 import { useDrip, useRecipientBalance, useStreamRateLockStatus } from "@/lib/contracts";
+import { useEngagementRewards } from "@/lib/gooddollar/hooks/useEngagementRewards";
 import { getTokenByAddress } from "@/components/token-selector";
 import { useChainId } from "wagmi";
 import { toast } from "sonner";
@@ -40,8 +41,26 @@ export function StreamCardEnhanced({
   const { address } = useAccount();
   const chainId = useChainId();
   const { pauseStream, resumeStream, cancelStream, withdrawFromStream, isPending, isConfirming, isConfirmed } = useDrip();
+  const { 
+    engagementRewards, 
+    isReady: isEngagementRewardsReady, 
+    isUserRegistered, 
+    signClaim, 
+    getCurrentBlockNumber 
+  } = useEngagementRewards();
   const rateLockStatus = useStreamRateLockStatus(streamId);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+  
+  // Get inviter from localStorage (if previously set)
+  const [inviter] = useState<`0x${string}` | null>(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("drip_inviter");
+      if (stored && /^0x[a-fA-F0-9]{40}$/.test(stored)) {
+        return stored as `0x${string}`;
+      }
+    }
+    return null;
+  });
 
   // Contract enum: 0 = Pending, 1 = Active, 2 = Paused, 3 = Cancelled, 4 = Completed
   const isStreamPending = status === 0;
@@ -177,8 +196,66 @@ export function StreamCardEnhanced({
     try {
       toast.loading("Submitting transaction...", { id: "withdraw-stream" });
       setPendingAction("withdraw");
+      
+      // Prepare engagement rewards parameters if enabled
+      let engagementRewardsParams: {
+        inviter: `0x${string}` | null;
+        validUntilBlock: bigint | undefined;
+        signature: `0x${string}` | undefined;
+      } = {
+        inviter: null,
+        validUntilBlock: undefined,
+        signature: undefined,
+      };
+
+      // Only include engagement rewards if SDK is ready and user is registered or needs to register
+      if (isEngagementRewardsReady && engagementRewards && address) {
+        try {
+          // Get current block number
+          const currentBlock = await getCurrentBlockNumber();
+          if (currentBlock) {
+            const validUntilBlock = currentBlock + 600n; // Valid for 600 blocks (~2 hours)
+            
+            // Check if user needs to sign (first-time registration)
+            const needsSignature = isUserRegistered === false;
+            
+            let signature: `0x${string}` = "0x";
+            if (needsSignature) {
+              toast.loading("Signing for engagement rewards...", { id: "engagement-signature" });
+              try {
+                signature = await signClaim(inviter, validUntilBlock);
+                toast.success("Signature generated", { id: "engagement-signature", duration: 2000 });
+              } catch (err) {
+                console.error("Failed to generate signature:", err);
+                toast.error("Failed to generate signature. Withdrawal will proceed without engagement rewards.", {
+                  id: "engagement-signature",
+                  duration: 5000,
+                });
+                // Continue without signature - contract will handle it
+                signature = "0x";
+              }
+            }
+
+            engagementRewardsParams = {
+              inviter,
+              validUntilBlock,
+              signature: signature !== "0x" ? signature : undefined,
+            };
+          }
+        } catch (err) {
+          console.error("Error preparing engagement rewards:", err);
+          // Continue without engagement rewards if there's an error
+        }
+      }
+      
       // Withdraw maximum available (0 means withdraw all)
-      await withdrawFromStream(streamId, address);
+      await withdrawFromStream(
+        streamId,
+        address,
+        engagementRewardsParams.inviter,
+        engagementRewardsParams.validUntilBlock,
+        engagementRewardsParams.signature
+      );
       toast.loading("Waiting for confirmation...", { id: "withdraw-stream" });
     } catch (error: any) {
       toast.error(error?.message || "Failed to withdraw", { id: "withdraw-stream" });

@@ -1,20 +1,21 @@
 {
   "chainId": "42220",
   "network": "celo",
-  "deployedAt": "2025-11-28T13:42:25.673Z",
+  "deployedAt": "2026-01-07T10:16:50.135Z",
   "deployer": "0x7818CEd1298849B47a9B56066b5adc72CDDAf733",
   "contracts": {
     "DripCore": {
-      "proxy": "0x5530975fDe062FE6706298fF3945E3d1a17A310a",
-      "implementation": "0x081cB570E86bc3aA09FE5d848c2d91368fcEf0dE",
-      "admin": "0x90FD81efC0bB74cca2997ebB6D77e5145788f481"
+      "proxy": "0x19a05b5bCD18A2A14c620F86356C44ecD5946203",
+      "implementation": "0xb4616cBD8b7Fe7DD1F8786FEcd0c8f0AE1bc820E",
+      "admin": "0x97b3cCcFe554F0422a127Ab392cF98Ea0d44AffB"
     },
-    "SubscriptionManager": "0xBE3e232657233224F14b7b2a5625f69aF8F95054"
+    "SubscriptionManager": "0x3b247FACa2E9DF6c3e9660705176A841933Ae695"
   },
   "parameters": {
     "platformFeeRecipient": "0x7818CEd1298849B47a9B56066b5adc72CDDAf733",
-    "proxyAdmin": "0x7818CEd1298849B47a9B56066b5adc72CDDAf733"
+    "proxyAdmin": "0x7818CEd1298849B47a9B56066b5adc72CDDAf733",
+    "engagementRewardsAddress": "0xb44fC3A592aDaA257AECe1Ae8956019EA53d0465"
   },
-  "upgradedAt": "2025-12-06T02:19:42.940Z",
+  "upgradedAt": "2026-01-07T11:05:02.658Z",
   "upgradedBy": "0x7818CEd1298849B47a9B56066b5adc72CDDAf733"
 }

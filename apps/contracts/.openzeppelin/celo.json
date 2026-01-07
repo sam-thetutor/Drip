@@ -5,6 +5,11 @@
       "address": "0x5530975fDe062FE6706298fF3945E3d1a17A310a",
       "txHash": "0xe617594301d3d1f281c9de2cbfb72674ef789231ed6363890815197ee4bbad6e",
       "kind": "transparent"
+    },
+    {
+      "address": "0x19a05b5bCD18A2A14c620F86356C44ecD5946203",
+      "txHash": "0x81634532d69c554d969ef935d2a57b5fdb44eeb9c30dc00964bc75ea6be5bed6",
+      "kind": "transparent"
     }
   ],
   "impls": {
@@ -1189,6 +1194,734 @@
               {
                 "label": "status",
                 "type": "t_enum(StreamStatus)6960",
+                "offset": 0,
+                "slot": "7"
+              },
+              {
+                "label": "rateLockUntil",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "8"
+              },
+              {
+                "label": "title",
+                "type": "t_string_storage",
+                "offset": 0,
+                "slot": "9"
+              },
+              {
+                "label": "description",
+                "type": "t_string_storage",
+                "offset": 0,
+                "slot": "10"
+              }
+            ],
+            "numberOfBytes": "352"
+          }
+        },
+        "namespaces": {
+          "erc7201:openzeppelin.storage.Ownable": [
+            {
+              "contract": "OwnableUpgradeable",
+              "label": "_owner",
+              "type": "t_address",
+              "src": "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol:24",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.ReentrancyGuard": [
+            {
+              "contract": "ReentrancyGuardUpgradeable",
+              "label": "_status",
+              "type": "t_uint256",
+              "src": "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol:43",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Initializable": [
+            {
+              "contract": "Initializable",
+              "label": "_initialized",
+              "type": "t_uint64",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:69",
+              "offset": 0,
+              "slot": "0"
+            },
+            {
+              "contract": "Initializable",
+              "label": "_initializing",
+              "type": "t_bool",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:73",
+              "offset": 8,
+              "slot": "0"
+            }
+          ]
+        }
+      }
+    },
+    "ea808dafbeb6e407712b05c76f880f4903ac0fd76547ed686632084813e18f34": {
+      "address": "0xf3d26607342213Bf894f9146D08D0dfe4aAf6C5b",
+      "txHash": "0x717067059e43497bb64f36b549442a798b0ed913b91ba2aaa35c57fe44631bb4",
+      "layout": {
+        "solcVersion": "0.8.20",
+        "storage": [
+          {
+            "label": "_streamIdCounter",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_uint256",
+            "contract": "DripCore",
+            "src": "contracts/DripCore.sol:22"
+          },
+          {
+            "label": "_streams",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_mapping(t_uint256,t_struct(Stream)7834_storage)",
+            "contract": "DripCore",
+            "src": "contracts/DripCore.sol:25"
+          },
+          {
+            "label": "_recipientRates",
+            "offset": 0,
+            "slot": "2",
+            "type": "t_mapping(t_uint256,t_mapping(t_address,t_uint256))",
+            "contract": "DripCore",
+            "src": "contracts/DripCore.sol:28"
+          },
+          {
+            "label": "_recipientLastWithdraw",
+            "offset": 0,
+            "slot": "3",
+            "type": "t_mapping(t_uint256,t_mapping(t_address,t_uint256))",
+            "contract": "DripCore",
+            "src": "contracts/DripCore.sol:31"
+          },
+          {
+            "label": "_recipientTotalWithdrawn",
+            "offset": 0,
+            "slot": "4",
+            "type": "t_mapping(t_uint256,t_mapping(t_address,t_uint256))",
+            "contract": "DripCore",
+            "src": "contracts/DripCore.sol:34"
+          },
+          {
+            "label": "_senderStreams",
+            "offset": 0,
+            "slot": "5",
+            "type": "t_mapping(t_address,t_array(t_uint256)dyn_storage)",
+            "contract": "DripCore",
+            "src": "contracts/DripCore.sol:37"
+          },
+          {
+            "label": "_recipientStreams",
+            "offset": 0,
+            "slot": "6",
+            "type": "t_mapping(t_address,t_array(t_uint256)dyn_storage)",
+            "contract": "DripCore",
+            "src": "contracts/DripCore.sol:40"
+          },
+          {
+            "label": "_pausedTime",
+            "offset": 0,
+            "slot": "7",
+            "type": "t_mapping(t_uint256,t_uint256)",
+            "contract": "DripCore",
+            "src": "contracts/DripCore.sol:43"
+          },
+          {
+            "label": "_pauseStartTime",
+            "offset": 0,
+            "slot": "8",
+            "type": "t_mapping(t_uint256,t_uint256)",
+            "contract": "DripCore",
+            "src": "contracts/DripCore.sol:46"
+          },
+          {
+            "label": "platformFeeBps",
+            "offset": 0,
+            "slot": "9",
+            "type": "t_uint256",
+            "contract": "DripCore",
+            "src": "contracts/DripCore.sol:61"
+          },
+          {
+            "label": "platformFeeRecipient",
+            "offset": 0,
+            "slot": "10",
+            "type": "t_address",
+            "contract": "DripCore",
+            "src": "contracts/DripCore.sol:64"
+          },
+          {
+            "label": "engagementRewards",
+            "offset": 0,
+            "slot": "11",
+            "type": "t_contract(IEngagementRewards)8235",
+            "contract": "DripCore",
+            "src": "contracts/DripCore.sol:67"
+          },
+          {
+            "label": "engagementRewardsEnabled",
+            "offset": 20,
+            "slot": "11",
+            "type": "t_bool",
+            "contract": "DripCore",
+            "src": "contracts/DripCore.sol:70"
+          },
+          {
+            "label": "hasClaimedFirstStreamCreation",
+            "offset": 0,
+            "slot": "12",
+            "type": "t_mapping(t_address,t_bool)",
+            "contract": "DripCore",
+            "src": "contracts/DripCore.sol:73"
+          },
+          {
+            "label": "hasClaimedFirstStreamReceived",
+            "offset": 0,
+            "slot": "13",
+            "type": "t_mapping(t_address,t_bool)",
+            "contract": "DripCore",
+            "src": "contracts/DripCore.sol:76"
+          },
+          {
+            "label": "userInviter",
+            "offset": 0,
+            "slot": "14",
+            "type": "t_mapping(t_address,t_address)",
+            "contract": "DripCore",
+            "src": "contracts/DripCore.sol:79"
+          }
+        ],
+        "types": {
+          "t_address": {
+            "label": "address",
+            "numberOfBytes": "20"
+          },
+          "t_bool": {
+            "label": "bool",
+            "numberOfBytes": "1"
+          },
+          "t_struct(InitializableStorage)73_storage": {
+            "label": "struct Initializable.InitializableStorage",
+            "members": [
+              {
+                "label": "_initialized",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "_initializing",
+                "type": "t_bool",
+                "offset": 8,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(OwnableStorage)13_storage": {
+            "label": "struct OwnableUpgradeable.OwnableStorage",
+            "members": [
+              {
+                "label": "_owner",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(ReentrancyGuardStorage)163_storage": {
+            "label": "struct ReentrancyGuardUpgradeable.ReentrancyGuardStorage",
+            "members": [
+              {
+                "label": "_status",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_uint256": {
+            "label": "uint256",
+            "numberOfBytes": "32"
+          },
+          "t_uint64": {
+            "label": "uint64",
+            "numberOfBytes": "8"
+          },
+          "t_array(t_address)dyn_storage": {
+            "label": "address[]",
+            "numberOfBytes": "32"
+          },
+          "t_array(t_uint256)dyn_storage": {
+            "label": "uint256[]",
+            "numberOfBytes": "32"
+          },
+          "t_contract(IEngagementRewards)8235": {
+            "label": "contract IEngagementRewards",
+            "numberOfBytes": "20"
+          },
+          "t_enum(StreamStatus)7808": {
+            "label": "enum IDrip.StreamStatus",
+            "members": [
+              "Pending",
+              "Active",
+              "Paused",
+              "Cancelled",
+              "Completed"
+            ],
+            "numberOfBytes": "1"
+          },
+          "t_mapping(t_address,t_address)": {
+            "label": "mapping(address => address)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_array(t_uint256)dyn_storage)": {
+            "label": "mapping(address => uint256[])",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_bool)": {
+            "label": "mapping(address => bool)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_uint256)": {
+            "label": "mapping(address => uint256)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_mapping(t_address,t_uint256))": {
+            "label": "mapping(uint256 => mapping(address => uint256))",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_struct(Stream)7834_storage)": {
+            "label": "mapping(uint256 => struct IDrip.Stream)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_uint256)": {
+            "label": "mapping(uint256 => uint256)",
+            "numberOfBytes": "32"
+          },
+          "t_string_storage": {
+            "label": "string",
+            "numberOfBytes": "32"
+          },
+          "t_struct(Stream)7834_storage": {
+            "label": "struct IDrip.Stream",
+            "members": [
+              {
+                "label": "streamId",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "sender",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "recipients",
+                "type": "t_array(t_address)dyn_storage",
+                "offset": 0,
+                "slot": "2"
+              },
+              {
+                "label": "token",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "3"
+              },
+              {
+                "label": "deposit",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "4"
+              },
+              {
+                "label": "startTime",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "5"
+              },
+              {
+                "label": "endTime",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "6"
+              },
+              {
+                "label": "status",
+                "type": "t_enum(StreamStatus)7808",
+                "offset": 0,
+                "slot": "7"
+              },
+              {
+                "label": "rateLockUntil",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "8"
+              },
+              {
+                "label": "title",
+                "type": "t_string_storage",
+                "offset": 0,
+                "slot": "9"
+              },
+              {
+                "label": "description",
+                "type": "t_string_storage",
+                "offset": 0,
+                "slot": "10"
+              }
+            ],
+            "numberOfBytes": "352"
+          }
+        },
+        "namespaces": {
+          "erc7201:openzeppelin.storage.Ownable": [
+            {
+              "contract": "OwnableUpgradeable",
+              "label": "_owner",
+              "type": "t_address",
+              "src": "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol:24",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.ReentrancyGuard": [
+            {
+              "contract": "ReentrancyGuardUpgradeable",
+              "label": "_status",
+              "type": "t_uint256",
+              "src": "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol:43",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Initializable": [
+            {
+              "contract": "Initializable",
+              "label": "_initialized",
+              "type": "t_uint64",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:69",
+              "offset": 0,
+              "slot": "0"
+            },
+            {
+              "contract": "Initializable",
+              "label": "_initializing",
+              "type": "t_bool",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:73",
+              "offset": 8,
+              "slot": "0"
+            }
+          ]
+        }
+      }
+    },
+    "a872ccf20ee42c206a0687b3c937e06ccfa0380c650ac56c75bb1dd49838754c": {
+      "address": "0xb4616cBD8b7Fe7DD1F8786FEcd0c8f0AE1bc820E",
+      "txHash": "0xa1b86d8fc3cef5aaa29aa98303f92fdf4926b156f33a5c9a6f006e41580ca9e5",
+      "layout": {
+        "solcVersion": "0.8.20",
+        "storage": [
+          {
+            "label": "_streamIdCounter",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_uint256",
+            "contract": "DripCore",
+            "src": "contracts/DripCore.sol:22"
+          },
+          {
+            "label": "_streams",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_mapping(t_uint256,t_struct(Stream)5066_storage)",
+            "contract": "DripCore",
+            "src": "contracts/DripCore.sol:25"
+          },
+          {
+            "label": "_recipientRates",
+            "offset": 0,
+            "slot": "2",
+            "type": "t_mapping(t_uint256,t_mapping(t_address,t_uint256))",
+            "contract": "DripCore",
+            "src": "contracts/DripCore.sol:28"
+          },
+          {
+            "label": "_recipientLastWithdraw",
+            "offset": 0,
+            "slot": "3",
+            "type": "t_mapping(t_uint256,t_mapping(t_address,t_uint256))",
+            "contract": "DripCore",
+            "src": "contracts/DripCore.sol:31"
+          },
+          {
+            "label": "_recipientTotalWithdrawn",
+            "offset": 0,
+            "slot": "4",
+            "type": "t_mapping(t_uint256,t_mapping(t_address,t_uint256))",
+            "contract": "DripCore",
+            "src": "contracts/DripCore.sol:34"
+          },
+          {
+            "label": "_senderStreams",
+            "offset": 0,
+            "slot": "5",
+            "type": "t_mapping(t_address,t_array(t_uint256)dyn_storage)",
+            "contract": "DripCore",
+            "src": "contracts/DripCore.sol:37"
+          },
+          {
+            "label": "_recipientStreams",
+            "offset": 0,
+            "slot": "6",
+            "type": "t_mapping(t_address,t_array(t_uint256)dyn_storage)",
+            "contract": "DripCore",
+            "src": "contracts/DripCore.sol:40"
+          },
+          {
+            "label": "_pausedTime",
+            "offset": 0,
+            "slot": "7",
+            "type": "t_mapping(t_uint256,t_uint256)",
+            "contract": "DripCore",
+            "src": "contracts/DripCore.sol:43"
+          },
+          {
+            "label": "_pauseStartTime",
+            "offset": 0,
+            "slot": "8",
+            "type": "t_mapping(t_uint256,t_uint256)",
+            "contract": "DripCore",
+            "src": "contracts/DripCore.sol:46"
+          },
+          {
+            "label": "platformFeeBps",
+            "offset": 0,
+            "slot": "9",
+            "type": "t_uint256",
+            "contract": "DripCore",
+            "src": "contracts/DripCore.sol:61"
+          },
+          {
+            "label": "platformFeeRecipient",
+            "offset": 0,
+            "slot": "10",
+            "type": "t_address",
+            "contract": "DripCore",
+            "src": "contracts/DripCore.sol:64"
+          },
+          {
+            "label": "engagementRewards",
+            "offset": 0,
+            "slot": "11",
+            "type": "t_contract(IEngagementRewards)5467",
+            "contract": "DripCore",
+            "src": "contracts/DripCore.sol:67"
+          },
+          {
+            "label": "engagementRewardsEnabled",
+            "offset": 20,
+            "slot": "11",
+            "type": "t_bool",
+            "contract": "DripCore",
+            "src": "contracts/DripCore.sol:70"
+          },
+          {
+            "label": "hasClaimedFirstStreamCreation",
+            "offset": 0,
+            "slot": "12",
+            "type": "t_mapping(t_address,t_bool)",
+            "contract": "DripCore",
+            "src": "contracts/DripCore.sol:73"
+          },
+          {
+            "label": "hasClaimedFirstStreamReceived",
+            "offset": 0,
+            "slot": "13",
+            "type": "t_mapping(t_address,t_bool)",
+            "contract": "DripCore",
+            "src": "contracts/DripCore.sol:76"
+          },
+          {
+            "label": "userInviter",
+            "offset": 0,
+            "slot": "14",
+            "type": "t_mapping(t_address,t_address)",
+            "contract": "DripCore",
+            "src": "contracts/DripCore.sol:79"
+          }
+        ],
+        "types": {
+          "t_address": {
+            "label": "address",
+            "numberOfBytes": "20"
+          },
+          "t_bool": {
+            "label": "bool",
+            "numberOfBytes": "1"
+          },
+          "t_struct(InitializableStorage)73_storage": {
+            "label": "struct Initializable.InitializableStorage",
+            "members": [
+              {
+                "label": "_initialized",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "_initializing",
+                "type": "t_bool",
+                "offset": 8,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(OwnableStorage)13_storage": {
+            "label": "struct OwnableUpgradeable.OwnableStorage",
+            "members": [
+              {
+                "label": "_owner",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(ReentrancyGuardStorage)163_storage": {
+            "label": "struct ReentrancyGuardUpgradeable.ReentrancyGuardStorage",
+            "members": [
+              {
+                "label": "_status",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_uint256": {
+            "label": "uint256",
+            "numberOfBytes": "32"
+          },
+          "t_uint64": {
+            "label": "uint64",
+            "numberOfBytes": "8"
+          },
+          "t_array(t_address)dyn_storage": {
+            "label": "address[]",
+            "numberOfBytes": "32"
+          },
+          "t_array(t_uint256)dyn_storage": {
+            "label": "uint256[]",
+            "numberOfBytes": "32"
+          },
+          "t_contract(IEngagementRewards)5467": {
+            "label": "contract IEngagementRewards",
+            "numberOfBytes": "20"
+          },
+          "t_enum(StreamStatus)5040": {
+            "label": "enum IDrip.StreamStatus",
+            "members": [
+              "Pending",
+              "Active",
+              "Paused",
+              "Cancelled",
+              "Completed"
+            ],
+            "numberOfBytes": "1"
+          },
+          "t_mapping(t_address,t_address)": {
+            "label": "mapping(address => address)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_array(t_uint256)dyn_storage)": {
+            "label": "mapping(address => uint256[])",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_bool)": {
+            "label": "mapping(address => bool)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_uint256)": {
+            "label": "mapping(address => uint256)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_mapping(t_address,t_uint256))": {
+            "label": "mapping(uint256 => mapping(address => uint256))",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_struct(Stream)5066_storage)": {
+            "label": "mapping(uint256 => struct IDrip.Stream)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_uint256)": {
+            "label": "mapping(uint256 => uint256)",
+            "numberOfBytes": "32"
+          },
+          "t_string_storage": {
+            "label": "string",
+            "numberOfBytes": "32"
+          },
+          "t_struct(Stream)5066_storage": {
+            "label": "struct IDrip.Stream",
+            "members": [
+              {
+                "label": "streamId",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "sender",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "recipients",
+                "type": "t_array(t_address)dyn_storage",
+                "offset": 0,
+                "slot": "2"
+              },
+              {
+                "label": "token",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "3"
+              },
+              {
+                "label": "deposit",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "4"
+              },
+              {
+                "label": "startTime",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "5"
+              },
+              {
+                "label": "endTime",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "6"
+              },
+              {
+                "label": "status",
+                "type": "t_enum(StreamStatus)5040",
                 "offset": 0,
                 "slot": "7"
               },

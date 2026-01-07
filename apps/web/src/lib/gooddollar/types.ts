@@ -70,3 +70,16 @@ export interface FaceVerificationOptions {
   chainId?: number;
 }
 
+/**
+ * Engagement Rewards environment
+ */
+export type EngagementRewardsEnv = "DEV" | "PRODUCTION";
+
+/**
+ * Engagement Rewards configuration
+ */
+export interface EngagementRewardsConfig {
+  contractAddress: Address;
+  env: EngagementRewardsEnv;
+}
+

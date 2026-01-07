@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useAccount, useChainId } from "wagmi";
 import { useDrip } from "@/lib/contracts";
+import { useEngagementRewards } from "@/lib/gooddollar/hooks/useEngagementRewards";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,7 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Plus, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { parseEther, formatEther, parseUnits, formatUnits, maxUint256 } from "viem";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 const streamSchema = z.object({
   recipients: z
@@ -48,10 +49,32 @@ export function CreateStreamForm() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { createStream, approveToken, checkTokenAllowance, isPending, isConfirming, isConfirmed, hash } = useDrip();
+  const { 
+    engagementRewards, 
+    isReady: isEngagementRewardsReady, 
+    isUserRegistered, 
+    signClaim, 
+    getCurrentBlockNumber 
+  } = useEngagementRewards();
   const [calculatedDeposit, setCalculatedDeposit] = useState<string>("0");
   const [needsApproval, setNeedsApproval] = useState<boolean>(false);
   const [approvalAmount, setApprovalAmount] = useState<string>("0");
+  
+  // Get inviter from URL params (for referral links)
+  const inviterFromUrl = searchParams?.get("inviter") as `0x${string}` | null;
+  
+  // Get inviter from localStorage (if previously set)
+  const [inviter, setInviter] = useState<`0x${string}` | null>(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("drip_inviter");
+      if (stored && /^0x[a-fA-F0-9]{40}$/.test(stored)) {
+        return stored as `0x${string}`;
+      }
+    }
+    return inviterFromUrl;
+  });
 
   const {
     register,
@@ -278,6 +301,57 @@ export function CreateStreamForm() {
 
       toast.loading("Creating stream...", { id: "create-stream" });
 
+      // Prepare engagement rewards parameters if enabled
+      let engagementRewardsParams: {
+        inviter: `0x${string}` | null;
+        validUntilBlock: bigint | undefined;
+        signature: `0x${string}` | undefined;
+      } = {
+        inviter: null,
+        validUntilBlock: undefined,
+        signature: undefined,
+      };
+
+      // Only include engagement rewards if SDK is ready and user is registered or needs to register
+      if (isEngagementRewardsReady && engagementRewards && address) {
+        try {
+          // Get current block number
+          const currentBlock = await getCurrentBlockNumber();
+          if (currentBlock) {
+            const validUntilBlock = currentBlock + 600n; // Valid for 600 blocks (~2 hours)
+            
+            // Check if user needs to sign (first-time registration)
+            const needsSignature = isUserRegistered === false;
+            
+            let signature: `0x${string}` = "0x";
+            if (needsSignature) {
+              toast.loading("Signing for engagement rewards...", { id: "engagement-signature" });
+              try {
+                signature = await signClaim(inviter, validUntilBlock);
+                toast.success("Signature generated", { id: "engagement-signature", duration: 2000 });
+              } catch (err) {
+                console.error("Failed to generate signature:", err);
+                toast.error("Failed to generate signature. Stream will be created without engagement rewards.", {
+                  id: "engagement-signature",
+                  duration: 5000,
+                });
+                // Continue without signature - contract will handle it
+                signature = "0x";
+              }
+            }
+
+            engagementRewardsParams = {
+              inviter,
+              validUntilBlock,
+              signature: signature !== "0x" ? signature : undefined,
+            };
+          }
+        } catch (err) {
+          console.error("Error preparing engagement rewards:", err);
+          // Continue without engagement rewards if there's an error
+        }
+      }
+
       await createStream(
         recipients,
         data.token as `0x${string}`,
@@ -285,7 +359,10 @@ export function CreateStreamForm() {
         periodSeconds,
         calculatedDeposit,
         data.title || "",
-        data.description || ""
+        data.description || "",
+        engagementRewardsParams.inviter,
+        engagementRewardsParams.validUntilBlock,
+        engagementRewardsParams.signature
       );
 
       // Transaction submitted - wait for confirmation

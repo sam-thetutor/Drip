@@ -3,6 +3,7 @@
 import { useAccount } from "wagmi";
 import { useRecipientBalance } from "@/lib/contracts";
 import { useDrip } from "@/lib/contracts";
+import { useEngagementRewards } from "@/lib/gooddollar/hooks/useEngagementRewards";
 import { formatTokenAmount } from "@/lib/utils/format";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
@@ -31,7 +32,25 @@ export function WithdrawModal({ streamId, recipient, token, onClose }: WithdrawM
   const chainId = useChainId();
   const { balance, isLoading: balanceLoading, refetch: refetchBalance } = useRecipientBalance(streamId, recipient);
   const { withdrawFromStream, isPending, isConfirming, isConfirmed, hash, error } = useDrip();
+  const { 
+    engagementRewards, 
+    isReady: isEngagementRewardsReady, 
+    isUserRegistered, 
+    signClaim, 
+    getCurrentBlockNumber 
+  } = useEngagementRewards();
   const [hasSubmitted, setHasSubmitted] = useState(false);
+  
+  // Get inviter from localStorage (if previously set)
+  const [inviter] = useState<`0x${string}` | null>(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("drip_inviter");
+      if (stored && /^0x[a-fA-F0-9]{40}$/.test(stored)) {
+        return stored as `0x${string}`;
+      }
+    }
+    return null;
+  });
 
   // Get token info for formatting
   const tokenInfo = getTokenByAddress(token, chainId) || { decimals: 18, symbol: "CELO" };
@@ -89,10 +108,67 @@ export function WithdrawModal({ streamId, recipient, token, onClose }: WithdrawM
       toast.loading("Opening MetaMask...", { id: "withdraw" });
       setHasSubmitted(true);
       
+      // Prepare engagement rewards parameters if enabled
+      let engagementRewardsParams: {
+        inviter: `0x${string}` | null;
+        validUntilBlock: bigint | undefined;
+        signature: `0x${string}` | undefined;
+      } = {
+        inviter: null,
+        validUntilBlock: undefined,
+        signature: undefined,
+      };
+
+      // Only include engagement rewards if SDK is ready and user is registered or needs to register
+      if (isEngagementRewardsReady && engagementRewards && address) {
+        try {
+          // Get current block number
+          const currentBlock = await getCurrentBlockNumber();
+          if (currentBlock) {
+            const validUntilBlock = currentBlock + 600n; // Valid for 600 blocks (~2 hours)
+            
+            // Check if user needs to sign (first-time registration)
+            const needsSignature = isUserRegistered === false;
+            
+            let signature: `0x${string}` = "0x";
+            if (needsSignature) {
+              toast.loading("Signing for engagement rewards...", { id: "engagement-signature" });
+              try {
+                signature = await signClaim(inviter, validUntilBlock);
+                toast.success("Signature generated", { id: "engagement-signature", duration: 2000 });
+              } catch (err) {
+                console.error("Failed to generate signature:", err);
+                toast.error("Failed to generate signature. Withdrawal will proceed without engagement rewards.", {
+                  id: "engagement-signature",
+                  duration: 5000,
+                });
+                // Continue without signature - contract will handle it
+                signature = "0x";
+              }
+            }
+
+            engagementRewardsParams = {
+              inviter,
+              validUntilBlock,
+              signature: signature !== "0x" ? signature : undefined,
+            };
+          }
+        } catch (err) {
+          console.error("Error preparing engagement rewards:", err);
+          // Continue without engagement rewards if there's an error
+        }
+      }
+      
       // Always withdraw all available balance
       // writeContract should trigger MetaMask popup
       // If MetaMask doesn't open, writeContract will throw an error
-      await withdrawFromStream(streamId, recipient);
+      await withdrawFromStream(
+        streamId,
+        recipient,
+        engagementRewardsParams.inviter,
+        engagementRewardsParams.validUntilBlock,
+        engagementRewardsParams.signature
+      );
     } catch (error: any) {
       console.error("Error in handleWithdraw:", error);
       // Extract error message from various possible error formats

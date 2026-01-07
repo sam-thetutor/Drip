@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "./interfaces/ISubscription.sol";
 import "./interfaces/IDrip.sol";
 import "./interfaces/IERC20.sol";
+import "./interfaces/IEngagementRewards.sol";
 import "./utils/TokenHelper.sol";
 
 /**
@@ -43,6 +44,18 @@ contract SubscriptionManager is ISubscription, ReentrancyGuard, Ownable {
     /// @notice Platform fee recipient
     address public platformFeeRecipient;
 
+    /// @notice Engagement Rewards contract address
+    IEngagementRewards public engagementRewards;
+
+    /// @notice Whether engagement rewards are enabled
+    bool public engagementRewardsEnabled;
+
+    /// @notice Mapping to track if user has claimed reward for first subscription creation
+    mapping(address => bool) public hasClaimedFirstSubscription;
+
+    /// @notice Mapping to track inviter for each user (shared with DripCore if needed)
+    mapping(address => address) public userInviter;
+
     /// @notice Minimum subscription amount
     uint256 public constant MIN_AMOUNT = 1e15; // 0.001 tokens (assuming 18 decimals)
 
@@ -77,6 +90,9 @@ contract SubscriptionManager is ISubscription, ReentrancyGuard, Ownable {
      * @param firstPaymentTime Timestamp for first payment (0 for now + interval)
      * @param title Optional title (max 120 chars)
      * @param description Optional description (max 1024 chars)
+     * @param inviter Optional inviter address for engagement rewards (can be address(0))
+     * @param validUntilBlock Block number until which signature is valid (for engagement rewards)
+     * @param signature User signature for engagement rewards (can be empty bytes)
      * @return subscriptionId Unique identifier for the created subscription
      */
     function createSubscription(
@@ -87,8 +103,42 @@ contract SubscriptionManager is ISubscription, ReentrancyGuard, Ownable {
         uint256 customInterval,
         uint256 firstPaymentTime,
         string calldata title,
-        string calldata description
+        string calldata description,
+        address inviter,
+        uint256 validUntilBlock,
+        bytes memory signature
     ) external payable nonReentrant returns (uint256 subscriptionId) {
+        return _createSubscriptionInternal(
+            recipient,
+            token,
+            amount,
+            cadence,
+            customInterval,
+            firstPaymentTime,
+            title,
+            description,
+            inviter,
+            validUntilBlock,
+            signature
+        );
+    }
+
+    /**
+     * @notice Internal function to create subscription (used by both overloaded functions)
+     */
+    function _createSubscriptionInternal(
+        address recipient,
+        address token,
+        uint256 amount,
+        Cadence cadence,
+        uint256 customInterval,
+        uint256 firstPaymentTime,
+        string calldata title,
+        string calldata description,
+        address inviter,
+        uint256 validUntilBlock,
+        bytes memory signature
+    ) internal returns (uint256 subscriptionId) {
         require(recipient != address(0), "SubscriptionManager: Invalid recipient");
         require(recipient != msg.sender, "SubscriptionManager: Cannot subscribe to self");
         require(amount >= MIN_AMOUNT, "SubscriptionManager: Amount too small");
@@ -141,7 +191,58 @@ contract SubscriptionManager is ISubscription, ReentrancyGuard, Ownable {
             description
         );
 
+        // Try to claim engagement reward for first-time subscription creator (non-blocking)
+        if (engagementRewardsEnabled && address(engagementRewards) != address(0)) {
+            if (!hasClaimedFirstSubscription[msg.sender]) {
+                address inviterAddress = inviter != address(0) ? inviter : userInviter[msg.sender];
+                _tryClaimEngagementReward(
+                    msg.sender,
+                    inviterAddress,
+                    validUntilBlock,
+                    signature
+                );
+                hasClaimedFirstSubscription[msg.sender] = true;
+            }
+        }
+
         return subscriptionId;
+    }
+
+    /**
+     * @notice Create a new subscription (backward compatible overload)
+     * @param recipient Address that will receive the subscription payments
+     * @param token ERC20 token address (address(0) for native CELO)
+     * @param amount Amount per payment
+     * @param cadence Payment cadence (Daily, Weekly, Monthly, or Custom)
+     * @param customInterval Custom interval in seconds (only used if cadence is Custom)
+     * @param firstPaymentTime Timestamp for first payment (0 for now + interval)
+     * @param title Optional title (max 120 chars)
+     * @param description Optional description (max 1024 chars)
+     * @return subscriptionId Unique identifier for the created subscription
+     */
+    function createSubscription(
+        address recipient,
+        address token,
+        uint256 amount,
+        Cadence cadence,
+        uint256 customInterval,
+        uint256 firstPaymentTime,
+        string calldata title,
+        string calldata description
+    ) external payable nonReentrant returns (uint256 subscriptionId) {
+        return _createSubscriptionInternal(
+            recipient,
+            token,
+            amount,
+            cadence,
+            customInterval,
+            firstPaymentTime,
+            title,
+            description,
+            address(0), // inviter
+            0, // validUntilBlock
+            "" // signature
+        );
     }
 
     /**
@@ -696,6 +797,77 @@ contract SubscriptionManager is ISubscription, ReentrancyGuard, Ownable {
     }
 
     /**
+     * @notice Set the Engagement Rewards contract address (owner only)
+     * @param _engagementRewards Address of the Engagement Rewards contract
+     */
+    function setEngagementRewards(address _engagementRewards) external onlyOwner {
+        require(_engagementRewards != address(0), "SubscriptionManager: Invalid address");
+        engagementRewards = IEngagementRewards(_engagementRewards);
+        emit EngagementRewardsContractSet(_engagementRewards);
+    }
+
+    /**
+     * @notice Enable or disable engagement rewards (owner only)
+     * @param _enabled Whether to enable engagement rewards
+     */
+    function setEngagementRewardsEnabled(bool _enabled) external onlyOwner {
+        engagementRewardsEnabled = _enabled;
+        emit EngagementRewardsEnabledSet(_enabled);
+    }
+
+    /**
+     * @notice Set inviter address for the caller
+     * @param inviter Address of the inviter
+     */
+    function setInviter(address inviter) external {
+        require(inviter != address(0), "SubscriptionManager: Invalid inviter");
+        require(inviter != msg.sender, "SubscriptionManager: Cannot invite self");
+        require(userInviter[msg.sender] == address(0), "SubscriptionManager: Inviter already set");
+        userInviter[msg.sender] = inviter;
+        emit InviterSet(msg.sender, inviter);
+    }
+
+    /**
+     * @notice Internal function to attempt engagement reward claim (non-blocking)
+     * @param user Address of the user claiming the reward
+     * @param inviter Address of the inviter (can be address(0))
+     * @param validUntilBlock Block number until which signature is valid
+     * @param signature User signature (can be empty bytes for subsequent claims)
+     */
+    function _tryClaimEngagementReward(
+        address user,
+        address inviter,
+        uint256 validUntilBlock,
+        bytes memory signature
+    ) internal {
+        if (address(engagementRewards) == address(0)) return;
+        if (!engagementRewardsEnabled) return;
+        
+        // If validUntilBlock is 0, skip claiming (frontend didn't provide it)
+        if (validUntilBlock == 0) return;
+        
+        // If validUntilBlock is in the past, skip claiming
+        if (validUntilBlock < block.number) return;
+
+        try engagementRewards.appClaim(
+            user,
+            inviter,
+            validUntilBlock,
+            signature
+        ) returns (bool success) {
+            if (success) {
+                emit EngagementRewardClaimed(user, inviter, true);
+            } else {
+                emit EngagementRewardClaimed(user, inviter, false);
+            }
+        } catch Error(string memory reason) {
+            emit EngagementRewardClaimFailed(user, reason);
+        } catch {
+            emit EngagementRewardClaimFailed(user, "Unknown error");
+        }
+    }
+
+    /**
      * @notice Internal function to get interval from cadence
      * @param cadence Payment cadence
      * @param customInterval Custom interval (if cadence is Custom)
@@ -723,4 +895,11 @@ contract SubscriptionManager is ISubscription, ReentrancyGuard, Ownable {
     receive() external payable {
         // Allow contract to receive native CELO for escrow deposits
     }
+
+    // Engagement Rewards Events
+    event EngagementRewardClaimed(address indexed user, address indexed inviter, bool success);
+    event EngagementRewardClaimFailed(address indexed user, string reason);
+    event EngagementRewardsContractSet(address indexed contractAddress);
+    event EngagementRewardsEnabledSet(bool enabled);
+    event InviterSet(address indexed user, address indexed inviter);
 }

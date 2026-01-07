@@ -150,6 +150,9 @@ export function useDrip() {
    * @param deposit Total deposit amount (human-readable)
    * @param title Optional title
    * @param description Optional description
+   * @param inviter Optional inviter address for engagement rewards
+   * @param validUntilBlock Optional block number until which signature is valid
+   * @param signature Optional user signature for engagement rewards
    */
   const createStream = async (
     recipients: `0x${string}`[],
@@ -158,7 +161,10 @@ export function useDrip() {
     periodSeconds: number, // Period duration in seconds
     deposit: string, // Total deposit (human-readable)
     title: string = "",
-    description: string = ""
+    description: string = "",
+    inviter?: `0x${string}` | null,
+    validUntilBlock?: bigint,
+    signature?: `0x${string}`
   ) => {
     if (!contractAddress) {
       throw new Error("DripCore contract not deployed on this network");
@@ -319,11 +325,21 @@ export function useDrip() {
       isNativeToken,
     });
 
+    // Prepare engagement rewards parameters
+    const inviterAddress = inviter || "0x0000000000000000000000000000000000000000";
+    const validUntil = validUntilBlock || 0n;
+    const userSignature = signature || "0x";
+
+    // Use new signature with engagement rewards if parameters provided, otherwise use old signature
+    const useEngagementRewards = validUntilBlock !== undefined && validUntilBlock > 0n;
+
     const baseContract = {
       address: contractAddress,
       abi: DRIP_CORE_ABI,
       functionName: "createStream" as const,
-      args: [recipients, token, amountsInWei, BigInt(periodSeconds), depositInWei, title, description],
+      args: useEngagementRewards
+        ? [recipients, token, amountsInWei, BigInt(periodSeconds), depositInWei, title, description, inviterAddress, validUntil, userSignature]
+        : [recipients, token, amountsInWei, BigInt(periodSeconds), depositInWei, title, description],
     };
     
     return writeContract(
@@ -383,8 +399,17 @@ export function useDrip() {
    * Withdraw all available balance from a stream (as recipient)
    * @param streamId Stream ID
    * @param recipient Recipient address
+   * @param inviter Optional inviter address for engagement rewards
+   * @param validUntilBlock Optional block number until which signature is valid
+   * @param signature Optional user signature for engagement rewards
    */
-  const withdrawFromStream = async (streamId: bigint, recipient: `0x${string}`) => {
+  const withdrawFromStream = async (
+    streamId: bigint,
+    recipient: `0x${string}`,
+    inviter?: `0x${string}` | null,
+    validUntilBlock?: bigint,
+    signature?: `0x${string}`
+  ) => {
     if (!isConnected || !address) {
       throw new Error("Wallet not connected. Please connect your wallet first.");
     }
@@ -397,12 +422,22 @@ export function useDrip() {
       throw new Error("You can only withdraw your own balance");
     }
 
+    // Prepare engagement rewards parameters
+    const inviterAddress = inviter || "0x0000000000000000000000000000000000000000";
+    const validUntil = validUntilBlock || 0n;
+    const userSignature = signature || "0x";
+
+    // Use new signature with engagement rewards if parameters provided, otherwise use old signature
+    const useEngagementRewards = validUntilBlock !== undefined && validUntilBlock > 0n;
+
     try {
       return await writeContract({
         address: contractAddress,
         abi: DRIP_CORE_ABI,
         functionName: "withdrawFromStream",
-        args: [streamId, recipient],
+        args: useEngagementRewards
+          ? [streamId, recipient, inviterAddress, validUntil, userSignature]
+          : [streamId, recipient],
       });
     } catch (error: any) {
       console.error("Error in withdrawFromStream:", error);

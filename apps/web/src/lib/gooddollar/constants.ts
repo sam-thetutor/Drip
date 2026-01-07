@@ -59,5 +59,13 @@ export const GOODDOLLAR_DOCS = {
   UBI: "https://docs.gooddollar.org/frequently-asked-questions/about-gooddollar",
   IDENTITY: "https://docs.gooddollar.org/for-developers/apis-and-sdks/sybil-resistance/identity-ethers-v5-react",
   CLAIMS: "https://docs.gooddollar.org/for-developers/apis-and-sdks/ubi/claim-ubi-viem-wagmi",
+  ENGAGEMENT_REWARDS: "https://docs.gooddollar.org/for-developers/apis-and-sdks/engagement-rewards",
 } as const;
+
+/**
+ * Engagement Rewards environment
+ * Defaults to DEV for development/testing
+ */
+export const ENGAGEMENT_REWARDS_ENV: "DEV" | "PRODUCTION" =
+  (process.env.NEXT_PUBLIC_ENGAGEMENT_REWARDS_ENV as "DEV" | "PRODUCTION") || "DEV";
 
