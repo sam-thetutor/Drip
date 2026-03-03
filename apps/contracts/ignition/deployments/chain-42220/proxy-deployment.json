@@ -6,7 +6,7 @@
   "contracts": {
     "DripCore": {
       "proxy": "0x19a05b5bCD18A2A14c620F86356C44ecD5946203",
-      "implementation": "0xb4616cBD8b7Fe7DD1F8786FEcd0c8f0AE1bc820E",
+      "implementation": "0xC08F59693bB5600e2F0671168CcfdA2F41eF79Eb",
       "admin": "0x97b3cCcFe554F0422a127Ab392cF98Ea0d44AffB"
     },
     "SubscriptionManager": "0x3b247FACa2E9DF6c3e9660705176A841933Ae695"
@@ -16,6 +16,6 @@
     "proxyAdmin": "0x7818CEd1298849B47a9B56066b5adc72CDDAf733",
     "engagementRewardsAddress": "0xb44fC3A592aDaA257AECe1Ae8956019EA53d0465"
   },
-  "upgradedAt": "2026-01-07T11:05:02.658Z",
+  "upgradedAt": "2026-01-22T19:28:29.944Z",
   "upgradedBy": "0x7818CEd1298849B47a9B56066b5adc72CDDAf733"
 }

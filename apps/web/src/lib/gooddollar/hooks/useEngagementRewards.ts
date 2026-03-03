@@ -50,7 +50,7 @@ export function useEngagementRewards() {
       const appAddress = getDripCoreAddress();
       if (!appAddress) return;
 
-      const registered = await engagementRewards.isUserRegistered(appAddress, address);
+      const registered = await (engagementRewards as any).isUserRegistered(appAddress, address);
       setIsUserRegistered(registered);
       return registered;
     } catch (err) {

@@ -5,11 +5,19 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import { StreamDetailsView } from "@/components/stream-details-view";
+import { SuperfluidStreamDetailsView } from "@/components/superfluid-stream-details-view";
+import { useStream, useSuperfluidStreamData } from "@/lib/contracts";
+import { useAccount } from "wagmi";
 
 export default function StreamDetailsPage() {
   const params = useParams();
   const router = useRouter();
+  const { address } = useAccount();
   const streamId = params?.id ? BigInt(params.id as string) : undefined;
+
+  // Try to load from both contracts to determine which one it belongs to
+  const { stream: regularStream, isLoading: regularLoading } = useStream(streamId!);
+  const { streamData: superfluidStream, isLoading: superfluidLoading } = useSuperfluidStreamData(streamId, address);
 
   if (!streamId) {
     return (
@@ -26,6 +34,10 @@ export default function StreamDetailsPage() {
     );
   }
 
+  // Determine which type of stream it is
+  const isSuperfluid = superfluidStream && !superfluidLoading;
+  const isRegular = regularStream && !regularLoading && !isSuperfluid;
+
   return (
     <main className="flex-1">
       <div className="container px-4 mx-auto max-w-7xl py-8">
@@ -38,7 +50,11 @@ export default function StreamDetailsPage() {
           </Button>
         </div>
 
-        <StreamDetailsView streamId={streamId} />
+        {isSuperfluid ? (
+          <SuperfluidStreamDetailsView streamId={streamId} />
+        ) : (
+          <StreamDetailsView streamId={streamId} />
+        )}
       </div>
     </main>
   );

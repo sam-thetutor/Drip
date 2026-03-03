@@ -1,6 +1,6 @@
 {
-  "installCommand": "cd ../.. && pnpm install",
-  "buildCommand": "cd ../.. && pnpm run build --filter=web",
+  "installCommand": "npm install --legacy-peer-deps",
+  "buildCommand": "next build",
   "framework": "nextjs"
 }
 

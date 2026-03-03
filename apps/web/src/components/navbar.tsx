@@ -2,27 +2,29 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, Droplets, Repeat, Wallet, Trophy } from "lucide-react"
+import { Home, PlusCircle, Wallet, User, TrendingUp, Shield } from "lucide-react"
 
 import { ConnectButton } from "@/components/connect-button"
 import { WalletButton } from "@/components/wallet-button"
+import { useIsAdmin } from "@/lib/admin/auth"
 
 const navLinks = [
-  { name: "Home", href: "/", icon: Home },
-  { name: "Streams", href: "/streams", icon: Droplets },
-  { name: "Subscriptions", href: "/subscriptions", icon: Repeat },
-  { name: "Treasury", href: "/treasury", icon: Wallet },
-  { name: "Leaderboard", href: "/leaderboard", icon: Trophy },
+  { name: "Home", href: "/dashboard", icon: Home },
+  { name: "Create", href: "/streams/create", icon: PlusCircle },
+  { name: "Stake", href: "/stake", icon: TrendingUp },
+  { name: "Wallet", href: "/wallet", icon: Wallet },
+  { name: "Profile", href: "/profile", icon: User },
 ]
 
 export function Navbar() {
   const pathname = usePathname()
+  const isAdmin = useIsAdmin()
   
   return (
     <>
       {/* Top navbar - simplified on mobile, full on desktop */}
       <header className="sticky top-0 z-50 w-full border-b border-white/15 bg-transparent backdrop-blur-sm supports-[backdrop-filter]:bg-transparent md:relative md:border-b">
-        <div className="container flex h-14 md:h-16 max-w-[1280px] items-center justify-between px-4">
+        <div className="page-container flex h-14 items-center justify-between md:h-16">
           {/* Logo - always visible */}
           <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity group">
             <span className="font-bold text-lg md:text-xl text-green group-hover:scale-105 transition-transform">
@@ -49,6 +51,21 @@ export function Navbar() {
               )
             })}
             
+            {/* Admin Link - Only visible to admins */}
+            {isAdmin && (
+              <Link
+                href="/admin/ubi"
+                className={`flex items-center gap-1.5 text-sm font-medium transition-all hover:text-green hover:scale-105 ${
+                  pathname === "/admin/ubi"
+                    ? "text-green"
+                    : "text-foreground/70"
+                }`}
+              >
+                <Shield className="h-4 w-4" />
+                Admin
+              </Link>
+            )}
+            
             {/* Wallet Connection - Show ConnectButton if not connected, WalletButton if connected */}
             <div className="flex items-center gap-3 min-w-[140px] justify-end">
               <div className="flex items-center">
@@ -70,7 +87,7 @@ export function Navbar() {
 
       {/* Bottom Navigation Bar - Mobile only - Always visible on all pages */}
       <nav className="fixed bottom-0 left-0 right-0 z-[100] md:hidden border-t border-white/15 bg-black/60 backdrop-blur-lg supports-[backdrop-filter]:bg-black/60 shadow-[0_-4px_20px_rgba(0,0,0,0.3)]">
-        <div className="container max-w-[1280px]">
+        <div className="page-container">
           <div className="grid grid-cols-4 h-16">
             {navLinks.map((link) => {
               const Icon = link.icon

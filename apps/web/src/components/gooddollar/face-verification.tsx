@@ -9,7 +9,6 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { isSupportedChain } from "@/lib/gooddollar/utils";
 import { GOODDOLLAR_DOCS } from "@/lib/gooddollar/constants";
-import { UbiClaimCard } from "./ubi-claim-card";
 
 export function FaceVerification() {
   const { address, isConnected } = useAccount();
@@ -40,9 +39,9 @@ export function FaceVerification() {
     return null;
   }
 
-  // Show UBI claim card if already verified
+  // Already verified — nothing to show
   if (identityStatus.isWhitelisted) {
-    return <UbiClaimCard />;
+    return null;
   }
 
   const handleGenerateLink = async () => {
@@ -100,13 +99,12 @@ export function FaceVerification() {
         <div className="p-4 rounded-lg bg-muted/30 border border-white/10">
           <p className="text-sm text-muted-foreground mb-2">
             To claim Good Dollar UBI, you need to verify your identity through face verification.
-            This is a one-time process that helps prevent fraud and ensures fair distribution.
           </p>
-          <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
+          {/* <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
             <li>One person = One identity</li>
             <li>Secure and privacy-preserving</li>
             <li>Required to claim daily UBI</li>
-          </ul>
+          </ul> */}
         </div>
 
         {verificationLink ? (

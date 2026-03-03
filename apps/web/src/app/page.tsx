@@ -1,189 +1,228 @@
 "use client";
 
-import type { CSSProperties } from "react";
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Droplet, Zap, Shield, Clock } from "lucide-react";
 
-export default function Home() {
+const sparklinePath =
+  "M2 24C8 10 18 6 30 16C42 26 52 12 64 18C76 24 86 8 98 14";
+
+export default function HomePage() {
   return (
-    <main className="flex-1 relative overflow-hidden min-h-[calc(100vh-4rem)]">
-      {/* Floating Background Elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {/* Top Left - Purple Circle */}
-        <div className="absolute top-20 left-10 w-24 h-24 bg-purple-500/20 rounded-full blur-2xl animate-pulse"></div>
-        
-        {/* Top Right - Orange Circle */}
-        <div className="absolute top-20 right-10 w-24 h-24 bg-orange-500/20 rounded-full blur-2xl animate-pulse delay-1000"></div>
-        
-        {/* Bottom Left - Green Circle */}
-        <div className="absolute bottom-20 left-10 w-24 h-24 bg-green/20 rounded-full blur-2xl animate-pulse delay-500"></div>
-        
-        {/* Bottom Right - Green Circle */}
-        <div className="absolute bottom-20 right-10 w-24 h-24 bg-green/20 rounded-full blur-2xl animate-pulse delay-700"></div>
-      </div>
+    <main className="relative overflow-hidden">
+      <div className="absolute inset-0 hero-grid" aria-hidden="true"></div>
+      <div className="absolute inset-0 hero-glow" aria-hidden="true"></div>
 
-      {/* Hero Section - Centered Layout */}
-      <section className="relative z-10 flex items-center justify-center min-h-[calc(100vh-4rem)] py-20">
-        <div className="container px-4 mx-auto max-w-6xl">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            {/* Left Column - Text Content */}
-            <div className="text-center lg:text-left space-y-8">
-              {/* Main Headline with Drip Icon */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-center lg:justify-start gap-3 mb-4">
-                  <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight">
-                    <span className="text-green">Drip Payments</span>
-                    <br />
-                    Like Water
-                  </h1>
-                </div>
-                
-                {/* Tagline/Description */}
-                <p className="text-xl md:text-2xl text-foreground/90 leading-relaxed">
-                  Continuous, automatic payments that{" "}
-                  <span className="text-green font-semibold">flow steadily</span> over time.
-                </p>
-              </div>
-
-              {/* Key Benefits */}
-              {/* <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 py-6">
-                <div className="flex flex-col items-center lg:items-start gap-2">
-                  <Clock className="h-6 w-6 text-green" />
-                  <span className="text-sm text-foreground/80">24/7 Automated</span>
-                </div>
-                <div className="flex flex-col items-center lg:items-start gap-2">
-                  <Shield className="h-6 w-6 text-green" />
-                  <span className="text-sm text-foreground/80">Smart Contract</span>
-                </div>
-                <div className="flex flex-col items-center lg:items-start gap-2">
-                  <Zap className="h-6 w-6 text-green" />
-                  <span className="text-sm text-foreground/80">Instant & Secure</span>
-                </div>
-              </div> */}
-
-              {/* CTA Buttons */}
-              <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-                <Button
-                  size="lg"
-                  className="px-8 py-6 text-base font-semibold bg-green text-white rounded-lg hover:bg-green-dark transition-all duration-300 shadow-lg shadow-green/20"
-                  asChild
-                >
-                  <Link href="/streams/create" className="flex items-center gap-2">
-                    Start Dripping
-                    <ArrowRight className="h-5 w-5" />
-                  </Link>
-                </Button>
-                
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="px-8 py-6 text-base font-semibold rounded-lg border-2 border-green text-foreground bg-background hover:bg-green/10 hover:border-green transition-all duration-300"
-                  asChild
-                >
-                  <Link href="/streams" className="flex items-center gap-2">
-                    View Streams
-                    <ArrowRight className="h-5 w-5" />
-                  </Link>
-                </Button>
-              </div>
+      <section className="page-container relative z-10 flex min-h-[calc(100vh-4rem)] items-center py-16">
+        <div className="grid w-full grid-cols-1 gap-10 lg:grid-cols-[1.05fr_0.95fr]">
+          <div className="space-y-8">
+            <div className="space-y-4">
+              <p className="text-sm font-semibold uppercase tracking-[0.45em] text-foreground/70">
+                Per-second streaming on Celo
+              </p>
+              <h1 className="text-4xl font-bold leading-tight text-white sm:text-5xl lg:text-6xl">
+                Automate treasury payouts for{" "}
+                <span className="hero-gradient-text">DAOs & teams</span>
+              </h1>
+              <p className="text-lg leading-relaxed text-foreground/80">
+                Run per-second contributor streams and recurring billing with
+                smart-contract automation, lower ops overhead, and full on-chain
+                proof.
+              </p>
             </div>
 
-            {/* Right Column - Dripping Animation Visualization */}
-            <div className="relative h-[520px] flex items-center justify-center">
-              {/* Soft focus area to subtly highlight animation */}
-              <div className="absolute inset-6 rounded-[36px] bg-gradient-to-b from-black/45 via-black/25 to-transparent blur-3xl pointer-events-none"></div>
-              
-              <div className="relative w-full max-w-md h-full">
-                {/* Source Container (Top) */}
-                <div className="absolute top-4 left-1/2 transform -translate-x-1/2 w-28 h-16 bg-white/5 rounded-xl border border-white/20 flex items-center justify-center">
-                  <div className="text-center space-y-1">
-                    <Droplet className="h-6 w-6 text-white mx-auto opacity-90" />
-                    <span className="text-[10px] uppercase tracking-[0.2em] text-white/80">
-                      Funds Pool
-                    </span>
-                  </div>
-                </div>
+            <div className="hero-cta-row">
+              <Button className="hero-cta-button" asChild>
+                <Link href="/streams/create" className="flex items-center gap-2">
+                  Start payouts
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+              <Button variant="outline" className="hero-cta-outline" asChild>
+                <Link href="/dashboard" className="flex items-center gap-2">
+                  Open treasury dashboard
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+            </div>
 
-                {/* Dripping Drops Animation */}
-                {/** Define drop paths that align with each flow line */}
-                {(() => {
-                  const dropTargets = [20, 35, 50, 65, 80]; // percent positions for each line
-                  return (
-                    <div className="absolute top-16 left-0 w-full h-[360px] overflow-visible">
-                      {dropTargets.map((target, idx) => (
-                        <div
-                          key={`drop-${idx}`}
-                          className="diagonal-drop"
-                          style={
-                            {
-                              "--target-x": `${target}%`,
-                              "--start-top": "110px",
-                              "--dy": "230px",
-                              "--duration": `${2.5 + idx * 0.2}s`,
-                              animationDelay: `${idx * 0.25}s`,
-                            } as CSSProperties
-                          }
-                        >
-                          <div className="w-2.5 h-11 bg-gradient-to-b from-white via-white/70 to-transparent rounded-full opacity-90"></div>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })()}
-                
+            <div className="flex flex-wrap items-center gap-3 text-xs text-foreground/60">
+              <span className="hero-badge">DAOs & collectives</span>
+              <span className="hero-badge">Per-second accrual</span>
+              <span className="hero-badge">Creator teams</span>
+              <span className="hero-badge">Service platforms</span>
+            </div>
 
-                {/* Recipient Containers (Bottom) */}
-                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 w-full flex justify-around">
-                  {[0, 1, 2].map((i) => (
-                    <div
-                      key={i}
-                      className="w-20 h-18 rounded-xl border border-white/20 bg-white/5 flex items-center justify-center relative overflow-hidden animate-fill"
-                      style={{
-                        animationDuration: `${3.5 + i * 0.4}s`,
-                        animationDelay: `${0.8 + i * 0.4}s`,
-                      }}
-                    >
-                      <div
-                        className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-white/50 to-transparent"
-                        style={{ height: `${25 + i * 18}%` }}
-                      ></div>
-                      <Droplet className="h-5 w-5 text-white opacity-80" />
-                    </div>
-                  ))}
-                </div>
-
-                {/* Flow Lines */}
-                <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 1 }}>
-                  {[20, 35, 50, 65, 80].map((target, idx) => (
-                    <line
-                      key={`line-${idx}`}
-                      x1="50%"
-                      y1="110"
-                      x2={`${target}%`}
-                      y2="330"
-                      stroke="rgba(255, 255, 255, 0.25)"
-                      strokeWidth="1.5"
-                      strokeDasharray="3 6"
-                      className="animate-pulse"
-                      style={{
-                        animationDelay: `${idx * 0.15}s`,
-                      }}
-                    />
-                  ))}
-                </svg>
+            <div className="hero-invite-card">
+              <p className="text-sm font-semibold text-white">Built for ops leads</p>
+              <p className="text-sm text-foreground/70">
+                Replace spreadsheet ops with autonomous per-second streams and
+                audit-ready payout records.
+              </p>
+              <div className="mt-2 flex items-center justify-between gap-4 text-xs text-foreground/80">
+                <span>On-chain proof for every transfer</span>
+                <Button variant="ghost" className="hero-invite-btn">
+                  Learn more
+                </Button>
               </div>
             </div>
           </div>
 
-          {/* Explanation Text Below */}
-          {/* <div className="mt-16 text-center max-w-3xl mx-auto">
-            <p className="text-lg text-foreground/70 leading-relaxed">
-              Instead of sending large lump sums, <span className="text-green font-semibold">drip your payments</span> steadily over time.
-              <br />
-              Perfect for salaries, subscriptions, recurring expenses, and more. Every second, every hour, every day—automatic.
+          <div className="relative">
+            <div className="hero-card hero-spotlight card-glow">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.4em] text-foreground/50">
+                    Live treasury
+                  </p>
+                  <p className="text-2xl font-bold text-white">$184,320</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs uppercase tracking-[0.4em] text-foreground/50">
+                    Live stream rate
+                  </p>
+                  <p className="text-lg font-semibold text-green">
+                    0.42 cUSD / sec
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6 space-y-4">
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <div className="flex items-center justify-between text-sm text-foreground/75">
+                    <span>Treasury Balance</span>
+                    <span className="font-semibold text-white">34,500 cUSD</span>
+                  </div>
+                  <div className="hero-sparkline mt-3">
+                    <svg
+                      viewBox="0 0 100 30"
+                      preserveAspectRatio="none"
+                      className="h-full w-full"
+                    >
+                      <path d={sparklinePath} className="hero-sparkline-path" />
+                    </svg>
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <div className="flex items-center justify-between text-sm text-foreground/75">
+                    <span>Subscription Revenue</span>
+                    <span className="font-semibold text-white">8,420 cUSD</span>
+                  </div>
+                  <div className="hero-sparkline mt-3">
+                    <svg
+                      viewBox="0 0 100 30"
+                      preserveAspectRatio="none"
+                      className="h-full w-full"
+                    >
+                      <path d={sparklinePath} className="hero-sparkline-path" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-7 grid gap-3 text-xs text-foreground/80 sm:grid-cols-2">
+                <div className="hero-mini-card">
+                  <p>Contributors paid</p>
+                  <p className="text-lg font-semibold text-white">42</p>
+                </div>
+                <div className="hero-mini-card">
+                  <p>Active streams</p>
+                  <p className="text-lg font-semibold text-green">128</p>
+                </div>
+                <div className="hero-mini-card">
+                  <p>Per-second flows</p>
+                  <p className="text-lg font-semibold text-white">36</p>
+                </div>
+                <div className="hero-mini-card">
+                  <p>Pending actions</p>
+                  <p className="text-lg font-semibold text-white">2</p>
+                </div>
+              </div>
+
+              <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-xs text-foreground/80 animate-pulse-soft">
+                <div className="flex items-center justify-between">
+                  <span className="uppercase tracking-[0.35em] text-foreground/50">
+                    Latest payout
+                  </span>
+                  <span className="text-green">Confirmed</span>
+                </div>
+                <div className="mt-2 flex items-center justify-between text-sm">
+                  <span className="font-semibold text-white">
+                    Contributor #24
+                  </span>
+                  <span className="text-foreground/70">0.003 cUSD / sec</span>
+                </div>
+              </div>
+            </div>
+            <div className="absolute -right-6 -bottom-8 h-24 w-24 rounded-full bg-gradient-to-br from-green/60 to-teal/60 blur-[60px]"></div>
+          </div>
+        </div>
+      </section>
+
+      <section className="page-container relative z-10 pb-20">
+        <div className="mx-auto w-full max-w-6xl space-y-8">
+          <div className="space-y-3 text-center">
+            <p className="text-xs font-semibold uppercase tracking-[0.4em] text-foreground/60">
+              Who it’s for
             </p>
-          </div> */}
+            <h2 className="text-3xl font-bold text-white sm:text-4xl">
+              Built for high-volume payout teams
+            </h2>
+            <p className="mx-auto max-w-3xl text-sm leading-relaxed text-foreground/75 sm:text-base">
+              Designed for teams that need reliable, transparent, and
+              programmable payment operations.
+            </p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <article className="hero-card card-glow space-y-3">
+              <p className="text-xs uppercase tracking-[0.35em] text-foreground/50">
+                DAOs & collectives
+              </p>
+              <h3 className="text-xl font-semibold text-white">
+                Automate contributor payouts
+              </h3>
+              <p className="text-sm leading-relaxed text-foreground/75">
+                Run grants, per-second contributor streams, and treasury disbursements
+                without manual reconciliation.
+              </p>
+            </article>
+
+            <article className="hero-card card-glow space-y-3">
+              <p className="text-xs uppercase tracking-[0.35em] text-foreground/50">
+                Creator teams
+              </p>
+              <h3 className="text-xl font-semibold text-white">
+                Pay collaborators continuously
+              </h3>
+              <p className="text-sm leading-relaxed text-foreground/75">
+                Stream payments to editors, designers, and operators with
+                instant withdrawals and clear payment history.
+              </p>
+            </article>
+
+            <article className="hero-card card-glow space-y-3">
+              <p className="text-xs uppercase tracking-[0.35em] text-foreground/50">
+                Service platforms
+              </p>
+              <h3 className="text-xl font-semibold text-white">
+                Launch programmable billing
+              </h3>
+              <p className="text-sm leading-relaxed text-foreground/75">
+                Support recurring subscriptions and usage-based flows with
+                on-chain proof for reconciliation.
+              </p>
+            </article>
+          </div>
+
+          <div className="flex justify-center">
+            <Button variant="outline" className="hero-cta-outline" asChild>
+              <Link href="/dashboard" className="flex items-center gap-2">
+                View treasury metrics
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+          </div>
         </div>
       </section>
     </main>

@@ -4,4 +4,5 @@ export * from "./useSubscription";
 export * from "./useUserStreams";
 export * from "./useStreamRecipients";
 export * from "./useTreasury";
+export * from "./useSuperfluid";
 

@@ -16,6 +16,12 @@ model UserStats {
   totalDeposited     Decimal  @default(0)
   totalWithdrawn     Decimal  @default(0)
   points             Decimal  @default(0)
+  
+  // UBI tracking fields
+  ubiClaimCount      Int      @default(0)  // Total number of UBI claims
+  totalUbiClaimed    Decimal  @default(0)  // Total G$ claimed from UBI
+  lastUbiClaim       DateTime? // Last UBI claim timestamp
+  
   updatedAt          DateTime @updatedAt
 }
 
@@ -39,4 +45,17 @@ model SelfVerification {
   @@index([verifiedAt])
 }
 
+model UbiClaim {
+  id              String   @id @default(cuid())
+  address         String   // User wallet address
+  amount          Decimal  // Amount claimed (in G$)
+  amountWei       String   // Raw amount in wei (for precision)
+  transactionHash String?  // Transaction hash
+  claimedAt       DateTime @default(now())
+  chainId         Int      // Network (42220 for Celo mainnet)
+  
+  @@index([address])
+  @@index([claimedAt])
+  @@index([chainId])
+}
 

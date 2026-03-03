@@ -325,22 +325,19 @@ export function useDrip() {
       isNativeToken,
     });
 
-    // Prepare engagement rewards parameters
-    const inviterAddress = inviter || "0x0000000000000000000000000000000000000000";
-    const validUntil = validUntilBlock || 0n;
-    const userSignature = signature || "0x";
-
-    // Use new signature with engagement rewards if parameters provided, otherwise use old signature
-    const useEngagementRewards = validUntilBlock !== undefined && validUntilBlock > 0n;
-
+    // For now, skip engagement rewards parameters to avoid signature generation hanging
+    // This allows stream creation to proceed normally without the engagement rewards signature
+    // The contract will still try to claim rewards, but without the signature
+    
+    // TODO: Fix engagement rewards signature generation to be non-blocking or use Web Worker
     const baseContract = {
       address: contractAddress,
       abi: DRIP_CORE_ABI,
       functionName: "createStream" as const,
-      args: useEngagementRewards
-        ? [recipients, token, amountsInWei, BigInt(periodSeconds), depositInWei, title, description, inviterAddress, validUntil, userSignature]
-        : [recipients, token, amountsInWei, BigInt(periodSeconds), depositInWei, title, description],
+      args: [recipients, token, amountsInWei, BigInt(periodSeconds), depositInWei, title, description],
     };
+    
+    console.log("Creating stream without engagement rewards signature (signature generation can be slow)");
     
     return writeContract(
       (isNativeToken ? { ...baseContract, value: depositInWei } : baseContract) as any
@@ -422,22 +419,16 @@ export function useDrip() {
       throw new Error("You can only withdraw your own balance");
     }
 
-    // Prepare engagement rewards parameters
-    const inviterAddress = inviter || "0x0000000000000000000000000000000000000000";
-    const validUntil = validUntilBlock || 0n;
-    const userSignature = signature || "0x";
-
-    // Use new signature with engagement rewards if parameters provided, otherwise use old signature
-    const useEngagementRewards = validUntilBlock !== undefined && validUntilBlock > 0n;
-
+    // For now, skip engagement rewards parameters to avoid signature generation hanging
+    // TODO: Fix engagement rewards signature generation to be non-blocking or use Web Worker
+    
     try {
+      // Create withdrawal without engagement rewards signature for now
       return await writeContract({
         address: contractAddress,
         abi: DRIP_CORE_ABI,
         functionName: "withdrawFromStream",
-        args: useEngagementRewards
-          ? [streamId, recipient, inviterAddress, validUntil, userSignature]
-          : [streamId, recipient],
+        args: [streamId, recipient],
       });
     } catch (error: any) {
       console.error("Error in withdrawFromStream:", error);

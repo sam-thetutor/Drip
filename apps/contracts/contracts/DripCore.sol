@@ -78,6 +78,9 @@ contract DripCore is IDrip, Initializable, ReentrancyGuardUpgradeable, OwnableUp
     /// @notice Mapping to track inviter for each user
     mapping(address => address) public userInviter;
 
+    /// @notice Mapping to track if user has claimed reward via direct claimEngagementReward function
+    mapping(address => bool) public hasClaimedDirectEngagementReward;
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
@@ -565,6 +568,70 @@ contract DripCore is IDrip, Initializable, ReentrancyGuardUpgradeable, OwnableUp
             0, // validUntilBlock
             "" // signature
         );
+    }
+
+    /**
+     * @notice Claim engagement rewards directly without stream operations
+     * @dev Allows users to claim GoodDollar rewards independently
+     * @dev On first claim: requires valid signature and validUntilBlock > current block
+     * @dev On subsequent claims: can pass empty signature and validUntilBlock = 0
+     * @param inviter Optional inviter address (can be address(0))
+     * @param validUntilBlock Block number until which signature is valid (required on first claim, can be 0 after)
+     * @param signature User signature for verification (required on first claim, can be empty after)
+     * @return success Whether the claim was successful
+     */
+    function claimEngagementReward(
+        address inviter,
+        uint256 validUntilBlock,
+        bytes memory signature
+    ) external nonReentrant returns (bool success) {
+        require(engagementRewardsEnabled, "DripCore: Engagement rewards disabled");
+        require(address(engagementRewards) != address(0), "DripCore: No rewards contract");
+
+        // On first claim: require valid signature and block
+        // On subsequent claims: can pass empty signature and block 0
+        if (!hasClaimedDirectEngagementReward[msg.sender]) {
+            require(validUntilBlock > block.number, "DripCore: Signature expired (first claim requires valid block)");
+            require(signature.length > 0, "DripCore: Signature required on first claim");
+        }
+
+        // Determine inviter address
+        address inviterAddress = inviter != address(0) ? inviter : userInviter[msg.sender];
+
+        // Attempt to claim reward
+        try engagementRewards.appClaim(
+            msg.sender,
+            inviterAddress,
+            validUntilBlock,
+            signature
+        ) returns (bool claimSuccess) {
+            emit EngagementRewardClaimed(msg.sender, inviterAddress, claimSuccess);
+            
+            // Mark as claimed after first attempt (whether successful or not)
+            if (!hasClaimedDirectEngagementReward[msg.sender]) {
+                hasClaimedDirectEngagementReward[msg.sender] = true;
+            }
+            
+            return claimSuccess;
+        } catch Error(string memory reason) {
+            emit EngagementRewardClaimFailed(msg.sender, reason);
+            
+            // Mark as claimed after first attempt (even if failed)
+            if (!hasClaimedDirectEngagementReward[msg.sender]) {
+                hasClaimedDirectEngagementReward[msg.sender] = true;
+            }
+            
+            return false;
+        } catch {
+            emit EngagementRewardClaimFailed(msg.sender, "Unknown error");
+            
+            // Mark as claimed after first attempt (even if failed)
+            if (!hasClaimedDirectEngagementReward[msg.sender]) {
+                hasClaimedDirectEngagementReward[msg.sender] = true;
+            }
+            
+            return false;
+        }
     }
 
     /**

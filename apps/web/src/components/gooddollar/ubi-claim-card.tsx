@@ -61,6 +61,26 @@ export function UbiClaimCard() {
         duration: 5000,
       });
 
+      // Log the claim to database
+      if (walletClaimStatus && address && chainId) {
+        try {
+          await fetch('/api/gooddollar/claim/log', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              address,
+              amount: formatEntitlement(walletClaimStatus.entitlement || 0n),
+              amountWei: (walletClaimStatus.entitlement || 0n).toString(),
+              transactionHash: claimState.transactionHash,
+              chainId,
+            }),
+          });
+        } catch (logError) {
+          // Don't fail the claim if logging fails
+          console.error("Failed to log claim:", logError);
+        }
+      }
+
       // Refresh entitlement
       await checkEntitlement();
     } catch (error) {
@@ -173,30 +193,24 @@ export function UbiClaimCard() {
           !isSuccess &&
           walletClaimStatus && (
             <>
-              {/* Claimable Amount */}
-              <div className="p-4 rounded-lg bg-green/10 border border-green/20">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm text-muted-foreground">Available to Claim</p>
-                  {walletClaimStatus.status === "can_claim" && (
-                    <span className="text-xs px-2 py-1 rounded-full bg-green/20 text-green">
-                      Ready
-                    </span>
+              {/* Show Claimable Amount only when can_claim */}
+              {walletClaimStatus.status === "can_claim" && (
+                <div className="p-4 rounded-lg bg-green/10 border border-green/20">
+                  <p className="text-2xl font-bold text-green">
+                    {/* Use entitlement from walletClaimStatus if available, otherwise fallback to entitlement state */}
+                    {walletClaimStatus.entitlement && walletClaimStatus.entitlement > 0n
+                      ? parseFloat(formatEntitlement(walletClaimStatus.entitlement)).toFixed(2)
+                      : parseFloat(entitlement?.entitlementFormatted || "0").toFixed(2)} G$
+                  </p>
+                  {entitlement?.altClaimAvailable && (
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Alternative claim available
+                    </p>
                   )}
                 </div>
-                <p className="text-3xl font-bold text-green">
-                  {/* Use entitlement from walletClaimStatus if available, otherwise fallback to entitlement state */}
-                  {walletClaimStatus.entitlement && walletClaimStatus.entitlement > 0n
-                    ? formatEntitlement(walletClaimStatus.entitlement)
-                    : entitlement?.entitlementFormatted || "0"} G$
-                </p>
-                {entitlement?.altClaimAvailable && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Alternative claim available
-                  </p>
-                )}
-              </div>
+              )}
 
-              {/* Status Information */}
+              {/* Show Next Claim Time only when already_claimed */}
               {walletClaimStatus.status === "already_claimed" && nextClaimTime && (
                 <div className="p-4 rounded-lg bg-muted/30 border border-white/10">
                   <div className="flex items-center gap-2 mb-2">

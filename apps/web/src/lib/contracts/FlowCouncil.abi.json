@@ -1,0 +1,85 @@
+[
+  {
+    "inputs": [
+      {
+        "components": [
+          { "internalType": "address", "name": "recipient", "type": "address" },
+          { "internalType": "uint96", "name": "amount", "type": "uint96" }
+        ],
+        "internalType": "struct Vote[]",
+        "name": "_votes",
+        "type": "tuple[]"
+      }
+    ],
+    "name": "vote",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "_account", "type": "address" }
+    ],
+    "name": "getVoter",
+    "outputs": [
+      {
+        "components": [
+          { "internalType": "address", "name": "account", "type": "address" },
+          { "internalType": "uint96", "name": "votingPower", "type": "uint96" },
+          {
+            "components": [
+              { "internalType": "uint160", "name": "recipientId", "type": "uint160" },
+              { "internalType": "uint96", "name": "amount", "type": "uint96" }
+            ],
+            "internalType": "struct CurrentVote[]",
+            "name": "votes",
+            "type": "tuple[]"
+          }
+        ],
+        "internalType": "struct Voter",
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "_account", "type": "address" }
+    ],
+    "name": "getVotes",
+    "outputs": [
+      {
+        "components": [
+          { "internalType": "address", "name": "recipient", "type": "address" },
+          { "internalType": "uint96", "name": "amount", "type": "uint96" }
+        ],
+        "internalType": "struct Vote[]",
+        "name": "",
+        "type": "tuple[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "_account", "type": "address" }
+    ],
+    "name": "getRecipient",
+    "outputs": [
+      {
+        "components": [
+          { "internalType": "address", "name": "account", "type": "address" },
+          { "internalType": "uint96", "name": "votes", "type": "uint96" }
+        ],
+        "internalType": "struct Recipient",
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
+]

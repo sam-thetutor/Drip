@@ -2,5 +2,6 @@
   "DripProxyModule#DripCoreProxy": "0x19a05b5bCD18A2A14c620F86356C44ecD5946203",
   "DripProxyModule#DripCoreImplementation": "0xf3d26607342213Bf894f9146D08D0dfe4aAf6C5b",
   "DripProxyModule#ProxyAdmin": "0x97b3cCcFe554F0422a127Ab392cF98Ea0d44AffB",
-  "DripProxyModule#SubscriptionManager": "0x3b247FACa2E9DF6c3e9660705176A841933Ae695"
+  "DripProxyModule#SubscriptionManager": "0x3b247FACa2E9DF6c3e9660705176A841933Ae695",
+  "DripStakingModule#DripStaking": "0x408291B40ca2a92B26c86210c60fA97fab8CCf07"
 }

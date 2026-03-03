@@ -54,7 +54,7 @@ export function IdentityStatus() {
         <div className="flex items-center justify-between">
           <div>
             <CardTitle>Identity Status</CardTitle>
-            <CardDescription>Your Good Dollar identity verification status</CardDescription>
+            <CardDescription>Your identity verification status</CardDescription>
           </div>
           <Button
             variant="ghost"

@@ -79,6 +79,8 @@ export const CONTRACT_ADDRESSES = {
   [CELO_MAINNET_ID]: {
     DripCore: "0x19a05b5bCD18A2A14c620F86356C44ecD5946203" as `0x${string}`,
     SubscriptionManager: "0x3b247FACa2E9DF6c3e9660705176A841933Ae695" as `0x${string}`,
+    DripStaking: "0x8deF81b277590Be389bB4B3b7137c8554F93992a" as `0x${string}`,
+    DripCoreSuperfluid: "0x5530975fDe062FE6706298fF3945E3d1a17A310a" as `0x${string}`, // Main proxy upgraded with Superfluid
   },
   [CELO_SEPOLIA_ID]: {
     DripCore: "0xfAaB5005f7844eC5499cF258F52dE29EDc74aa31" as `0x${string}`,
@@ -122,15 +124,14 @@ export function getEngagementRewardsAddress(
  */
 export function getContractAddress(
   chainId: number,
-  contractName: "DripCore" | "SubscriptionManager"
+  contractName: "DripCore" | "SubscriptionManager" | "DripStaking" | "DripCoreSuperfluid"
 ): `0x${string}` | null {
   const addresses = CONTRACT_ADDRESSES[chainId as keyof typeof CONTRACT_ADDRESSES];
   if (!addresses) return null;
-  
-  const address = addresses[contractName];
-  // Check if address is zero (not deployed)
-  if (address === "0x0000000000000000000000000000000000000000") return null;
-  
+
+  const address = (addresses as Record<string, `0x${string}`>)[contractName];
+  if (!address || address === "0x0000000000000000000000000000000000000000") return null;
+
   return address;
 }
 

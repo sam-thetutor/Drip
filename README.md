@@ -353,3 +353,31 @@ Drip is an open-source project. Contributions are welcome! Please see our develo
 
 
 
+
+
+@sirpy @DeMewlingOak, I am integrating the engaements pool into my app. 
+
+I succeessfully registered on the development link and approved my app contract. however, when i try to call the engagement pool ocntract from my registered contract, I get unkown error. 
+
+I am using an address already verified on the good dollar identity. Here is my implementation. Am I missing out on anything?
+https://github.com/sam-thetutor/Drip/blob/main/apps/contracts/contracts/DripCore.sol
+
+
+Can you share:
+1. the exact error you are getting
+2. the deployed address of your contract (preferably verified)
+3. the contract addresses you are using for engagement rewards + identity and any other G$ contracts you are using
+
+
+Deploy contract address of my project: 0x5530975fDe062FE6706298fF3945E3d1a17A310a
+
+verified user address trying to claim: 
+0x85A4b09fb0788f1C549a68dC2EdAe3F97aeb5Dd7
+
+good dollar contract asddress(engagement rewards dev): 0xb44fC3A592aDaA257AECe1Ae8956019EA53d0465
+
+
+
+
+
+

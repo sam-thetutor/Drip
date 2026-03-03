@@ -17,6 +17,21 @@ const nextConfig = {
   },
   webpack: (config) => {
     config.externals.push('pino-pretty', 'lokijs', 'encoding')
+
+    // Handle better-sqlite3 for Next.js
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      fs: false,
+      net: false,
+      tls: false,
+    };
+
+    // Metamask SDK pulls in RN async storage; not needed for web builds
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      "@react-native-async-storage/async-storage": false,
+    };
+    
     return config
   },
 };

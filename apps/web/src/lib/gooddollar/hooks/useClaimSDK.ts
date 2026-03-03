@@ -184,6 +184,16 @@ export function useClaimSDK() {
       console.log("getWalletClaimStatus result:", status);
       
       setWalletClaimStatus(status);
+
+      if (status?.nextClaimTime) {
+        const nextTime =
+          status.nextClaimTime instanceof Date
+            ? status.nextClaimTime
+            : new Date(status.nextClaimTime as unknown as string);
+        if (!Number.isNaN(nextTime.getTime())) {
+          setNextClaimTime(nextTime);
+        }
+      }
       
       // IMPORTANT: Use entitlement from walletClaimStatus if it's available
       // This is the authoritative source for claimable amount
@@ -204,22 +214,6 @@ export function useClaimSDK() {
       return status;
     } catch (error) {
       console.error("Failed to get wallet claim status:", error);
-      return null;
-    }
-  }, [claimSDK]);
-
-  // Get next claim time
-  const getNextClaimTime = useCallback(async () => {
-    if (!claimSDK) {
-      return null;
-    }
-
-    try {
-      const time = await claimSDK.nextClaimTime();
-      setNextClaimTime(time);
-      return time;
-    } catch (error) {
-      console.error("Failed to get next claim time:", error);
       return null;
     }
   }, [claimSDK]);
@@ -252,7 +246,7 @@ export function useClaimSDK() {
         });
 
         // Refresh entitlement and status after successful claim
-        await Promise.all([checkEntitlement(), getWalletClaimStatus(), getNextClaimTime()]);
+        await Promise.all([checkEntitlement(), getWalletClaimStatus()]);
 
         return receipt;
       } catch (error) {
@@ -265,7 +259,7 @@ export function useClaimSDK() {
         throw error;
       }
     },
-    [claimSDK, checkEntitlement, getWalletClaimStatus, getNextClaimTime]
+    [claimSDK, checkEntitlement, getWalletClaimStatus]
   );
 
   // Auto-check entitlement when SDK is ready
@@ -273,13 +267,14 @@ export function useClaimSDK() {
   useEffect(() => {
     if (claimSDK && !isInitializing) {
       // Call getWalletClaimStatus first - it will update entitlement
-      getWalletClaimStatus().then(() => {
-        // Then call checkEntitlement as a fallback/verification
-        checkEntitlement();
-        getNextClaimTime();
+      getWalletClaimStatus().then((status) => {
+        if (!status || !("entitlement" in status)) {
+          // Fallback check if status missing entitlement
+          checkEntitlement();
+        }
       });
     }
-  }, [claimSDK, isInitializing, checkEntitlement, getWalletClaimStatus, getNextClaimTime]);
+  }, [claimSDK, isInitializing, checkEntitlement, getWalletClaimStatus]);
 
   return {
     // SDK instance
@@ -296,7 +291,6 @@ export function useClaimSDK() {
 
     // Next claim time
     nextClaimTime,
-    getNextClaimTime,
 
     // Claim transaction
     claim,
@@ -310,4 +304,3 @@ export function useClaimSDK() {
     isWhitelisted: identityStatus.isWhitelisted,
   };
 }
-
