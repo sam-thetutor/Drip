@@ -1,0 +1,22 @@
+# Test files
+tests/
+**/*.test.ts
+**/*.test.js
+**/*.spec.ts
+**/*.spec.js
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Cache and build artifacts
+.turbo/
+.cache/
+cache/
+artifacts/

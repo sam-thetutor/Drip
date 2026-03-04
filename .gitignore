@@ -100,3 +100,6 @@ Thumbs.db
 .turbo
 .vercel
 .env*.local
+
+# Test files and utilities
+tests/
