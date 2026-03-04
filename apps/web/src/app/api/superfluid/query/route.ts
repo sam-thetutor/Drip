@@ -11,6 +11,28 @@ const publicClient = createPublicClient({
   transport: http()
 });
 
+// Type definitions for contract return values
+type StreamInfo = {
+  streamId: bigint;
+  sender: `0x${string}`;
+  recipients: readonly `0x${string}`[];
+  token: `0x${string}`;
+  deposit: bigint;
+  startTime: bigint;
+  endTime: bigint;
+  status: number;
+  rateLockUntil: bigint;
+  title: string;
+  description: string;
+};
+
+type RecipientInfo = {
+  ratePerSecond: bigint;
+  totalWithdrawn: bigint;
+  lastWithdrawTime: bigint;
+  currentAccrued: bigint;
+};
+
 export async function POST(request: NextRequest) {
   try {
     const { streamId, recipient } = await request.json();
@@ -28,28 +50,25 @@ export async function POST(request: NextRequest) {
       abi: SUPERFLUID_GDA_ABI,
       functionName: 'getStream',
       args: [BigInt(streamId)],
-    });
+    }) as unknown as StreamInfo;
 
     const recipientInfo = await publicClient.readContract({
       address: DRIP_CONTRACT,
       abi: SUPERFLUID_GDA_ABI,
       functionName: 'getRecipientInfo',
       args: [BigInt(streamId), recipient as `0x${string}`],
-    });
+    }) as unknown as RecipientInfo;
 
     const claimableBalance = await publicClient.readContract({
       address: DRIP_CONTRACT,
       abi: SUPERFLUID_GDA_ABI,
       functionName: 'getRecipientBalance',
       args: [BigInt(streamId), recipient as `0x${string}`],
-    });
+    }) as bigint;
 
-    const [title, sender, deposit, startTime, endTime, status, recipients] = streamInfo as [
-      string, string, bigint, bigint, bigint, number, string[]
-    ];
-    const [ratePerSecond, totalWithdrawn, lastWithdrawTime, currentAccrued] = recipientInfo as [
-      bigint, bigint, bigint, bigint
-    ];
+    // Extract stream data from object (contract returns struct, not tuple)
+    const { title, sender, deposit, startTime, endTime, status, recipients } = streamInfo;
+    const { ratePerSecond, totalWithdrawn, lastWithdrawTime, currentAccrued } = recipientInfo;
 
     // Calculate rates and projections
     const now = BigInt(Math.floor(Date.now() / 1000));
