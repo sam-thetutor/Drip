@@ -4422,6 +4422,498 @@
           ]
         }
       }
+    },
+    "02a79cd9bfa4af108954484a8e96ac321924654e6be16b29b46358a5384cf280": {
+      "address": "0x6041BEA80FC86A3Ab312e9eAa0a65a9f2B58542C",
+      "txHash": "0xa10d315f2fc8ea5080987c1253b76de6c4ce823fcd2fa203c1e74884781b192b",
+      "layout": {
+        "solcVersion": "0.8.24",
+        "storage": [
+          {
+            "label": "_streamIdCounter",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_uint256",
+            "contract": "DripCoreV3",
+            "src": "contracts/DripCoreV3.sol:87"
+          },
+          {
+            "label": "_streams",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_mapping(t_uint256,t_struct(Stream)4353_storage)",
+            "contract": "DripCoreV3",
+            "src": "contracts/DripCoreV3.sol:88"
+          },
+          {
+            "label": "_streamRuntime",
+            "offset": 0,
+            "slot": "2",
+            "type": "t_mapping(t_uint256,t_struct(StreamRuntime)846_storage)",
+            "contract": "DripCoreV3",
+            "src": "contracts/DripCoreV3.sol:90"
+          },
+          {
+            "label": "_isRecipientInStream",
+            "offset": 0,
+            "slot": "3",
+            "type": "t_mapping(t_uint256,t_mapping(t_address,t_bool))",
+            "contract": "DripCoreV3",
+            "src": "contracts/DripCoreV3.sol:91"
+          },
+          {
+            "label": "_recipientRates",
+            "offset": 0,
+            "slot": "4",
+            "type": "t_mapping(t_uint256,t_mapping(t_address,t_uint256))",
+            "contract": "DripCoreV3",
+            "src": "contracts/DripCoreV3.sol:92"
+          },
+          {
+            "label": "_recipientTotalWithdrawn",
+            "offset": 0,
+            "slot": "5",
+            "type": "t_mapping(t_uint256,t_mapping(t_address,t_uint256))",
+            "contract": "DripCoreV3",
+            "src": "contracts/DripCoreV3.sol:94"
+          },
+          {
+            "label": "_recipientLastWithdraw",
+            "offset": 0,
+            "slot": "6",
+            "type": "t_mapping(t_uint256,t_mapping(t_address,t_uint256))",
+            "contract": "DripCoreV3",
+            "src": "contracts/DripCoreV3.sol:97"
+          },
+          {
+            "label": "_senderStreams",
+            "offset": 0,
+            "slot": "7",
+            "type": "t_mapping(t_address,t_array(t_uint256)dyn_storage)",
+            "contract": "DripCoreV3",
+            "src": "contracts/DripCoreV3.sol:98"
+          },
+          {
+            "label": "_recipientStreams",
+            "offset": 0,
+            "slot": "8",
+            "type": "t_mapping(t_address,t_array(t_uint256)dyn_storage)",
+            "contract": "DripCoreV3",
+            "src": "contracts/DripCoreV3.sol:99"
+          },
+          {
+            "label": "platformFeeBps",
+            "offset": 0,
+            "slot": "9",
+            "type": "t_uint256",
+            "contract": "DripCoreV3",
+            "src": "contracts/DripCoreV3.sol:102"
+          },
+          {
+            "label": "platformFeeRecipient",
+            "offset": 0,
+            "slot": "10",
+            "type": "t_address",
+            "contract": "DripCoreV3",
+            "src": "contracts/DripCoreV3.sol:102"
+          },
+          {
+            "label": "superToken",
+            "offset": 0,
+            "slot": "11",
+            "type": "t_contract(ISuperToken)781",
+            "contract": "DripCoreV3",
+            "src": "contracts/DripCoreV3.sol:103"
+          },
+          {
+            "label": "gdaForwarder",
+            "offset": 0,
+            "slot": "12",
+            "type": "t_contract(IGDAv1Forwarder)813",
+            "contract": "DripCoreV3",
+            "src": "contracts/DripCoreV3.sol:103"
+          },
+          {
+            "label": "engagementRewards",
+            "offset": 0,
+            "slot": "13",
+            "type": "t_address",
+            "contract": "DripCoreV3",
+            "src": "contracts/DripCoreV3.sol:104"
+          },
+          {
+            "label": "engagementRewardsEnabled",
+            "offset": 20,
+            "slot": "13",
+            "type": "t_bool",
+            "contract": "DripCoreV3",
+            "src": "contracts/DripCoreV3.sol:107"
+          },
+          {
+            "label": "userInviter",
+            "offset": 0,
+            "slot": "14",
+            "type": "t_mapping(t_address,t_address)",
+            "contract": "DripCoreV3",
+            "src": "contracts/DripCoreV3.sol:107"
+          },
+          {
+            "label": "stakingToken",
+            "offset": 0,
+            "slot": "15",
+            "type": "t_contract(IERC20)715",
+            "contract": "DripCoreV3",
+            "src": "contracts/DripCoreV3.sol:149"
+          },
+          {
+            "label": "stakers",
+            "offset": 0,
+            "slot": "16",
+            "type": "t_mapping(t_address,t_struct(StakerInfo)921_storage)",
+            "contract": "DripCoreV3",
+            "src": "contracts/DripCoreV3.sol:149"
+          },
+          {
+            "label": "totalStaked",
+            "offset": 0,
+            "slot": "17",
+            "type": "t_uint256",
+            "contract": "DripCoreV3",
+            "src": "contracts/DripCoreV3.sol:150"
+          },
+          {
+            "label": "totalPointsIssued",
+            "offset": 0,
+            "slot": "18",
+            "type": "t_uint256",
+            "contract": "DripCoreV3",
+            "src": "contracts/DripCoreV3.sol:151"
+          },
+          {
+            "label": "__gap",
+            "offset": 0,
+            "slot": "19",
+            "type": "t_array(t_uint256)48_storage",
+            "contract": "DripCoreV3",
+            "src": "contracts/DripCoreV3.sol:152"
+          }
+        ],
+        "types": {
+          "t_address": {
+            "label": "address",
+            "numberOfBytes": "20"
+          },
+          "t_bool": {
+            "label": "bool",
+            "numberOfBytes": "1"
+          },
+          "t_struct(InitializableStorage)73_storage": {
+            "label": "struct Initializable.InitializableStorage",
+            "members": [
+              {
+                "label": "_initialized",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "_initializing",
+                "type": "t_bool",
+                "offset": 8,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(OwnableStorage)13_storage": {
+            "label": "struct OwnableUpgradeable.OwnableStorage",
+            "members": [
+              {
+                "label": "_owner",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(ReentrancyGuardStorage)163_storage": {
+            "label": "struct ReentrancyGuardUpgradeable.ReentrancyGuardStorage",
+            "members": [
+              {
+                "label": "_status",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_uint256": {
+            "label": "uint256",
+            "numberOfBytes": "32"
+          },
+          "t_uint64": {
+            "label": "uint64",
+            "numberOfBytes": "8"
+          },
+          "t_array(t_address)dyn_storage": {
+            "label": "address[]",
+            "numberOfBytes": "32"
+          },
+          "t_array(t_uint256)48_storage": {
+            "label": "uint256[48]",
+            "numberOfBytes": "1536"
+          },
+          "t_array(t_uint256)dyn_storage": {
+            "label": "uint256[]",
+            "numberOfBytes": "32"
+          },
+          "t_contract(IERC20)715": {
+            "label": "contract IERC20",
+            "numberOfBytes": "20"
+          },
+          "t_contract(IGDAv1Forwarder)813": {
+            "label": "contract IGDAv1Forwarder",
+            "numberOfBytes": "20"
+          },
+          "t_contract(ISuperToken)781": {
+            "label": "contract ISuperToken",
+            "numberOfBytes": "20"
+          },
+          "t_contract(ISuperfluidPool)753": {
+            "label": "contract ISuperfluidPool",
+            "numberOfBytes": "20"
+          },
+          "t_enum(StreamStatus)4327": {
+            "label": "enum IDrip.StreamStatus",
+            "members": [
+              "Pending",
+              "Active",
+              "Paused",
+              "Cancelled",
+              "Completed"
+            ],
+            "numberOfBytes": "1"
+          },
+          "t_int96": {
+            "label": "int96",
+            "numberOfBytes": "12"
+          },
+          "t_mapping(t_address,t_address)": {
+            "label": "mapping(address => address)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_array(t_uint256)dyn_storage)": {
+            "label": "mapping(address => uint256[])",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_bool)": {
+            "label": "mapping(address => bool)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_struct(StakerInfo)921_storage)": {
+            "label": "mapping(address => struct DripCoreV3.StakerInfo)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_uint256)": {
+            "label": "mapping(address => uint256)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_mapping(t_address,t_bool))": {
+            "label": "mapping(uint256 => mapping(address => bool))",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_mapping(t_address,t_uint256))": {
+            "label": "mapping(uint256 => mapping(address => uint256))",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_struct(Stream)4353_storage)": {
+            "label": "mapping(uint256 => struct IDrip.Stream)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_struct(StreamRuntime)846_storage)": {
+            "label": "mapping(uint256 => struct DripCoreV3.StreamRuntime)",
+            "numberOfBytes": "32"
+          },
+          "t_string_storage": {
+            "label": "string",
+            "numberOfBytes": "32"
+          },
+          "t_struct(StakerInfo)921_storage": {
+            "label": "struct DripCoreV3.StakerInfo",
+            "members": [
+              {
+                "label": "stakedAmount",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "snapshotPoints",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "lastUpdateTime",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "2"
+              }
+            ],
+            "numberOfBytes": "96"
+          },
+          "t_struct(Stream)4353_storage": {
+            "label": "struct IDrip.Stream",
+            "members": [
+              {
+                "label": "streamId",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "sender",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "recipients",
+                "type": "t_array(t_address)dyn_storage",
+                "offset": 0,
+                "slot": "2"
+              },
+              {
+                "label": "token",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "3"
+              },
+              {
+                "label": "deposit",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "4"
+              },
+              {
+                "label": "startTime",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "5"
+              },
+              {
+                "label": "endTime",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "6"
+              },
+              {
+                "label": "status",
+                "type": "t_enum(StreamStatus)4327",
+                "offset": 0,
+                "slot": "7"
+              },
+              {
+                "label": "rateLockUntil",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "8"
+              },
+              {
+                "label": "title",
+                "type": "t_string_storage",
+                "offset": 0,
+                "slot": "9"
+              },
+              {
+                "label": "description",
+                "type": "t_string_storage",
+                "offset": 0,
+                "slot": "10"
+              }
+            ],
+            "numberOfBytes": "352"
+          },
+          "t_struct(StreamRuntime)846_storage": {
+            "label": "struct DripCoreV3.StreamRuntime",
+            "members": [
+              {
+                "label": "pool",
+                "type": "t_contract(ISuperfluidPool)753",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "totalFlowRate",
+                "type": "t_int96",
+                "offset": 20,
+                "slot": "0"
+              },
+              {
+                "label": "remainingBudget",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "totalDistributedAccounting",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "2"
+              },
+              {
+                "label": "lastAccountingTimestamp",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "3"
+              }
+            ],
+            "numberOfBytes": "128"
+          }
+        },
+        "namespaces": {
+          "erc7201:openzeppelin.storage.Ownable": [
+            {
+              "contract": "OwnableUpgradeable",
+              "label": "_owner",
+              "type": "t_address",
+              "src": "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol:24",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.ReentrancyGuard": [
+            {
+              "contract": "ReentrancyGuardUpgradeable",
+              "label": "_status",
+              "type": "t_uint256",
+              "src": "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol:43",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Initializable": [
+            {
+              "contract": "Initializable",
+              "label": "_initialized",
+              "type": "t_uint64",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:69",
+              "offset": 0,
+              "slot": "0"
+            },
+            {
+              "contract": "Initializable",
+              "label": "_initializing",
+              "type": "t_bool",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:73",
+              "offset": 8,
+              "slot": "0"
+            }
+          ]
+        }
+      }
     }
   }
 }

@@ -3,7 +3,7 @@
 import { useRef, useEffect } from "react";
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { parseEther, formatEther, erc20Abi, maxUint256 } from "viem";
-import { DRIP_STAKING_V2_ABI } from "../abis";
+import { DRIP_CORE_V3_ABI } from "../abis";
 import { getContractAddress } from "../config";
 
 // ─────────────────────────────────────────────────────────────────
@@ -30,11 +30,11 @@ export function useStakingV2() {
   const { isLoading: isCheckpointConfirming, isSuccess: isCheckpointConfirmed } = useWaitForTransactionReceipt({ hash: checkpointHash });
   const { isLoading: isApproveConfirming,    isSuccess: isApproveConfirmed }    = useWaitForTransactionReceipt({ hash: approveHash });
 
-  // ── Read: token address ──────────────────────────────────────
+  // ── Read: staking token address ──────────────────────────────
   const { data: tokenAddress } = useReadContract({
     address: stakingAddress,
-    abi: DRIP_STAKING_V2_ABI,
-    functionName: "token",
+    abi: DRIP_CORE_V3_ABI,
+    functionName: "stakingToken",
     query: { enabled: !!stakingAddress },
   });
 
@@ -59,7 +59,7 @@ export function useStakingV2() {
   // ── Read: full staker info ───────────────────────────────────
   const { data: stakerInfo, refetch: refetchStakerInfo } = useReadContract({
     address: stakingAddress,
-    abi: DRIP_STAKING_V2_ABI,
+    abi: DRIP_CORE_V3_ABI,
     functionName: "getStakerInfo",
     args: address ? [address] : undefined,
     query: { enabled: !!address && !!stakingAddress, refetchInterval: 3000 },
@@ -68,7 +68,7 @@ export function useStakingV2() {
   // ── Read: live points ───────────────────────────────────────
   const { data: livePoints, refetch: refetchPoints } = useReadContract({
     address: stakingAddress,
-    abi: DRIP_STAKING_V2_ABI,
+    abi: DRIP_CORE_V3_ABI,
     functionName: "getPoints",
     args: address ? [address] : undefined,
     query: {
@@ -80,14 +80,14 @@ export function useStakingV2() {
   // ── Read: global stats ───────────────────────────────────────
   const { data: totalStaked,       refetch: refetchTotalStaked }  = useReadContract({
     address: stakingAddress,
-    abi: DRIP_STAKING_V2_ABI,
+    abi: DRIP_CORE_V3_ABI,
     functionName: "totalStaked",
     query: { enabled: !!stakingAddress, refetchInterval: 5000 },
   });
 
   const { data: totalPointsIssued, refetch: refetchTotalPoints }  = useReadContract({
     address: stakingAddress,
-    abi: DRIP_STAKING_V2_ABI,
+    abi: DRIP_CORE_V3_ABI,
     functionName: "totalPointsIssued",
     query: { enabled: !!stakingAddress, refetchInterval: 5000 },
   });
@@ -132,7 +132,7 @@ export function useStakingV2() {
         pendingStakeRef.current = null;
         writeStake({
           address: stakingAddress,
-          abi: DRIP_STAKING_V2_ABI,
+          abi: DRIP_CORE_V3_ABI,
           functionName: "stake",
           args: [pending],
         });
@@ -154,7 +154,7 @@ export function useStakingV2() {
 
     writeStake({
       address: stakingAddress,
-      abi: DRIP_STAKING_V2_ABI,
+      abi: DRIP_CORE_V3_ABI,
       functionName: "stake",
       args: [amountBigInt],
     });
@@ -164,7 +164,7 @@ export function useStakingV2() {
     if (!stakingAddress) return;
     writeUnstake({
       address: stakingAddress,
-      abi: DRIP_STAKING_V2_ABI,
+      abi: DRIP_CORE_V3_ABI,
       functionName: "unstake",
       args: [parseEther(amount)],
     });
@@ -174,7 +174,7 @@ export function useStakingV2() {
     if (!stakingAddress) return;
     writeCheckpoint({
       address: stakingAddress,
-      abi: DRIP_STAKING_V2_ABI,
+      abi: DRIP_CORE_V3_ABI,
       functionName: "checkpointPoints",
     });
   };

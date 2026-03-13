@@ -80,8 +80,8 @@ export const CONTRACT_ADDRESSES = {
     DripCore: "0x19a05b5bCD18A2A14c620F86356C44ecD5946203" as `0x${string}`,
     SubscriptionManager: "0x3b247FACa2E9DF6c3e9660705176A841933Ae695" as `0x${string}`,
     DripStaking: "0x8deF81b277590Be389bB4B3b7137c8554F93992a" as `0x${string}`,
-    DripCoreSuperfluid: "0x5530975fDe062FE6706298fF3945E3d1a17A310a" as `0x${string}`, // Main proxy upgraded with Superfluid
-    DripStakingV2: "0x391bb285637e99a93ccAa8F4B5be8e5587102D89" as `0x${string}`,
+    DripCoreSuperfluid: "0x5530975fDe062FE6706298fF3945E3d1a17A310a" as `0x${string}`, // DripCoreV3 — streaming + staking merged
+    DripStakingV2: "0x5530975fDe062FE6706298fF3945E3d1a17A310a" as `0x${string}`, // same proxy — staking now lives here
   },
   [CELO_SEPOLIA_ID]: {
     DripCore: "0xfAaB5005f7844eC5499cF258F52dE29EDc74aa31" as `0x${string}`,
