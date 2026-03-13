@@ -1,20 +1,20 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useAccount, useBalance, useChainId } from "wagmi";
 import { formatEther, parseEther } from "viem";
-import { TrendingUp, Lock, Coins, ArrowUpRight, Zap, Shield, Award } from "lucide-react";
+import { TrendingUp, Lock, Coins, ArrowUpRight, Star, Shield, Award } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useStaking } from "@/lib/contracts/hooks/useStaking";
+import { useStakingV2 } from "@/lib/contracts/hooks/useStakingV2";
 import { getTokenAddressBySymbol } from "@/lib/tokens/config";
 
 export default function StakePage() {
-  const { address, isConnected } = useAccount();
+  const { address } = useAccount();
   const chainId = useChainId();
-  const staking = useStaking();
+  const staking = useStakingV2();
   const [amount, setAmount] = useState("");
   const [activeTab, setActiveTab] = useState<"stake" | "unstake">("stake");
 
@@ -22,67 +22,63 @@ export default function StakePage() {
   const { data: gdBalance } = useBalance({
     address: address as `0x${string}` | undefined,
     token: goodDollarAddress,
-    query: {
-      enabled: !!address && !!goodDollarAddress,
-    },
+    query: { enabled: !!address && !!goodDollarAddress },
   });
 
-  const gdFormatted = gdBalance
-    ? formatEther(gdBalance.value)
-    : "0.00";
+  const gdFormatted = gdBalance ? formatEther(gdBalance.value) : "0.00";
 
   const setPresetAmount = (percentage: number) => {
     if (activeTab === "stake" && gdBalance) {
-      const preset = (gdBalance.value * BigInt(percentage)) / 100n;
-      setAmount(formatEther(preset));
+      setAmount(formatEther((gdBalance.value * BigInt(percentage)) / 100n));
     } else if (activeTab === "unstake") {
-      const preset = (staking.stakedAmount * BigInt(percentage)) / 100n;
-      setAmount(formatEther(preset));
+      setAmount(formatEther((staking.stakedAmount * BigInt(percentage)) / 100n));
     }
   };
 
   const handleAction = () => {
     if (!amount) return;
     if (activeTab === "stake") {
-      staking.stake(amount);
+      staking.stakeTokens(amount);
     } else {
-      staking.unstake(amount);
+      staking.unstakeTokens(amount);
     }
     setAmount("");
   };
 
-  const poolSharePercentage = (staking.totalStaked as bigint) > 0n
-    ? (Number(staking.stakedAmount) / Number(staking.totalStaked as bigint)) * 100
-    : 0;
+  const poolSharePct =
+    staking.totalStaked > 0n
+      ? (Number(staking.stakedAmount) / Number(staking.totalStaked)) * 100
+      : 0;
 
-  const isProcessing = 
-    staking.isStakePending || 
-    staking.isStakeConfirming || 
-    staking.isUnstakePending || 
+  const isProcessing =
+    staking.isStakePending ||
+    staking.isStakeConfirming ||
+    staking.isUnstakePending ||
     staking.isUnstakeConfirming ||
     staking.isApprovePending;
+
+  const needsApproval = staking.needsApproval(amount || "0");
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-background via-background to-green/5">
       <div className="container mx-auto px-4 py-8 max-w-6xl">
-        {/* Hero Section */}
+        {/* Hero — live points counter */}
         <div className="text-center mb-12 relative">
           <div className="absolute inset-0 bg-gradient-to-r from-green/20 via-cyan/20 to-green/20 blur-3xl opacity-30 -z-10" />
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-green/10 border border-green/20 mb-4">
             <div className="w-2 h-2 rounded-full bg-green animate-pulse" />
-            <span className="text-xs font-medium text-green">Live Staking</span>
+            <span className="text-xs font-medium text-green">Live Points</span>
           </div>
-          
-          <h1 className="text-5xl md:text-6xl font-bold mb-4 bg-gradient-to-r from-green via-cyan-400 to-green bg-clip-text text-transparent animate-gradient">
-            {staking.apy.toFixed(2)}% APY
+
+          <h1 className="text-5xl md:text-6xl font-bold mb-3 bg-gradient-to-r from-green via-cyan-400 to-green bg-clip-text text-transparent animate-gradient font-mono tabular-nums">
+            {Number(staking.pointsDisplay).toLocaleString()}
           </h1>
-          
-          <p className="text-foreground/60 text-lg mb-2">
-            Stake G$ tokens and earn continuous rewards
-          </p>
-          <p className="text-sm text-foreground/40">
-            Powered by Superfluid • Real-time streaming rewards
-          </p>
+          <p className="text-foreground/60 text-lg mb-1">Points earned so far</p>
+          {staking.stakedAmount > 0n && (
+            <p className="text-sm text-foreground/40">
+              +{Math.floor(staking.pointsPerDay).toLocaleString()} pts / day at current stake
+            </p>
+          )}
         </div>
 
         {/* Main Content - Dual Panel */}
@@ -98,129 +94,66 @@ export default function StakePage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Staked Amount */}
                 <div className="text-center py-6">
                   <p className="text-sm text-foreground/50 mb-2">Staked Balance</p>
                   <p className="text-4xl font-bold text-white mb-1">
-                    {parseFloat(formatEther(staking.stakedAmount)).toFixed(4)}
+                    {parseFloat(staking.stakedDisplay).toFixed(2)}
                   </p>
                   <p className="text-sm text-foreground/60">G$ Tokens</p>
                 </div>
 
-                {/* Pool Share Circle */}
                 <div className="relative w-48 h-48 mx-auto">
                   <svg className="transform -rotate-90 w-48 h-48">
+                    <circle cx="96" cy="96" r="88" stroke="currentColor" strokeWidth="8" fill="none" className="text-white/5" />
                     <circle
-                      cx="96"
-                      cy="96"
-                      r="88"
-                      stroke="currentColor"
-                      strokeWidth="8"
-                      fill="none"
-                      className="text-white/5"
-                    />
-                    <circle
-                      cx="96"
-                      cy="96"
-                      r="88"
-                      stroke="currentColor"
-                      strokeWidth="8"
-                      fill="none"
+                      cx="96" cy="96" r="88"
+                      stroke="currentColor" strokeWidth="8" fill="none"
                       strokeDasharray={`${2 * Math.PI * 88}`}
-                      strokeDashoffset={`${2 * Math.PI * 88 * (1 - poolSharePercentage / 100)}`}
+                      strokeDashoffset={`${2 * Math.PI * 88 * (1 - poolSharePct / 100)}`}
                       className="text-green transition-all duration-1000"
                       strokeLinecap="round"
                     />
                   </svg>
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <p className="text-3xl font-bold text-green">
-                      {poolSharePercentage.toFixed(2)}%
-                    </p>
+                    <p className="text-3xl font-bold text-green">{poolSharePct.toFixed(2)}%</p>
                     <p className="text-xs text-foreground/50">Pool Share</p>
                   </div>
                 </div>
 
-                {/* Stats Grid */}
                 <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/10">
                   <div className="text-center">
-                    <p className="text-xs text-foreground/50 mb-1">Pool Units</p>
-                    <p className="text-lg font-semibold text-white">
-                      {staking.poolUnits.toString()}
+                    <p className="text-xs text-foreground/50 mb-1">Total Points</p>
+                    <p className="text-lg font-semibold text-green font-mono tabular-nums">
+                      {Number(staking.pointsDisplay).toLocaleString()}
                     </p>
                   </div>
                   <div className="text-center">
-                    <p className="text-xs text-foreground/50 mb-1">Claimed</p>
+                    <p className="text-xs text-foreground/50 mb-1">Pts / Day</p>
                     <p className="text-lg font-semibold text-white">
-                      {parseFloat(formatEther(staking.claimedAmount)).toFixed(4)} G$
+                      {Math.floor(staking.pointsPerDay).toLocaleString()}
                     </p>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Live Earnings Card */}
             {staking.stakedAmount > 0n && (
               <Card className="glass-card border-green/30 bg-gradient-to-br from-green/10 to-transparent">
                 <CardContent className="pt-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <Zap className="h-5 w-5 text-green animate-pulse" />
-                      <span className="text-sm font-medium text-foreground/70">
-                        {staking.isConnected ? "Streaming to Wallet" : "Claimable Rewards"}
-                      </span>
-                    </div>
-                    {!staking.isConnected && staking.claimableRewards > 0n && (
-                      <Button
-                        onClick={() => staking.claimRewards()}
-                        disabled={staking.isClaimPending || staking.isClaimConfirming}
-                        size="sm"
-                        className="bg-green hover:bg-green/90 text-black font-semibold shadow-lg shadow-green/20"
-                      >
-                        {staking.isClaimPending || staking.isClaimConfirming
-                          ? "Claiming..."
-                          : "Claim"}
-                      </Button>
-                    )}
-                    {!staking.isConnected && staking.claimableRewards === 0n && (
-                      <Button
-                        onClick={() => staking.connectToPool()}
-                        disabled={staking.isConnectPending || staking.isConnectConfirming}
-                        size="sm"
-                        className="bg-blue-500 hover:bg-blue-600 text-white font-semibold"
-                      >
-                        {staking.isConnectPending || staking.isConnectConfirming
-                          ? "Connecting..."
-                          : "Connect"}
-                      </Button>
-                    )}
+                  <div className="flex items-center gap-2 mb-4">
+                    <Star className="h-5 w-5 text-green animate-pulse" />
+                    <span className="text-sm font-medium text-foreground/70">Points Accruing</span>
                   </div>
                   <div className="text-center py-4">
                     <p className="text-3xl font-bold text-green font-mono tabular-nums">
-                      {parseFloat(formatEther(staking.claimableRewards)).toFixed(6)}
+                      {Number(staking.pointsDisplay).toLocaleString()}
                     </p>
-                    <p className="text-xs text-foreground/50 mt-1">
-                      {staking.isConnected ? "G$ Streaming Real-Time ✨" : "G$ Ready to Claim"}
-                    </p>
+                    <p className="text-xs text-foreground/50 mt-1">pts (updating live)</p>
                   </div>
-                  {staking.isConnected ? (
-                    <div className="text-xs text-center text-green pt-3 border-t border-green/20 flex items-center justify-center gap-1">
-                      <span className="inline-block w-2 h-2 bg-green rounded-full animate-pulse"></span>
-                      Rewards flowing directly to your balance
-                    </div>
-                  ) : (
-                    <div className="text-xs text-center text-foreground/40 pt-3 border-t border-green/20">
-                      +{parseFloat(formatEther((staking.rewardRate as bigint) * 86400n)).toFixed(4)} G$ per day
-                      <Button
-                        onClick={() => staking.connectToPool()}
-                        disabled={staking.isConnectPending || staking.isConnectConfirming}
-                        variant="link"
-                        size="sm"
-                        className="text-blue-400 hover:text-blue-300 h-auto p-0 ml-2"
-                      >
-                        Enable auto-streaming →
-                      </Button>
-                    </div>
-                  )}
+                  <div className="text-xs text-center text-green pt-3 border-t border-green/20 flex items-center justify-center gap-1">
+                    <span className="inline-block w-2 h-2 bg-green rounded-full animate-pulse" />
+                    Points grow every second you stake
+                  </div>
                 </CardContent>
               </Card>
             )}
@@ -299,33 +232,28 @@ export default function StakePage() {
 
                     <Button
                       onClick={handleAction}
-                      disabled={
-                        !amount ||
-                        Number(amount) <= 0 ||
-                        isProcessing
-                      }
+                      disabled={!amount || Number(amount) <= 0 || isProcessing}
                       className="w-full h-12 hero-cta-button text-lg font-semibold"
                     >
                       {staking.isApprovePending
                         ? "Approving..."
+                        : staking.isApproveConfirming
+                        ? "Approving... (staking next)"
                         : staking.isStakePending
-                        ? "Confirming..."
+                        ? "Confirm in wallet..."
                         : staking.isStakeConfirming
-                        ? "Processing..."
-                        : staking.allowance < parseEther(amount || "0")
-                        ? "Approve G$"
+                        ? "Staking..."
+                        : needsApproval
+                        ? "Approve & Stake"
                         : "Stake Now"}
                     </Button>
 
-                    {/* Info Box */}
                     <div className="p-4 rounded-lg bg-green/5 border border-green/20">
-                      <p className="text-xs text-foreground/60 mb-2">
-                        💡 When you stake:
-                      </p>
+                      <p className="text-xs text-foreground/60 mb-2">💡 When you stake:</p>
                       <ul className="text-xs text-foreground/50 space-y-1 pl-4">
-                        <li>• Rewards stream continuously in real-time</li>
-                        <li>• No lock period - unstake anytime</li>
-                        <li>• Claim your rewards whenever you want</li>
+                        <li>• Points accrue every second proportional to your stake</li>
+                        <li>• No lock period — unstake anytime</li>
+                        <li>• Points power leaderboards and future reward tiers</li>
                       </ul>
                     </div>
                   </TabsContent>
@@ -337,7 +265,7 @@ export default function StakePage() {
                           Amount to Unstake
                         </label>
                         <span className="text-xs text-foreground/50">
-                          Staked: {formatEther(staking.stakedAmount)} G$
+                          Staked: {parseFloat(staking.stakedDisplay).toFixed(2)} G$
                         </span>
                       </div>
                       
@@ -394,9 +322,9 @@ export default function StakePage() {
                         ⚠️ When you unstake:
                       </p>
                       <ul className="text-xs text-foreground/50 space-y-1 pl-4">
-                        <li>• Your rewards stop accumulating</li>
-                        <li>• Pool share decreases</li>
-                        <li>• Remember to claim pending rewards first!</li>
+                        <li>• Points stop accruing on the withdrawn amount</li>
+                        <li>• Already-earned points are permanently saved</li>
+                        <li>• Your pool share decreases</li>
                       </ul>
                     </div>
                   </TabsContent>
@@ -404,37 +332,31 @@ export default function StakePage() {
               </CardContent>
             </Card>
 
-            {/* Pool Statistics */}
+            {/* Global Stats */}
             <Card className="glass-card">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Award className="h-5 w-5 text-green" />
-                  Pool Statistics
+                  Global Stats
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex justify-between items-center pb-3 border-b border-white/10">
                   <span className="text-sm text-foreground/60">Total Staked</span>
                   <span className="text-sm font-semibold text-white">
-                    {parseFloat(formatEther(staking.totalStaked as bigint)).toFixed(2)} G$
+                    {parseFloat(staking.totalStakedDisplay).toFixed(2)} G$
                   </span>
                 </div>
                 <div className="flex justify-between items-center pb-3 border-b border-white/10">
-                  <span className="text-sm text-foreground/60">Daily Rewards</span>
-                  <span className="text-sm font-semibold text-green">
-                    {formatEther((staking.rewardFlowRate as bigint) * 86400n)} G$
-                  </span>
-                </div>
-                <div className="flex justify-between items-center pb-3 border-b border-white/10">
-                  <span className="text-sm text-foreground/60">Flow Rate</span>
-                  <span className="text-sm font-semibold text-white font-mono">
-                    {parseFloat(formatEther(staking.rewardFlowRate as bigint)).toFixed(10)} G$/sec
+                  <span className="text-sm text-foreground/60">Total Points Issued</span>
+                  <span className="text-sm font-semibold text-green font-mono">
+                    {Number(staking.totalPointsIssued).toLocaleString()}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-foreground/60">Current APY</span>
+                  <span className="text-sm text-foreground/60">Your Pool Share</span>
                   <span className="text-lg font-bold text-green">
-                    {staking.apy.toFixed(2)}%
+                    {poolSharePct.toFixed(2)}%
                   </span>
                 </div>
               </CardContent>
@@ -442,7 +364,7 @@ export default function StakePage() {
           </div>
         </div>
 
-        {/* Bottom Info Banner */}
+        {/* Footer banner */}
         <Card className="glass-card border-cyan-400/20 bg-gradient-to-r from-cyan-500/5 to-green/5">
           <CardContent className="py-6">
             <div className="flex flex-col md:flex-row items-center justify-between gap-4">
@@ -451,20 +373,15 @@ export default function StakePage() {
                   <TrendingUp className="h-6 w-6 text-green" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-white">Powered by Superfluid</h3>
+                  <h3 className="font-semibold text-white">Points-Based Staking</h3>
                   <p className="text-sm text-foreground/60">
-                    Real-time money streaming protocol on Celo
+                    Stake G$ to earn points · Points = leaderboard rank · More tiers coming
                   </p>
                 </div>
               </div>
               <Button variant="outline" className="hero-cta-outline" asChild>
-                <a 
-                  href="https://www.superfluid.finance/" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2"
-                >
-                  Learn More
+                <a href="/leaderboard" className="flex items-center gap-2">
+                  Leaderboard
                   <ArrowUpRight className="h-4 w-4" />
                 </a>
               </Button>

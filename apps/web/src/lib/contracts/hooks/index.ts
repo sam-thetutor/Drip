@@ -5,4 +5,5 @@ export * from "./useUserStreams";
 export * from "./useStreamRecipients";
 export * from "./useTreasury";
 export * from "./useSuperfluid";
+export * from "./useStakingV2";
 

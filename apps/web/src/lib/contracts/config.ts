@@ -81,6 +81,7 @@ export const CONTRACT_ADDRESSES = {
     SubscriptionManager: "0x3b247FACa2E9DF6c3e9660705176A841933Ae695" as `0x${string}`,
     DripStaking: "0x8deF81b277590Be389bB4B3b7137c8554F93992a" as `0x${string}`,
     DripCoreSuperfluid: "0x5530975fDe062FE6706298fF3945E3d1a17A310a" as `0x${string}`, // Main proxy upgraded with Superfluid
+    DripStakingV2: "0x391bb285637e99a93ccAa8F4B5be8e5587102D89" as `0x${string}`,
   },
   [CELO_SEPOLIA_ID]: {
     DripCore: "0xfAaB5005f7844eC5499cF258F52dE29EDc74aa31" as `0x${string}`,
@@ -124,7 +125,7 @@ export function getEngagementRewardsAddress(
  */
 export function getContractAddress(
   chainId: number,
-  contractName: "DripCore" | "SubscriptionManager" | "DripStaking" | "DripCoreSuperfluid"
+  contractName: "DripCore" | "SubscriptionManager" | "DripStaking" | "DripCoreSuperfluid" | "DripStakingV2"
 ): `0x${string}` | null {
   const addresses = CONTRACT_ADDRESSES[chainId as keyof typeof CONTRACT_ADDRESSES];
   if (!addresses) return null;
