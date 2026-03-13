@@ -45,6 +45,17 @@ type StreamFormData = z.infer<typeof streamSchema>;
 
 type CadenceOption = StreamFormData["cadence"];
 
+// ---------------------------------------------------------------------------
+// Test phone-to-address lookup map.
+// Replace / extend these entries to test the feature with real wallets.
+// ---------------------------------------------------------------------------
+const PHONE_ADDRESS_MAP: Record<string, `0x${string}`> = {
+  "+2348012345678": "0x1234567890123456789012345678901234567890",
+  "+2347098765432": "0xAbCdEf0123456789AbCdEf0123456789AbCdEf01",
+  "+14155552671":   "0xDeAdBeEf00000000000000000000000000000001",
+  "+447911123456":  "0xCaFeBaBe00000000000000000000000000000002",
+};
+
 export function CreateStreamForm() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
@@ -61,6 +72,11 @@ export function CreateStreamForm() {
   const [calculatedDeposit, setCalculatedDeposit] = useState<string>("0");
   const [needsApproval, setNeedsApproval] = useState<boolean>(false);
   const [approvalAmount, setApprovalAmount] = useState<string>("0");
+  // recipientInputs: raw text the user typed (address or phone)
+  const [recipientInputs, setRecipientInputs] = useState<Record<number, string>>({});
+  // resolvedFromPhone: the phone string that successfully resolved for each index
+  const [resolvedFromPhone, setResolvedFromPhone] = useState<Record<number, string | null>>({});
+  const [phoneNotFound, setPhoneNotFound] = useState<Record<number, boolean>>({});
   
   // Get inviter from URL params (for referral links)
   const inviterFromUrl = searchParams?.get("inviter") as `0x${string}` | null;
@@ -378,6 +394,49 @@ export function CreateStreamForm() {
     }
   };
 
+  const handleRecipientInput = (index: number, value: string) => {
+    setRecipientInputs((prev) => ({ ...prev, [index]: value }));
+
+    const isAddress = /^0x[a-fA-F0-9]{40}$/.test(value.trim());
+    const isPhone   = /^\+[1-9]\d{7,14}$/.test(value.trim());
+
+    if (isAddress) {
+      // Direct address paste – use it straight away
+      setValue(`recipients.${index}.address`, value.trim() as `0x${string}`, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+      setResolvedFromPhone((prev) => ({ ...prev, [index]: null }));
+      setPhoneNotFound((prev) => ({ ...prev, [index]: false }));
+      return;
+    }
+
+    if (isPhone) {
+      const mapped = PHONE_ADDRESS_MAP[value.trim()];
+      if (mapped) {
+        setValue(`recipients.${index}.address`, mapped, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+        setResolvedFromPhone((prev) => ({ ...prev, [index]: value.trim() }));
+        setPhoneNotFound((prev) => ({ ...prev, [index]: false }));
+      } else {
+        // Phone recognised as valid format but not in the map
+        setValue(`recipients.${index}.address`, "" as any, {
+          shouldDirty: true,
+          shouldValidate: false,
+        });
+        setResolvedFromPhone((prev) => ({ ...prev, [index]: null }));
+        setPhoneNotFound((prev) => ({ ...prev, [index]: true }));
+      }
+      return;
+    }
+
+    // Still typing – clear resolved state, don't touch address yet
+    setResolvedFromPhone((prev) => ({ ...prev, [index]: null }));
+    setPhoneNotFound((prev) => ({ ...prev, [index]: false }));
+  };
+
   // Watch for transaction confirmation
   useEffect(() => {
   if (isConfirmed && hash) {
@@ -535,7 +594,7 @@ export function CreateStreamForm() {
           </p>
 
           <div className="grid grid-cols-[minmax(0,2.5fr)_minmax(0,1.5fr)_auto] gap-4 text-xs text-muted-foreground px-1">
-            <span>Recipient address</span>
+            <span>Recipient address or phone number</span>
             <span>Amount per period</span>
             <span className="sr-only">Actions</span>
           </div>
@@ -545,13 +604,36 @@ export function CreateStreamForm() {
               key={field.id}
               className="grid grid-cols-[minmax(0,2.5fr)_minmax(0,1.5fr)_auto] gap-4 items-start"
             >
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <Input
                   id={`recipient-${index}`}
-                  placeholder="0x… or ENS"
-                  {...register(`recipients.${index}.address`)}
+                  placeholder="0x… wallet address or +2348… phone"
+                  value={recipientInputs[index] ?? ""}
+                  onChange={(e) => handleRecipientInput(index, e.target.value)}
                 />
-                {errors.recipients?.[index]?.address && (
+                {/* Hidden field to keep RHF in sync */}
+                <input type="hidden" {...register(`recipients.${index}.address`)} />
+
+                {/* Resolved-from-phone badge */}
+                {resolvedFromPhone[index] && (
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                    ✓ Resolved from {resolvedFromPhone[index]} →{" "}
+                    <span className="font-mono">
+                      {watch(`recipients.${index}.address`).slice(0, 6)}…
+                      {watch(`recipients.${index}.address`).slice(-4)}
+                    </span>
+                  </p>
+                )}
+
+                {/* Phone not found warning */}
+                {phoneNotFound[index] && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    ⚠ No address mapping found for this number
+                  </p>
+                )}
+
+                {/* Address validation error */}
+                {errors.recipients?.[index]?.address && !resolvedFromPhone[index] && !phoneNotFound[index] && (
                   <p className="text-sm text-destructive">
                     {errors.recipients[index]?.address?.message}
                   </p>

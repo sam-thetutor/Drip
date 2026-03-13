@@ -7,6 +7,13 @@ const nextConfig = {
   experimental: {
     // Optimize package imports
     optimizePackageImports: ['lucide-react', '@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu'],
+    // Keep these packages external so Node can resolve runtime deps used by ODIS.
+    serverComponentsExternalPackages: [
+      '@celo/identity',
+      '@celo/blind-threshold-bls',
+      '@celo/phone-number-privacy-common',
+      '@celo/poprf',
+    ],
   },
   // Compiler optimizations
   compiler: {
