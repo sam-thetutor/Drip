@@ -5,7 +5,6 @@ import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import "./interfaces/IDrip.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // ─── Superfluid interfaces (same as DripCoreSuperfluid) ────────────────────
 
@@ -87,33 +86,6 @@ contract DripCoreV3 is IDrip, Initializable, ReentrancyGuardUpgradeable, Ownable
     IGDAv1Forwarder public gdaForwarder;
     address public engagementRewards;
     bool public engagementRewardsEnabled;
-    mapping(address => address) public userInviter;
-
-    // ═══════════════════════════════════════════════════════════════
-    // STAKING — constants (not in storage)
-    // ═══════════════════════════════════════════════════════════════
-
-    /// @notice 1 token (1e18 wei) staked for 1 second = 1 point.
-    uint256 public constant POINTS_DENOMINATOR = 1e18;
-
-    // ═══════════════════════════════════════════════════════════════
-    // STAKING — structs (no storage impact)
-    // ═══════════════════════════════════════════════════════════════
-
-    struct StakerInfo {
-        uint256 stakedAmount;   // currently staked (wei)
-        uint256 snapshotPoints; // points banked up to lastUpdateTime
-        uint256 lastUpdateTime; // block.timestamp at last action
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // STAKING — storage (appended after streaming state)
-    // ═══════════════════════════════════════════════════════════════
-
-    IERC20 public stakingToken;
-    mapping(address => StakerInfo) public stakers;
-    uint256 public totalStaked;
-    uint256 public totalPointsIssued;
 
     // ═══════════════════════════════════════════════════════════════
     // PHONE MAPPING — storage (appended for upgrade safety)
@@ -134,10 +106,6 @@ contract DripCoreV3 is IDrip, Initializable, ReentrancyGuardUpgradeable, Ownable
     // ═══════════════════════════════════════════════════════════════
 
     event SuperfluidConfigUpdated(address indexed superToken, address indexed gdaForwarder);
-    event Staked(address indexed staker, uint256 amount, uint256 totalStake, uint256 totalPoints);
-    event Unstaked(address indexed staker, uint256 amount, uint256 totalStake, uint256 totalPoints);
-    event PointsCheckpointed(address indexed staker, uint256 newSnapshot);
-    event ExcessRecovered(address indexed to, uint256 amount);
     event PhoneMapped(bytes32 indexed phoneHash, address indexed user);
     event PhoneUnmapped(bytes32 indexed phoneHash, address indexed user);
     event PhoneEncryptedDataUpdated(address indexed user);
@@ -174,14 +142,6 @@ contract DripCoreV3 is IDrip, Initializable, ReentrancyGuardUpgradeable, Ownable
         platformFeeBps = 50;
         superToken = ISuperToken(_superToken);
         gdaForwarder = IGDAv1Forwarder(_gdaForwarder);
-    }
-
-    /// @notice Staking initializer — called via upgradeAndCall during the upgrade to V3.
-    ///         reinitializer(2) ensures it runs exactly once (since initialize() set version=1).
-    /// @param _token  ERC20 token accepted for staking (G$ on Celo)
-    function initializeStaking(address _token) public reinitializer(2) {
-        require(_token != address(0), "DripCoreV3: invalid staking token");
-        stakingToken = IERC20(_token);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -826,17 +786,6 @@ contract DripCoreV3 is IDrip, Initializable, ReentrancyGuardUpgradeable, Ownable
         engagementRewardsEnabled = _enabled;
     }
 
-    function setInviter(address inviter) external {
-        if (inviter == address(0) || inviter == msg.sender) return;
-        if (userInviter[msg.sender] == address(0)) {
-            userInviter[msg.sender] = inviter;
-        }
-    }
-
-    function claimEngagementReward(address, uint256, bytes calldata) external pure returns (bool) {
-        return false;
-    }
-
     function emergencyWithdrawAll(address[] calldata tokens, address payable to) external onlyOwner {
         require(to != address(0), "DripCoreV3: invalid recipient");
         for (uint256 i = 0; i < tokens.length; i++) {
@@ -850,122 +799,4 @@ contract DripCoreV3 is IDrip, Initializable, ReentrancyGuardUpgradeable, Ownable
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // STAKING — internal helpers
-    // ═══════════════════════════════════════════════════════════════
-
-    function _checkpointPoints(address staker) internal {
-        StakerInfo storage info = stakers[staker];
-        uint256 accrued = _accruedSince(info);
-        if (accrued > 0) {
-            info.snapshotPoints += accrued;
-            totalPointsIssued += accrued;
-            emit PointsCheckpointed(staker, info.snapshotPoints);
-        }
-        info.lastUpdateTime = block.timestamp;
-    }
-
-    function _accruedSince(StakerInfo storage info) internal view returns (uint256) {
-        if (info.stakedAmount == 0 || info.lastUpdateTime == 0) return 0;
-        uint256 elapsed = block.timestamp - info.lastUpdateTime;
-        return (info.stakedAmount * elapsed) / POINTS_DENOMINATOR;
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // STAKING — write functions
-    // ═══════════════════════════════════════════════════════════════
-
-    /// @notice Stake tokens to start earning points.
-    function stake(uint256 amount) external nonReentrant {
-        require(amount > 0, "DripCoreV3: amount must be > 0");
-        require(address(stakingToken) != address(0), "DripCoreV3: staking not initialized");
-
-        _checkpointPoints(msg.sender);
-        stakers[msg.sender].stakedAmount += amount;
-        totalStaked += amount;
-
-        require(stakingToken.transferFrom(msg.sender, address(this), amount), "DripCoreV3: stake transfer failed");
-
-        emit Staked(msg.sender, amount, totalStaked, stakers[msg.sender].snapshotPoints);
-    }
-
-    /// @notice Unstake tokens. Accrued points are preserved.
-    function unstake(uint256 amount) external nonReentrant {
-        require(amount > 0, "DripCoreV3: amount must be > 0");
-        require(stakers[msg.sender].stakedAmount >= amount, "DripCoreV3: insufficient stake");
-
-        _checkpointPoints(msg.sender);
-        stakers[msg.sender].stakedAmount -= amount;
-        totalStaked -= amount;
-
-        require(stakingToken.transfer(msg.sender, amount), "DripCoreV3: unstake transfer failed");
-
-        emit Unstaked(msg.sender, amount, totalStaked, stakers[msg.sender].snapshotPoints);
-    }
-
-    /// @notice Manually checkpoint points without moving tokens.
-    function checkpointPoints() external nonReentrant {
-        _checkpointPoints(msg.sender);
-    }
-
-    /// @notice Emergency full unstake — banks all points then returns entire stake.
-    function emergencyUnstake() external nonReentrant {
-        uint256 amount = stakers[msg.sender].stakedAmount;
-        require(amount > 0, "DripCoreV3: no stake");
-
-        _checkpointPoints(msg.sender);
-        stakers[msg.sender].stakedAmount = 0;
-        totalStaked -= amount;
-
-        require(stakingToken.transfer(msg.sender, amount), "DripCoreV3: emergency unstake failed");
-
-        emit Unstaked(msg.sender, amount, totalStaked, stakers[msg.sender].snapshotPoints);
-    }
-
-    /// @notice Owner can recover tokens sent to this contract that are not staking tokens or stream tokens.
-    function recoverExcess(address tokenAddr, address to) external onlyOwner {
-        require(to != address(0), "DripCoreV3: invalid recipient");
-        uint256 bal;
-        if (tokenAddr == address(stakingToken)) {
-            // Only recover tokens above the staked balance
-            bal = stakingToken.balanceOf(address(this));
-            require(bal > totalStaked, "DripCoreV3: no excess");
-            bal = bal - totalStaked;
-        } else {
-            bal = IERC20(tokenAddr).balanceOf(address(this));
-            require(bal > 0, "DripCoreV3: no balance");
-        }
-        IERC20(tokenAddr).transfer(to, bal);
-        emit ExcessRecovered(to, bal);
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // STAKING — view functions
-    // ═══════════════════════════════════════════════════════════════
-
-    /// @notice Live total points for a staker (banked + accruing since last checkpoint).
-    function getPoints(address staker) external view returns (uint256 total) {
-        StakerInfo storage info = stakers[staker];
-        return info.snapshotPoints + _accruedSince(info);
-    }
-
-    /// @notice Full staker info: (stakedAmount, totalPoints, pointsPerSecond, lastUpdateTime).
-    function getStakerInfo(address staker) external view returns (
-        uint256 stakedAmount,
-        uint256 totalPoints,
-        uint256 pointsPerSecond,
-        uint256 lastUpdateTime
-    ) {
-        StakerInfo storage info = stakers[staker];
-        stakedAmount = info.stakedAmount;
-        totalPoints = info.snapshotPoints + _accruedSince(info);
-        pointsPerSecond = info.stakedAmount / POINTS_DENOMINATOR;
-        lastUpdateTime = info.lastUpdateTime;
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // Fallback
-    // ═══════════════════════════════════════════════════════════════
-
-    receive() external payable {}
 }
