@@ -21,6 +21,23 @@ const PHONE_MAPPING_ABI = [
   },
   {
     type: "function",
+    name: "registerPhoneSecure",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "phoneHash", type: "bytes32" },
+      { name: "encryptedPhoneData", type: "bytes" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "updateEncryptedPhoneData",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "encryptedPhoneData", type: "bytes" }],
+    outputs: [],
+  },
+  {
+    type: "function",
     name: "unregisterPhone",
     stateMutability: "nonpayable",
     inputs: [],
@@ -39,6 +56,13 @@ const PHONE_MAPPING_ABI = [
     stateMutability: "view",
     inputs: [{ name: "user", type: "address" }],
     outputs: [{ name: "phoneHash", type: "bytes32" }],
+  },
+  {
+    type: "function",
+    name: "getEncryptedPhoneByAddress",
+    stateMutability: "view",
+    inputs: [{ name: "user", type: "address" }],
+    outputs: [{ name: "encryptedPhoneData", type: "bytes" }],
   },
   {
     type: "function",
@@ -98,6 +122,20 @@ export function usePhoneMapping() {
     },
   });
 
+  const {
+    data: encryptedPhoneData,
+    refetch: refetchEncryptedPhoneData,
+    isLoading: encryptedPhoneDataLoading,
+  } = useReadContract({
+    address: contractAddress || undefined,
+    abi: PHONE_MAPPING_ABI,
+    functionName: "getEncryptedPhoneByAddress",
+    args: address ? [address] : undefined,
+    query: {
+      enabled: !!contractAddress && !!address,
+    },
+  });
+
   const registerPhone = async (phoneHash: `0x${string}`) => {
     if (!contractAddress) throw new Error("DripCore contract not found on this network");
 
@@ -117,6 +155,28 @@ export function usePhoneMapping() {
       abi: PHONE_MAPPING_ABI,
       functionName: "unregisterPhone",
       args: [],
+    });
+  };
+
+  const registerPhoneSecure = async (phoneHash: `0x${string}`, encryptedPhoneDataHex: `0x${string}`) => {
+    if (!contractAddress) throw new Error("DripCore contract not found on this network");
+
+    return writeContract({
+      address: contractAddress,
+      abi: PHONE_MAPPING_ABI,
+      functionName: "registerPhoneSecure",
+      args: [phoneHash, encryptedPhoneDataHex],
+    });
+  };
+
+  const updateEncryptedPhoneData = async (encryptedPhoneDataHex: `0x${string}`) => {
+    if (!contractAddress) throw new Error("DripCore contract not found on this network");
+
+    return writeContract({
+      address: contractAddress,
+      abi: PHONE_MAPPING_ABI,
+      functionName: "updateEncryptedPhoneData",
+      args: [encryptedPhoneDataHex],
     });
   };
 
@@ -161,7 +221,9 @@ export function usePhoneMapping() {
   return {
     contractAddress,
     registerPhone,
+    registerPhoneSecure,
     unregisterPhone,
+    updateEncryptedPhoneData,
     resolveAddressByPhoneHash,
     isPhoneHashRegistered,
     mappedPhoneHash: mappedPhoneHash as `0x${string}` | undefined,
@@ -169,8 +231,11 @@ export function usePhoneMapping() {
     isAddressRegistered: Boolean(isAddressRegistered),
     refetchMappedPhoneHash,
     refetchIsAddressRegistered,
+    encryptedPhoneData: encryptedPhoneData as `0x${string}` | undefined,
+    refetchEncryptedPhoneData,
     mappedPhoneHashLoading,
     isAddressRegisteredLoading,
+    encryptedPhoneDataLoading,
     hash,
     isPending,
     isConfirming,

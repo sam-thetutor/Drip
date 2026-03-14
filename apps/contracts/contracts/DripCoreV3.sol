@@ -41,8 +41,8 @@ interface IGDAv1Forwarder {
  * Storage layout rules (CRITICAL — never reorder lines below):
  *   Slots 0-14  → identical to DripCoreSuperfluid (streaming state)
  *   Slots 15-18 → new staking state (appended)
- *   Slots 19-20 → phone mapping state
- *   Slots 21-66 → __gap (reserved for future upgrades)
+ *   Slots 19-21 → phone mapping state
+ *   Slots 22-66 → __gap (reserved for future upgrades)
  */
 contract DripCoreV3 is IDrip, Initializable, ReentrancyGuardUpgradeable, OwnableUpgradeable {
 
@@ -123,9 +123,11 @@ contract DripCoreV3 is IDrip, Initializable, ReentrancyGuardUpgradeable, Ownable
     mapping(bytes32 => address) private _phoneToAddress;
     /// @dev wallet address => phone hash (normalized E.164 hash)
     mapping(address => bytes32) private _addressToPhone;
+    /// @dev wallet address => encrypted phone payload (ciphertext metadata + bytes)
+    mapping(address => bytes) private _addressToEncryptedPhone;
 
     /// @dev Reserved for future upgrades — do not use.
-    uint256[46] private __gap;
+    uint256[45] private __gap;
 
     // ═══════════════════════════════════════════════════════════════
     // Events
@@ -138,6 +140,7 @@ contract DripCoreV3 is IDrip, Initializable, ReentrancyGuardUpgradeable, Ownable
     event ExcessRecovered(address indexed to, uint256 amount);
     event PhoneMapped(bytes32 indexed phoneHash, address indexed user);
     event PhoneUnmapped(bytes32 indexed phoneHash, address indexed user);
+    event PhoneEncryptedDataUpdated(address indexed user);
 
     // ═══════════════════════════════════════════════════════════════
     // Constructor
@@ -730,6 +733,32 @@ contract DripCoreV3 is IDrip, Initializable, ReentrancyGuardUpgradeable, Ownable
         emit PhoneMapped(phoneHash, msg.sender);
     }
 
+    /// @notice Register phone hash and encrypted phone payload in one call.
+    /// @dev `encryptedPhoneData` is expected to be client-encrypted bytes.
+    function registerPhoneSecure(bytes32 phoneHash, bytes calldata encryptedPhoneData) external {
+        require(phoneHash != bytes32(0), "DripCoreV3: invalid phone hash");
+        require(encryptedPhoneData.length > 0, "DripCoreV3: encrypted phone required");
+        require(_phoneToAddress[phoneHash] == address(0), "DripCoreV3: phone already mapped");
+        require(_addressToPhone[msg.sender] == bytes32(0), "DripCoreV3: address already mapped");
+
+        _phoneToAddress[phoneHash] = msg.sender;
+        _addressToPhone[msg.sender] = phoneHash;
+        _addressToEncryptedPhone[msg.sender] = encryptedPhoneData;
+
+        emit PhoneMapped(phoneHash, msg.sender);
+        emit PhoneEncryptedDataUpdated(msg.sender);
+    }
+
+    /// @notice Update encrypted phone payload for caller.
+    /// @dev Useful for key rotation while preserving the same phone hash mapping.
+    function updateEncryptedPhoneData(bytes calldata encryptedPhoneData) external {
+        require(_addressToPhone[msg.sender] != bytes32(0), "DripCoreV3: no phone mapping");
+        require(encryptedPhoneData.length > 0, "DripCoreV3: encrypted phone required");
+
+        _addressToEncryptedPhone[msg.sender] = encryptedPhoneData;
+        emit PhoneEncryptedDataUpdated(msg.sender);
+    }
+
     /// @notice Remove caller's phone mapping.
     function unregisterPhone() external {
         bytes32 phoneHash = _addressToPhone[msg.sender];
@@ -737,6 +766,7 @@ contract DripCoreV3 is IDrip, Initializable, ReentrancyGuardUpgradeable, Ownable
 
         delete _addressToPhone[msg.sender];
         delete _phoneToAddress[phoneHash];
+        delete _addressToEncryptedPhone[msg.sender];
 
         emit PhoneUnmapped(phoneHash, msg.sender);
     }
@@ -749,6 +779,11 @@ contract DripCoreV3 is IDrip, Initializable, ReentrancyGuardUpgradeable, Ownable
     /// @notice Resolve a wallet address to its mapped phone hash.
     function resolvePhoneByAddress(address user) external view returns (bytes32 phoneHash) {
         phoneHash = _addressToPhone[user];
+    }
+
+    /// @notice Return encrypted phone payload for a mapped address.
+    function getEncryptedPhoneByAddress(address user) external view returns (bytes memory encryptedPhoneData) {
+        encryptedPhoneData = _addressToEncryptedPhone[user];
     }
 
     /// @notice Check whether a phone hash is already mapped.

@@ -23,6 +23,7 @@ import { FaceVerification } from "@/components/gooddollar/face-verification";
 import { InviteLinkGenerator } from "@/components/gooddollar/invite-link-generator";
 import { isSupportedChain } from "@/lib/gooddollar/utils";
 import { usePhoneMapping } from "@/lib/contracts";
+import { decryptPhoneFromOnchain, encryptPhoneForOnchain } from "@/lib/phone/crypto";
 import { hashPhoneE164 } from "@/lib/phone/hash";
 import { toast } from "sonner";
 
@@ -31,17 +32,20 @@ export default function ProfilePage() {
   const chainId = useChainId();
   const [copied, setCopied] = useState(false);
   const [phoneInput, setPhoneInput] = useState("");
-  const [revealPhoneInput, setRevealPhoneInput] = useState("");
+  const [encryptionPassphrase, setEncryptionPassphrase] = useState("");
+  const [decryptPassphrase, setDecryptPassphrase] = useState("");
   const [pendingAction, setPendingAction] = useState<"register" | "unregister" | null>(null);
-  const [pendingNormalizedPhone, setPendingNormalizedPhone] = useState<string | null>(null);
   const [mappedPhoneDisplay, setMappedPhoneDisplay] = useState<string | null>(null);
   const {
-    registerPhone,
+    registerPhoneSecure,
     unregisterPhone,
     hasMappedPhoneHash,
-    mappedPhoneHash,
+    isPhoneHashRegistered,
+    resolveAddressByPhoneHash,
     refetchMappedPhoneHash,
     refetchIsAddressRegistered,
+    encryptedPhoneData,
+    refetchEncryptedPhoneData,
     isPending: isPhoneWritePending,
     isConfirming: isPhoneWriteConfirming,
     isConfirmed: isPhoneWriteConfirmed,
@@ -64,8 +68,6 @@ export default function ProfilePage() {
 
   const isPhoneBusy = isPhoneWritePending || isPhoneWriteConfirming;
 
-  const phoneStorageKey = address ? `drip_mapped_phone_${address.toLowerCase()}` : null;
-
   const handleRegisterPhone = async () => {
     const hashed = hashPhoneE164(phoneInput);
     if (!hashed) {
@@ -73,16 +75,31 @@ export default function ProfilePage() {
       return;
     }
 
+    if (!encryptionPassphrase.trim()) {
+      toast.error("Enter an encryption passphrase to secure your phone on-chain");
+      return;
+    }
+
     try {
+      const alreadyRegistered = await isPhoneHashRegistered(hashed.hash);
+      if (alreadyRegistered) {
+        const existingOwner = await resolveAddressByPhoneHash(hashed.hash);
+        if (existingOwner && existingOwner.toLowerCase() !== address?.toLowerCase()) {
+          toast.error(`This phone number is already mapped to ${existingOwner}`);
+        } else {
+          toast.error("This phone number is already mapped");
+        }
+        return;
+      }
+
+      const encryptedPayload = await encryptPhoneForOnchain(hashed.normalized, encryptionPassphrase);
       setPendingAction("register");
-      setPendingNormalizedPhone(hashed.normalized);
       toast.loading("Submitting phone mapping transaction...", { id: "register-phone" });
-      await registerPhone(hashed.hash);
+      await registerPhoneSecure(hashed.hash, encryptedPayload);
       toast.loading("Waiting for confirmation...", { id: "register-phone" });
     } catch (error: any) {
       toast.error(error?.message || "Failed to register phone", { id: "register-phone" });
       setPendingAction(null);
-      setPendingNormalizedPhone(null);
     }
   };
 
@@ -95,34 +112,34 @@ export default function ProfilePage() {
     } catch (error: any) {
       toast.error(error?.message || "Failed to unregister phone", { id: "unregister-phone" });
       setPendingAction(null);
-      setPendingNormalizedPhone(null);
     }
   };
 
-  const handleRevealMappedPhone = () => {
-    if (!hasMappedPhoneHash || !mappedPhoneHash) {
+  const handleDecryptMappedPhone = async () => {
+    if (!hasMappedPhoneHash) {
       toast.error("No mapped phone hash found on-chain");
       return;
     }
 
-    const hashed = hashPhoneE164(revealPhoneInput);
-    if (!hashed) {
-      toast.error("Enter a valid phone in E.164 format (e.g. +2348012345678)");
+    if (!encryptedPhoneData || encryptedPhoneData === "0x") {
+      toast.error("No encrypted phone payload found on-chain");
       return;
     }
 
-    if (hashed.hash.toLowerCase() !== mappedPhoneHash.toLowerCase()) {
-      toast.error("That number does not match your mapped phone");
+    if (!decryptPassphrase.trim()) {
+      toast.error("Enter your passphrase to decrypt");
       return;
     }
 
-    setMappedPhoneDisplay(hashed.normalized);
-    setPhoneInput(hashed.normalized);
-    if (phoneStorageKey) {
-      localStorage.setItem(phoneStorageKey, hashed.normalized);
+    const decrypted = await decryptPhoneFromOnchain(encryptedPhoneData, decryptPassphrase);
+    if (!decrypted) {
+      toast.error("Unable to decrypt. Check your passphrase.");
+      return;
     }
-    setRevealPhoneInput("");
-    toast.success("Mapped number revealed");
+
+    setMappedPhoneDisplay(decrypted);
+    setPhoneInput(decrypted);
+    toast.success("Mapped number loaded from contract");
   };
 
   useEffect(() => {
@@ -130,52 +147,46 @@ export default function ProfilePage() {
 
     if (pendingAction === "register") {
       toast.success("Phone mapped successfully!", { id: "register-phone" });
-      if (pendingNormalizedPhone && phoneStorageKey) {
-        localStorage.setItem(phoneStorageKey, pendingNormalizedPhone);
-        setMappedPhoneDisplay(pendingNormalizedPhone);
-        setPhoneInput(pendingNormalizedPhone);
-      }
+      setMappedPhoneDisplay(phoneInput);
+      setDecryptPassphrase(encryptionPassphrase);
     } else {
       toast.success("Phone mapping removed", { id: "unregister-phone" });
-      if (phoneStorageKey) {
-        localStorage.removeItem(phoneStorageKey);
-      }
       setMappedPhoneDisplay(null);
       setPhoneInput("");
+      setDecryptPassphrase("");
     }
 
     setPendingAction(null);
-    setPendingNormalizedPhone(null);
     refetchMappedPhoneHash();
     refetchIsAddressRegistered();
+    refetchEncryptedPhoneData();
   }, [
     pendingAction,
-    pendingNormalizedPhone,
-    phoneStorageKey,
+    phoneInput,
+    encryptionPassphrase,
     isPhoneWriteConfirmed,
     refetchMappedPhoneHash,
     refetchIsAddressRegistered,
+    refetchEncryptedPhoneData,
   ]);
 
   useEffect(() => {
     if (!phoneWriteError || !pendingAction) return;
     toast.error(phoneWriteError.message || "Phone mapping transaction failed");
     setPendingAction(null);
-    setPendingNormalizedPhone(null);
   }, [phoneWriteError, pendingAction]);
 
   useEffect(() => {
-    if (!phoneStorageKey) return;
-
     if (!hasMappedPhoneHash) {
       setMappedPhoneDisplay(null);
+      setPhoneInput("");
       return;
     }
 
-    const stored = localStorage.getItem(phoneStorageKey);
-    setMappedPhoneDisplay(stored || null);
-    setPhoneInput(stored || "");
-  }, [hasMappedPhoneHash, phoneStorageKey]);
+    // Keep input clear until user decrypts from encrypted on-chain payload.
+    setMappedPhoneDisplay(null);
+    setPhoneInput("");
+  }, [hasMappedPhoneHash]);
 
   if (!isConnected || !address) {
     return (
@@ -267,29 +278,40 @@ export default function ProfilePage() {
                 </p>
                 <Input
                   placeholder="+2348012345678"
-                  value={hasMappedPhoneHash ? mappedPhoneDisplay || phoneInput : phoneInput}
+                  value={phoneInput}
                   onChange={(e) => setPhoneInput(e.target.value)}
                   disabled={hasMappedPhoneHash || isPhoneBusy}
                 />
 
+                {!hasMappedPhoneHash && (
+                  <Input
+                    type="password"
+                    placeholder="Set encryption passphrase"
+                    value={encryptionPassphrase}
+                    onChange={(e) => setEncryptionPassphrase(e.target.value)}
+                    disabled={isPhoneBusy}
+                  />
+                )}
+
                 {hasMappedPhoneHash && !mappedPhoneDisplay && (
                   <div className="space-y-2 rounded-lg border border-white/10 bg-white/5 p-3">
                     <p className="text-xs text-foreground/70">
-                      Your phone is mapped on-chain. Enter your number to reveal it on this device.
+                      Your phone is mapped and encrypted on-chain. Enter your passphrase to decrypt and display it.
                     </p>
                     <Input
-                      placeholder="+2348012345678"
-                      value={revealPhoneInput}
-                      onChange={(e) => setRevealPhoneInput(e.target.value)}
+                      type="password"
+                      placeholder="Enter your passphrase"
+                      value={decryptPassphrase}
+                      onChange={(e) => setDecryptPassphrase(e.target.value)}
                       disabled={isPhoneBusy}
                     />
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={handleRevealMappedPhone}
+                      onClick={handleDecryptMappedPhone}
                       disabled={isPhoneBusy}
                     >
-                      Show My Mapped Number
+                      Decrypt From Contract
                     </Button>
                   </div>
                 )}
