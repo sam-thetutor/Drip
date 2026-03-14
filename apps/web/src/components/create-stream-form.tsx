@@ -30,7 +30,7 @@ const streamSchema = z.object({
     )
     .min(1, "At least one recipient required"),
   token: z.string().regex(/^0x[a-fA-F0-9]{40}$/, "Token required"),
-  cadence: z.enum(["hourly", "daily", "weekly", "monthly", "quarterly"], {
+  cadence: z.enum(["per_minute", "hourly", "daily", "weekly", "monthly", "quarterly"], {
     required_error: "Choose how often it should drip",
   }),
   totalPeriods: z.string().min(1, "Total periods required").refine(
@@ -286,6 +286,7 @@ export function CreateStreamForm() {
       }
 
       const cadenceToSeconds: Record<CadenceOption, number> = {
+        per_minute: 60,
         hourly: 60 * 60,
         daily: 24 * 60 * 60,
         weekly: 7 * 24 * 60 * 60,
@@ -535,6 +536,7 @@ export function CreateStreamForm() {
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   {...register("cadence")}
                 >
+                  <option value="per_minute">Every minute</option>
                   <option value="hourly">Every hour</option>
                   <option value="daily">Every day</option>
                   <option value="weekly">Every week</option>

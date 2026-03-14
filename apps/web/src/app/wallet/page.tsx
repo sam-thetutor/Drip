@@ -365,7 +365,7 @@ export default function WalletPage() {
 
                 <div className="pt-2">
                   <Button variant="outline" className="w-full hero-cta-outline" asChild>
-                    <Link href="/streams">View all streams</Link>
+                    <Link href="/streams/create">View all streams</Link>
                   </Button>
                 </div>
               </>

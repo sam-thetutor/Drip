@@ -1,0 +1,386 @@
+"use client";
+
+import { useAccount, useChainId } from "wagmi";
+import { useAutoRefreshStreamData, useSuperfluidClaim } from "@/lib/contracts";
+import { usePoolConnection } from "@/lib/contracts/hooks/useSuperfluid";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Download, Loader2, ExternalLink, Zap, Wifi } from "lucide-react";
+import { formatEther } from "viem";
+import { toast } from "sonner";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+
+interface SuperfluidStreamDetailsViewProps {
+  streamId: bigint;
+}
+
+export function SuperfluidStreamDetailsView({ streamId }: SuperfluidStreamDetailsViewProps) {
+  const { address } = useAccount();
+  const chainId = useChainId();
+  const { streamData, isLoading, refetch } = useAutoRefreshStreamData(streamId, address);
+  const { claim, isPending, isConfirming, isConfirmed, error } = useSuperfluidClaim();
+  const {
+    isConnected,
+    connectToPool,
+    isPending: isConnectPending,
+    isConfirming: isConnectConfirming,
+    isConfirmed: isConnectConfirmed,
+    error: connectError,
+  } = usePoolConnection(streamId, address);
+
+  const isUserSender =
+    address && streamData?.sender.toLowerCase() === address.toLowerCase();
+
+  const isUserRecipient = address && streamData?.recipients.some(
+    (r: string) => r.toLowerCase() === address.toLowerCase()
+  );
+
+  const statusText = ["Pending", "Active", "Paused", "Cancelled", "Completed"];
+  const statusColors = {
+    0: "bg-yellow-500/10 text-yellow-500 border-yellow-500/30",
+    1: "bg-green-500/10 text-green-500 border-green-500/30",
+    2: "bg-orange-500/10 text-orange-500 border-orange-500/30",
+    3: "bg-red-500/10 text-red-500 border-red-500/30",
+    4: "bg-gray-500/10 text-gray-400 border-gray-500/30",
+  };
+
+  const calculations = useMemo(() => {
+    if (!streamData?.recipientInfo) return null;
+
+    const flowRatePerSecond = streamData.recipientInfo.ratePerSecond;
+    const flowRatePerHour = flowRatePerSecond * 3600n;
+    const flowRatePerDay = flowRatePerSecond * 86400n;
+    const flowRatePerWeek = flowRatePerSecond * 604800n;
+
+    const now = BigInt(Math.floor(Date.now() / 1000));
+    const timeRemainingSeconds = streamData.endTime > now ? Number(streamData.endTime - now) : 0;
+    const timeElapsedSeconds = now > streamData.startTime ? Number(now - streamData.startTime) : 0;
+
+    const projectedTotal =
+      streamData.recipientInfo.totalWithdrawn +
+      streamData.claimableNow +
+      (flowRatePerSecond * BigInt(timeRemainingSeconds));
+
+    const progress = streamData.endTime > streamData.startTime
+      ? ((Number(now - streamData.startTime) / Number(streamData.endTime - streamData.startTime)) * 100)
+      : 0;
+
+    return {
+      flowRatePerSecond,
+      flowRatePerHour,
+      flowRatePerDay,
+      flowRatePerWeek,
+      timeRemainingSeconds,
+      timeElapsedSeconds,
+      projectedTotal,
+      progress: Math.min(progress, 100),
+    };
+  }, [streamData]);
+
+  // ─── Real-time streaming counter ─────────────────────────────────────────
+  const [realtimeClaimable, setRealtimeClaimable] = useState<bigint>(0n);
+
+  useEffect(() => {
+    const rate = streamData?.recipientInfo?.ratePerSecond ?? 0n;
+    const base = streamData?.claimableNow ?? 0n;
+    const isActive = streamData?.status === 1;
+
+    setRealtimeClaimable(base);
+
+    if (!isActive || rate === 0n) return;
+
+    const snapshot = Date.now();
+    const endMs = Number(streamData!.endTime) * 1000;
+
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const cappedNow = Math.min(now, endMs);
+      const elapsedSecs = BigInt(Math.max(0, Math.floor((cappedNow - snapshot) / 1000)));
+      setRealtimeClaimable(base + rate * elapsedSecs);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [streamData]);
+  // ───────────────────────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (isConfirmed) {
+      toast.success("Successfully claimed tokens!");
+      refetch();
+    }
+    if (error) {
+      toast.error(`Failed to claim: ${error.message}`);
+    }
+  }, [isConfirmed, error, refetch]);
+
+  useEffect(() => {
+    if (isConnectConfirmed) {
+      toast.success("Connected! Tokens will now stream directly to your wallet.");
+    }
+    if (connectError) {
+      toast.error(`Failed to connect: ${connectError.message}`);
+    }
+  }, [isConnectConfirmed, connectError]);
+
+  const handleClaim = () => {
+    if (!streamData || !address) return;
+    claim(streamData.streamId, address);
+    toast.info("Claiming tokens...");
+  };
+
+  const handleConnect = () => {
+    connectToPool();
+    toast.info("Connecting to pool...");
+  };
+
+  const formatAddress = (addr: string) => {
+    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+  };
+
+  const formatTime = (timestamp: bigint) => {
+    return new Date(Number(timestamp) * 1000).toLocaleString();
+  };
+
+  const formatDuration = (seconds: number) => {
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    if (days > 0) return `${days}d ${hours}h ${minutes}m`;
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <span className="ml-2 text-muted-foreground">Loading stream details...</span>
+      </div>
+    );
+  }
+
+  if (!streamData) {
+    return (
+      <Card className="glass-card">
+        <CardContent className="pt-6">
+          <div className="text-center space-y-4">
+            <p className="text-destructive">Stream not found</p>
+            <div className="flex gap-2 justify-center">
+              <Button asChild variant="outline">
+                <Link href="/streams">View All Streams</Link>
+              </Button>
+              <Button asChild>
+                <Link href="/streams/create">Create New Stream</Link>
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+
+      {/* ── Header ─────────────────────────────────────────────────── */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold truncate">
+            {streamData.title || `Stream #${streamData.streamId}`}
+          </h1>
+          <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+            <span>#{streamData.streamId.toString()}</span>
+            <span>·</span>
+            <span>Sender:</span>
+            <code className="font-mono">{formatAddress(streamData.sender)}</code>
+            {isUserSender && (
+              <span className="text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded">You</span>
+            )}
+            <button
+              className="text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => window.open(`https://celoscan.io/address/${streamData.sender}`, '_blank')}
+            >
+              <ExternalLink className="h-3 w-3" />
+            </button>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {isUserRecipient && isConnected && streamData.status === 1 && (
+            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-500 border border-green-500/20">
+              <Wifi className="h-3 w-3 animate-pulse" />
+              Live
+            </span>
+          )}
+          <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${
+            statusColors[streamData.status as keyof typeof statusColors]
+          }`}>
+            {statusText[streamData.status]}
+          </span>
+        </div>
+      </div>
+
+      {/* ── Progress bar ───────────────────────────────────────────── */}
+      <div>
+        <div className="w-full h-1.5 bg-muted/30 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-gradient-to-r from-primary to-primary/70 transition-all duration-300"
+            style={{ width: `${calculations?.progress ?? 0}%` }}
+          />
+        </div>
+        <div className="flex justify-between text-xs text-muted-foreground mt-1.5">
+          <span>{formatTime(streamData.startTime)}</span>
+          <span className="font-medium">
+            {calculations
+              ? calculations.timeRemainingSeconds > 0
+                ? `${formatDuration(calculations.timeRemainingSeconds)} remaining`
+                : 'Ended'
+              : ''}
+          </span>
+          <span>{formatTime(streamData.endTime)}</span>
+        </div>
+      </div>
+
+      {/* ── Connect banner ─────────────────────────────────────────── */}
+      {isUserRecipient && isConnected === false && (
+        <div className="flex items-center justify-between gap-4 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3">
+          <div className="flex items-center gap-3">
+            <Zap className="h-4 w-4 text-amber-500 flex-shrink-0" />
+            <p className="text-sm">
+              <span className="font-semibold text-amber-500">Enable Auto-Receive</span>
+              <span className="text-muted-foreground ml-2">Connect once and tokens stream directly to your wallet.</span>
+            </p>
+          </div>
+          <Button
+            size="sm"
+            onClick={handleConnect}
+            disabled={isConnectPending || isConnectConfirming}
+            className="flex-shrink-0"
+          >
+            {isConnectPending || isConnectConfirming ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <><Zap className="mr-1.5 h-3.5 w-3.5" />Connect Now</>
+            )}
+          </Button>
+        </div>
+      )}
+
+      {/* ── Live counter ───────────────────────────────────────────── */}
+      {streamData.recipientInfo && (
+        <Card className="glass-card">
+          <CardContent className="pt-6 pb-6">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+
+              {/* Amount */}
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  {streamData.status === 1 && (
+                    <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                  )}
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    {isConnected ? 'Streaming to your wallet' : 'Claimable'}
+                  </p>
+                </div>
+                <p className="text-5xl font-bold tabular-nums tracking-tight text-green-500">
+                  {parseFloat(formatEther(realtimeClaimable)).toFixed(4)}
+                  <span className="text-2xl font-normal text-muted-foreground ml-2">G$</span>
+                </p>
+              </div>
+
+              {/* Flow rate chips */}
+              <div className="flex flex-wrap gap-3">
+                {([
+                  { label: 'per hour', val: calculations?.flowRatePerHour, dp: 2 },
+                  { label: 'per day',  val: calculations?.flowRatePerDay,  dp: 0 },
+                ] as const).map(({ label, val, dp }) => val != null && (
+                  <div key={label} className="rounded-lg border border-border/50 px-3 py-2 text-center min-w-[90px]">
+                    <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
+                    <p className="font-semibold tabular-nums">
+                      {parseFloat(formatEther(val)).toFixed(dp)}
+                      <span className="text-xs text-muted-foreground ml-1">G$</span>
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+            </div>
+
+            {/* Claim button for unconnected recipients */}
+            {isUserRecipient && !isConnected && realtimeClaimable > 0n && (
+              <Button
+                className="w-full mt-5"
+                onClick={handleClaim}
+                disabled={isPending || isConfirming}
+              >
+                {isPending || isConfirming ? (
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Claiming...</>
+                ) : (
+                  <><Download className="mr-2 h-4 w-4" />Claim {parseFloat(formatEther(realtimeClaimable)).toFixed(4)} G$</>
+                )}
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Stream info ────────────────────────────────────────────── */}
+      <Card className="glass-card">
+        <CardContent className="pt-5 pb-5 space-y-4">
+
+          {/* Stat row */}
+          <div className="flex flex-wrap gap-6 text-sm">
+            <div>
+              <p className="text-xs text-muted-foreground mb-0.5">Deposit</p>
+              <p className="font-semibold">{parseFloat(formatEther(streamData.deposit)).toFixed(2)} G$</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-0.5">Duration</p>
+              <p className="font-semibold">
+                {calculations ? formatDuration(Number(streamData.endTime - streamData.startTime)) : '—'}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-0.5">Recipients</p>
+              <p className="font-semibold">{streamData.recipients.length}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-0.5">Progress</p>
+              <p className="font-semibold">{calculations ? `${calculations.progress.toFixed(1)}%` : '—'}</p>
+            </div>
+          </div>
+
+          {/* Recipient list */}
+          <div className="space-y-2">
+            {streamData.recipients.map((recipient: string, index: number) => (
+              <div
+                key={index}
+                className="flex items-center justify-between rounded-lg border border-border/50 bg-muted/5 px-3 py-2"
+              >
+                <div className="flex items-center gap-2">
+                  <code className="text-sm font-mono">{formatAddress(recipient)}</code>
+                  {address && recipient.toLowerCase() === address.toLowerCase() && (
+                    <span className="text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded">You</span>
+                  )}
+                  {isConnected && address && recipient.toLowerCase() === address.toLowerCase() && (
+                    <span className="flex items-center gap-1 text-xs text-green-500">
+                      <Wifi className="h-3 w-3 animate-pulse" />Receiving
+                    </span>
+                  )}
+                </div>
+                <button
+                  className="text-muted-foreground hover:text-foreground transition-colors p-1"
+                  onClick={() => window.open(`https://celoscan.io/address/${recipient}`, '_blank')}
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+
+        </CardContent>
+      </Card>
+
+    </div>
+  );
+}

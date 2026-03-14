@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useAccount, useReadContract, useReadContracts, useWriteContract, useWaitForTransactionReceipt, useChainId } from 'wagmi';
-import { getContractAddress } from '../config';
-import { SUPERFLUID_GDA_ABI } from '../superfluid.abi';
+import { getContractAddress, getGDAForwarderAddress } from '../config';
+import { SUPERFLUID_GDA_ABI, GDA_FORWARDER_ABI } from '../superfluid.abi';
 
 export interface SuperfluidRecipientInfo {
   recipient: string;
@@ -17,6 +17,7 @@ export interface SuperfluidStreamData {
   streamId: number;
   title: string;
   sender: string;
+  token: string;
   deposit: bigint;
   startTime: bigint;
   endTime: bigint;
@@ -131,6 +132,7 @@ export function useSuperfluidStreamData(streamId?: bigint, recipient?: `0x${stri
       streamId: Number(stream.streamId),
       title: stream.title,
       sender: stream.sender,
+      token: stream.token,
       deposit: stream.deposit,
       startTime: stream.startTime,
       endTime: stream.endTime,
@@ -140,16 +142,20 @@ export function useSuperfluidStreamData(streamId?: bigint, recipient?: `0x${stri
     };
 
     if (recipientResult?.status === 'success' && recipient) {
-      const [ratePerSecond, totalWithdrawn, lastWithdrawTime, currentAccrued] = recipientResult.result as [
-        bigint, bigint, bigint, bigint
-      ];
+      const info = recipientResult.result as {
+        recipient: string;
+        ratePerSecond: bigint;
+        totalWithdrawn: bigint;
+        lastWithdrawTime: bigint;
+        currentAccrued: bigint;
+      };
 
       streamInfo.recipientInfo = {
         recipient,
-        ratePerSecond,
-        totalWithdrawn,
-        lastWithdrawTime,
-        currentAccrued,
+        ratePerSecond: info.ratePerSecond,
+        totalWithdrawn: info.totalWithdrawn,
+        lastWithdrawTime: info.lastWithdrawTime,
+        currentAccrued: info.currentAccrued,
       };
     }
 
@@ -165,7 +171,74 @@ export function useSuperfluidStreamData(streamId?: bigint, recipient?: `0x${stri
 }
 
 /**
- * Hook to claim from Superfluid stream
+ * Hook to check if a recipient is connected to a stream's GDA pool,
+ * and to connect them if not. Once connected, tokens flow automatically
+ * to their wallet — no manual claiming needed.
+ */
+export function usePoolConnection(streamId?: bigint, memberAddress?: `0x${string}`) {
+  const chainId = useChainId();
+  const contractAddress = getContractAddress(chainId, 'DripCoreSuperfluid');
+  const gdaForwarderAddress = getGDAForwarderAddress(chainId);
+
+  // 1. Get the pool address for this stream
+  const { data: poolAddress } = useReadContract({
+    address: contractAddress || undefined,
+    abi: SUPERFLUID_GDA_ABI,
+    functionName: 'getStreamPool',
+    args: streamId !== undefined ? [streamId] : undefined,
+    query: { enabled: !!contractAddress && streamId !== undefined },
+  });
+
+  // 2. Check if member is already connected to the pool
+  const { data: isConnected, refetch: refetchConnection } = useReadContract({
+    address: gdaForwarderAddress || undefined,
+    abi: GDA_FORWARDER_ABI,
+    functionName: 'isMemberConnected',
+    args: poolAddress && memberAddress ? [poolAddress as `0x${string}`, memberAddress] : undefined,
+    query: {
+      enabled: !!gdaForwarderAddress && !!poolAddress && !!memberAddress && poolAddress !== '0x0000000000000000000000000000000000000000',
+    },
+  });
+
+  // 3. Connect to pool
+  const { writeContract, data: hash, isPending, error } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash });
+
+  const connectToPool = () => {
+    if (!gdaForwarderAddress || !poolAddress) {
+      throw new Error('Pool or GDA forwarder not available');
+    }
+
+    writeContract({
+      address: gdaForwarderAddress,
+      abi: GDA_FORWARDER_ABI,
+      functionName: 'connectPool',
+      args: [poolAddress as `0x${string}`, '0x'],
+      gas: BigInt(500_000),
+    });
+  };
+
+  // Refetch connection status after successful connect
+  useEffect(() => {
+    if (isConfirmed) {
+      refetchConnection();
+    }
+  }, [isConfirmed, refetchConnection]);
+
+  return {
+    poolAddress: poolAddress as `0x${string}` | undefined,
+    isConnected: isConnected as boolean | undefined,
+    connectToPool,
+    isPending,
+    isConfirming,
+    isConfirmed,
+    error,
+    hash,
+  };
+}
+
+/**
+ * Hook to claim from Superfluid stream (fallback for unconnected members)
  */
 export function useSuperfluidClaim() {
   const chainId = useChainId();
@@ -177,7 +250,7 @@ export function useSuperfluidClaim() {
     hash,
   });
 
-  const claim = (streamId: number) => {
+  const claim = (streamId: number, recipient: `0x${string}`) => {
     if (!contractAddress) {
       throw new Error('DripCoreSuperfluid contract not deployed on this network');
     }
@@ -186,7 +259,8 @@ export function useSuperfluidClaim() {
       address: contractAddress,
       abi: SUPERFLUID_GDA_ABI,
       functionName: 'withdrawFromStream',
-      args: [BigInt(streamId)],
+      args: [BigInt(streamId), recipient],
+      gas: BigInt(1_000_000),
     });
   };
 

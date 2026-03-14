@@ -93,7 +93,7 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
                 </p>
                 <div className="flex gap-2 justify-center">
                   <Button asChild variant="outline">
-                    <Link href="/streams">View All Streams</Link>
+                    <Link href="/streams/create">View All Streams</Link>
                   </Button>
                   <Button asChild>
                     <Link href="/streams/create">Create New Stream</Link>

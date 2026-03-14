@@ -7,8 +7,46 @@ import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol
 import "./interfaces/IDrip.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-// ─── Superfluid interfaces (same as DripCoreSuperfluid) ────────────────────
+// ─── Superfluid CFA interfaces ─────────────────────────────────────────────
 
+interface ISuperTokenV4 {
+    function transferFrom(address from, address to, uint256 amount) external returns (bool);
+    function transfer(address to, uint256 amount) external returns (bool);
+    function balanceOf(address account) external view returns (uint256);
+}
+
+interface ICFAv1Forwarder {
+    function createFlow(
+        address token,
+        address sender,
+        address receiver,
+        int96 flowRate,
+        bytes calldata userData
+    ) external returns (bool);
+
+    function updateFlow(
+        address token,
+        address sender,
+        address receiver,
+        int96 flowRate,
+        bytes calldata userData
+    ) external returns (bool);
+
+    function deleteFlow(
+        address token,
+        address sender,
+        address receiver,
+        bytes calldata userData
+    ) external returns (bool);
+
+    function getFlowrate(
+        address token,
+        address sender,
+        address receiver
+    ) external view returns (int96 flowRate);
+}
+
+// Keep the GDA interfaces so storage types compile (needed for slot compatibility)
 struct PoolConfig {
     bool transferabilityForUnitsOwner;
     bool distributionFromAnyAddress;
@@ -20,34 +58,31 @@ interface ISuperfluidPool {
     function getClaimableNow(address memberAddr) external view returns (int256 claimableBalance, uint256 timestamp);
 }
 
-interface ISuperToken {
-    function transferFrom(address from, address to, uint256 amount) external returns (bool);
-    function transfer(address to, uint256 amount) external returns (bool);
-    function balanceOf(address account) external view returns (uint256);
-}
-
 interface IGDAv1Forwarder {
     function createPool(address token, address admin, PoolConfig memory config) external returns (bool success, ISuperfluidPool pool);
     function distributeFlow(address token, address from, ISuperfluidPool pool, int96 requestedFlowRate, bytes calldata userData) external returns (bool success);
-    function connectPool(ISuperfluidPool pool, bytes calldata userData) external returns (bool);
 }
 
 /**
- * @title DripCoreV3
- * @notice Merged contract: Superfluid token streaming + G$ staking with points.
- *         Deployed as the new implementation behind the existing TransparentProxy
+ * @title DripCoreV4
+ * @notice CFA-based streaming + G$ staking with points.
+ *         Tokens stream directly into recipients' wallets via Superfluid CFA —
+ *         no manual withdrawal required.
+ *
+ *         Designed to be deployed standalone first for testing, then later
+ *         set as the new implementation behind the existing TransparentProxy
  *         at 0x5530975fDe062FE6706298fF3945E3d1a17A310a.
  *
- * Storage layout rules (CRITICAL — never reorder lines below):
- *   Slots 0-14  → identical to DripCoreSuperfluid (streaming state)
- *   Slots 15-18 → new staking state (appended)
- *   Slots 19-20 → phone mapping state
- *   Slots 21-66 → __gap (reserved for future upgrades)
+ * Storage layout (CRITICAL — never reorder lines below):
+ *   Slots 0-14  → identical to DripCoreV3 / DripCoreSuperfluid (streaming state)
+ *   Slots 15-18 → staking state (same as V3)
+ *   Slots 19-21 → new V4 state (CFA forwarder, recipient paused, aggregate flow rates)
+ *   Slots 22-66 → __gap (reserved for future upgrades)
  */
-contract DripCoreV3 is IDrip, Initializable, ReentrancyGuardUpgradeable, OwnableUpgradeable {
+contract DripCoreV4 is IDrip, Initializable, ReentrancyGuardUpgradeable, OwnableUpgradeable {
 
     // ═══════════════════════════════════════════════════════════════
-    // STREAMING — constants (not in storage)
+    // STREAMING — constants
     // ═══════════════════════════════════════════════════════════════
 
     uint256 public constant MIN_DURATION = 3600;
@@ -56,11 +91,11 @@ contract DripCoreV3 is IDrip, Initializable, ReentrancyGuardUpgradeable, Ownable
     uint256 public constant MAX_DESCRIPTION_LEN = 1024;
 
     // ═══════════════════════════════════════════════════════════════
-    // STREAMING — structs (no storage impact)
+    // STREAMING — structs
     // ═══════════════════════════════════════════════════════════════
 
     struct StreamRuntime {
-        ISuperfluidPool pool;
+        ISuperfluidPool pool;               // slot kept for V3 compatibility (unused in V4)
         int96 totalFlowRate;
         uint256 remainingBudget;
         uint256 totalDistributedAccounting;
@@ -68,76 +103,77 @@ contract DripCoreV3 is IDrip, Initializable, ReentrancyGuardUpgradeable, Ownable
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // STREAMING — storage (mirrors DripCoreSuperfluid slot-for-slot)
+    // STREAMING — storage (slots 0-14, mirrors V3 exactly)
     // DO NOT reorder, insert, or remove any variable in this block.
     // ═══════════════════════════════════════════════════════════════
 
-    uint256 private _streamIdCounter;
-    mapping(uint256 => Stream) private _streams;
-    mapping(uint256 => StreamRuntime) private _streamRuntime;
-    mapping(uint256 => mapping(address => bool)) private _isRecipientInStream;
-    mapping(uint256 => mapping(address => uint256)) private _recipientRates;
-    mapping(uint256 => mapping(address => uint256)) private _recipientTotalWithdrawn;
-    mapping(uint256 => mapping(address => uint256)) private _recipientLastWithdraw;
-    mapping(address => uint256[]) private _senderStreams;
-    mapping(address => uint256[]) private _recipientStreams;
-    uint256 public platformFeeBps;
-    address public platformFeeRecipient;
-    ISuperToken public superToken;
-    IGDAv1Forwarder public gdaForwarder;
-    address public engagementRewards;
-    bool public engagementRewardsEnabled;
-    mapping(address => address) public userInviter;
+    uint256 private _streamIdCounter;                                        // slot 0
+    mapping(uint256 => Stream) private _streams;                             // slot 1
+    mapping(uint256 => StreamRuntime) private _streamRuntime;                // slot 2
+    mapping(uint256 => mapping(address => bool)) private _isRecipientInStream; // slot 3
+    mapping(uint256 => mapping(address => uint256)) private _recipientRates; // slot 4
+    mapping(uint256 => mapping(address => uint256)) private _recipientTotalWithdrawn; // slot 5
+    mapping(uint256 => mapping(address => uint256)) private _recipientLastWithdraw;   // slot 6
+    mapping(address => uint256[]) private _senderStreams;                     // slot 7
+    mapping(address => uint256[]) private _recipientStreams;                  // slot 8
+    uint256 public platformFeeBps;                                           // slot 9
+    address public platformFeeRecipient;                                     // slot 10
+    ISuperTokenV4 public superToken;                                         // slot 11
+    IGDAv1Forwarder public gdaForwarder;                                     // slot 12 (kept for layout)
+    address public engagementRewards;                                        // slot 13
+    bool public engagementRewardsEnabled;                                    // slot 13 (packed)
+    mapping(address => address) public userInviter;                          // slot 14
 
     // ═══════════════════════════════════════════════════════════════
-    // STAKING — constants (not in storage)
+    // STAKING — constants
     // ═══════════════════════════════════════════════════════════════
 
-    /// @notice 1 token (1e18 wei) staked for 1 second = 1 point.
     uint256 public constant POINTS_DENOMINATOR = 1e18;
 
     // ═══════════════════════════════════════════════════════════════
-    // STAKING — structs (no storage impact)
+    // STAKING — structs
     // ═══════════════════════════════════════════════════════════════
 
     struct StakerInfo {
-        uint256 stakedAmount;   // currently staked (wei)
-        uint256 snapshotPoints; // points banked up to lastUpdateTime
-        uint256 lastUpdateTime; // block.timestamp at last action
+        uint256 stakedAmount;
+        uint256 snapshotPoints;
+        uint256 lastUpdateTime;
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // STAKING — storage (appended after streaming state)
+    // STAKING — storage (slots 15-18, same as V3)
     // ═══════════════════════════════════════════════════════════════
 
-    IERC20 public stakingToken;
-    mapping(address => StakerInfo) public stakers;
-    uint256 public totalStaked;
-    uint256 public totalPointsIssued;
+    IERC20 public stakingToken;                                              // slot 15
+    mapping(address => StakerInfo) public stakers;                           // slot 16
+    uint256 public totalStaked;                                              // slot 17
+    uint256 public totalPointsIssued;                                        // slot 18
 
     // ═══════════════════════════════════════════════════════════════
-    // PHONE MAPPING — storage (appended for upgrade safety)
+    // V4 — new storage (slots 19-20, appended after V3)
     // ═══════════════════════════════════════════════════════════════
 
-    /// @dev phone hash (normalized E.164 hash) => wallet address
-    mapping(bytes32 => address) private _phoneToAddress;
-    /// @dev wallet address => phone hash (normalized E.164 hash)
-    mapping(address => bytes32) private _addressToPhone;
+    ICFAv1Forwarder public cfaForwarder;                                     // slot 19
+    mapping(uint256 => mapping(address => bool)) private _isRecipientPaused; // slot 20
+    /// @dev Tracks the aggregate CFA flow rate from this contract to each recipient
+    ///      across ALL active streams. CFA only allows one flow per sender→receiver pair,
+    ///      so when a recipient appears in multiple streams we must aggregate.
+    mapping(address => uint256) private _aggregateFlowRate;                   // slot 21
 
-    /// @dev Reserved for future upgrades — do not use.
-    uint256[46] private __gap;
+    /// @dev Reserved for future upgrades.
+    uint256[45] private __gap;
 
     // ═══════════════════════════════════════════════════════════════
     // Events
     // ═══════════════════════════════════════════════════════════════
 
-    event SuperfluidConfigUpdated(address indexed superToken, address indexed gdaForwarder);
+    event SuperfluidConfigUpdated(address indexed superToken, address indexed cfaForwarder);
     event Staked(address indexed staker, uint256 amount, uint256 totalStake, uint256 totalPoints);
     event Unstaked(address indexed staker, uint256 amount, uint256 totalStake, uint256 totalPoints);
     event PointsCheckpointed(address indexed staker, uint256 newSnapshot);
     event ExcessRecovered(address indexed to, uint256 amount);
-    event PhoneMapped(bytes32 indexed phoneHash, address indexed user);
-    event PhoneUnmapped(bytes32 indexed phoneHash, address indexed user);
+    event RecipientPaused(uint256 indexed streamId, address indexed recipient);
+    event RecipientResumed(uint256 indexed streamId, address indexed recipient);
 
     // ═══════════════════════════════════════════════════════════════
     // Constructor
@@ -152,33 +188,38 @@ contract DripCoreV3 is IDrip, Initializable, ReentrancyGuardUpgradeable, Ownable
     // Initializers
     // ═══════════════════════════════════════════════════════════════
 
-    /// @notice Streaming initializer — already called on the live proxy. Do not call again.
+    /// @notice Full initializer for standalone deployment (testing).
     function initialize(
         address _platformFeeRecipient,
         address _owner,
         address _superToken,
-        address _gdaForwarder
+        address _cfaForwarder
     ) public initializer {
-        require(_platformFeeRecipient != address(0), "DripCoreV3: invalid fee recipient");
-        require(_owner != address(0), "DripCoreV3: invalid owner");
-        require(_superToken != address(0), "DripCoreV3: invalid super token");
-        require(_gdaForwarder != address(0), "DripCoreV3: invalid forwarder");
+        require(_platformFeeRecipient != address(0), "V4: invalid fee recipient");
+        require(_owner != address(0), "V4: invalid owner");
+        require(_superToken != address(0), "V4: invalid super token");
+        require(_cfaForwarder != address(0), "V4: invalid cfa forwarder");
 
         __ReentrancyGuard_init();
         __Ownable_init(_owner);
 
         platformFeeRecipient = _platformFeeRecipient;
         platformFeeBps = 50;
-        superToken = ISuperToken(_superToken);
-        gdaForwarder = IGDAv1Forwarder(_gdaForwarder);
+        superToken = ISuperTokenV4(_superToken);
+        cfaForwarder = ICFAv1Forwarder(_cfaForwarder);
     }
 
-    /// @notice Staking initializer — called via upgradeAndCall during the upgrade to V3.
-    ///         reinitializer(2) ensures it runs exactly once (since initialize() set version=1).
-    /// @param _token  ERC20 token accepted for staking (G$ on Celo)
+    /// @notice Staking initializer — called via upgradeAndCall or separately.
     function initializeStaking(address _token) public reinitializer(2) {
-        require(_token != address(0), "DripCoreV3: invalid staking token");
+        require(_token != address(0), "V4: invalid staking token");
         stakingToken = IERC20(_token);
+    }
+
+    /// @notice V4 CFA initializer — called when upgrading from V3.
+    ///         Sets the CFA forwarder address. reinitializer(3) ensures it runs once.
+    function initializeCFA(address _cfaForwarder) public reinitializer(3) {
+        require(_cfaForwarder != address(0), "V4: invalid cfa forwarder");
+        cfaForwarder = ICFAv1Forwarder(_cfaForwarder);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -213,14 +254,58 @@ contract DripCoreV3 is IDrip, Initializable, ReentrancyGuardUpgradeable, Ownable
         runtime.lastAccountingTimestamp = effectiveNow;
 
         if (runtime.remainingBudget == 0 || effectiveNow >= stream.endTime) {
-            gdaForwarder.distributeFlow(address(superToken), address(this), runtime.pool, 0, "");
+            // Stop all CFA flows for this stream's recipients
+            for (uint256 i = 0; i < stream.recipients.length; i++) {
+                address recipient = stream.recipients[i];
+                if (_isRecipientInStream[streamId][recipient] && !_isRecipientPaused[streamId][recipient]) {
+                    uint256 rate = _recipientRates[streamId][recipient];
+                    _adjustFlow(recipient, -int256(rate));
+                }
+            }
             stream.status = StreamStatus.Completed;
             emit StreamCompleted(streamId);
         }
     }
 
     function _requireRateUnlocked(Stream memory stream) internal view {
-        require(stream.rateLockUntil <= block.timestamp, "DripCoreV3: rate locked");
+        require(stream.rateLockUntil <= block.timestamp, "V4: rate locked");
+    }
+
+    /// @dev Adjusts the real CFA flow to `recipient` so it matches the aggregate
+    ///      rate across all active streams.  Handles create / update / delete
+    ///      automatically based on whether a flow already exists.
+    ///      `rateChange` is the signed change (positive = add, negative = remove).
+    function _adjustFlow(address recipient, int256 rateChange) internal {
+        uint256 oldAgg = _aggregateFlowRate[recipient];
+        uint256 newAgg;
+        if (rateChange >= 0) {
+            newAgg = oldAgg + uint256(rateChange);
+        } else {
+            uint256 decrease = uint256(-rateChange);
+            newAgg = oldAgg > decrease ? oldAgg - decrease : 0;
+        }
+        _aggregateFlowRate[recipient] = newAgg;
+
+        if (oldAgg == 0 && newAgg > 0) {
+            // No existing flow → create
+            require(
+                cfaForwarder.createFlow(address(superToken), address(this), recipient, int96(int256(newAgg)), ""),
+                "V4: flow creation failed"
+            );
+        } else if (oldAgg > 0 && newAgg == 0) {
+            // Flow going to zero → delete
+            require(
+                cfaForwarder.deleteFlow(address(superToken), address(this), recipient, ""),
+                "V4: flow deletion failed"
+            );
+        } else if (oldAgg > 0 && newAgg > 0 && oldAgg != newAgg) {
+            // Flow rate changed → update
+            require(
+                cfaForwarder.updateFlow(address(superToken), address(this), recipient, int96(int256(newAgg)), ""),
+                "V4: flow update failed"
+            );
+        }
+        // else: no change needed (oldAgg == newAgg, or both 0)
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -236,52 +321,45 @@ contract DripCoreV3 is IDrip, Initializable, ReentrancyGuardUpgradeable, Ownable
         string calldata title,
         string calldata description
     ) external payable nonReentrant returns (uint256 streamId) {
-        require(msg.value == 0, "DripCoreV3: native not supported");
-        require(token == address(superToken), "DripCoreV3: token must be configured super token");
-        require(recipients.length > 0, "DripCoreV3: recipients required");
-        require(recipients.length == amountsPerPeriod.length, "DripCoreV3: mismatched arrays");
-        require(deposit > 0, "DripCoreV3: invalid deposit");
-        require(periodSeconds >= MIN_DURATION && periodSeconds <= MAX_DURATION, "DripCoreV3: invalid duration");
-        require(bytes(title).length <= MAX_TITLE_LEN, "DripCoreV3: title too long");
-        require(bytes(description).length <= MAX_DESCRIPTION_LEN, "DripCoreV3: description too long");
+        require(msg.value == 0, "V4: native not supported");
+        require(token == address(superToken), "V4: token must be configured super token");
+        require(recipients.length > 0, "V4: recipients required");
+        require(recipients.length == amountsPerPeriod.length, "V4: mismatched arrays");
+        require(deposit > 0, "V4: invalid deposit");
+        require(periodSeconds >= MIN_DURATION && periodSeconds <= MAX_DURATION, "V4: invalid duration");
+        require(bytes(title).length <= MAX_TITLE_LEN, "V4: title too long");
+        require(bytes(description).length <= MAX_DESCRIPTION_LEN, "V4: description too long");
 
         uint256 totalPerPeriod;
         int256 totalFlowRateInt;
         for (uint256 i = 0; i < recipients.length; i++) {
             address recipient = recipients[i];
-            require(recipient != address(0), "DripCoreV3: invalid recipient");
-            require(recipient != msg.sender, "DripCoreV3: self recipient forbidden");
-            require(!_isRecipientInStream[_streamIdCounter + 1][recipient], "DripCoreV3: duplicate recipient");
-            require(amountsPerPeriod[i] > 0, "DripCoreV3: invalid amount");
+            require(recipient != address(0), "V4: invalid recipient");
+            require(recipient != msg.sender, "V4: self recipient forbidden");
+            require(!_isRecipientInStream[_streamIdCounter + 1][recipient], "V4: duplicate recipient");
+            require(amountsPerPeriod[i] > 0, "V4: invalid amount");
 
             uint256 ratePerSecond = amountsPerPeriod[i] / periodSeconds;
-            require(ratePerSecond > 0, "DripCoreV3: rate too small");
+            require(ratePerSecond > 0, "V4: rate too small");
 
             totalPerPeriod += amountsPerPeriod[i];
             totalFlowRateInt += int256(ratePerSecond);
         }
 
-        require(deposit >= totalPerPeriod, "DripCoreV3: insufficient deposit for period");
-        require(totalFlowRateInt > 0 && totalFlowRateInt <= type(int96).max, "DripCoreV3: invalid total flow");
+        require(deposit >= totalPerPeriod, "V4: insufficient deposit for period");
+        require(totalFlowRateInt > 0 && totalFlowRateInt <= type(int96).max, "V4: invalid total flow");
 
         uint256 fee = (deposit * platformFeeBps) / 10000;
         uint256 streamDeposit = deposit - fee;
 
-        require(superToken.transferFrom(msg.sender, address(this), deposit), "DripCoreV3: transfer failed");
+        require(superToken.transferFrom(msg.sender, address(this), deposit), "V4: transfer failed");
         if (fee > 0) {
-            require(superToken.transfer(platformFeeRecipient, fee), "DripCoreV3: fee transfer failed");
+            require(superToken.transfer(platformFeeRecipient, fee), "V4: fee transfer failed");
         }
 
         streamId = ++_streamIdCounter;
         uint256 startTime = block.timestamp;
         uint256 endTime = startTime + periodSeconds;
-
-        (bool poolCreated, ISuperfluidPool pool) = gdaForwarder.createPool(
-            address(superToken),
-            address(this),
-            PoolConfig({ transferabilityForUnitsOwner: false, distributionFromAnyAddress: true })
-        );
-        require(poolCreated, "DripCoreV3: pool creation failed");
 
         address[] memory recipientsArray = new address[](recipients.length);
         for (uint256 i = 0; i < recipients.length; i++) {
@@ -294,7 +372,9 @@ contract DripCoreV3 is IDrip, Initializable, ReentrancyGuardUpgradeable, Ownable
             _isRecipientInStream[streamId][recipient] = true;
             _recipientStreams[recipient].push(streamId);
 
-            require(pool.updateMemberUnits(recipient, uint128(ratePerSecond)), "DripCoreV3: unit update failed");
+            // Create/update CFA flow directly to recipient's wallet
+            _adjustFlow(recipient, int256(ratePerSecond));
+
             emit RecipientAdded(streamId, recipient, amountsPerPeriod[i], ratePerSecond);
         }
 
@@ -313,7 +393,7 @@ contract DripCoreV3 is IDrip, Initializable, ReentrancyGuardUpgradeable, Ownable
         });
 
         _streamRuntime[streamId] = StreamRuntime({
-            pool: pool,
+            pool: ISuperfluidPool(address(0)),  // unused in V4
             totalFlowRate: int96(totalFlowRateInt),
             remainingBudget: streamDeposit,
             totalDistributedAccounting: 0,
@@ -322,26 +402,26 @@ contract DripCoreV3 is IDrip, Initializable, ReentrancyGuardUpgradeable, Ownable
 
         _senderStreams[msg.sender].push(streamId);
 
-        require(
-            gdaForwarder.distributeFlow(address(superToken), address(this), pool, int96(totalFlowRateInt), ""),
-            "DripCoreV3: flow start failed"
-        );
-
         emit StreamCreated(streamId, msg.sender, recipientsArray, token, streamDeposit, startTime, endTime, title, description);
     }
 
     function pauseStream(uint256 streamId) external {
         Stream storage stream = _streams[streamId];
-        require(stream.streamId != 0, "DripCoreV3: stream not found");
-        require(stream.sender == msg.sender || msg.sender == owner(), "DripCoreV3: unauthorized");
-        require(stream.status == StreamStatus.Active, "DripCoreV3: stream not active");
+        require(stream.streamId != 0, "V4: stream not found");
+        require(stream.sender == msg.sender || msg.sender == owner(), "V4: unauthorized");
+        require(stream.status == StreamStatus.Active, "V4: stream not active");
 
         _syncAccounting(streamId);
 
-        require(
-            gdaForwarder.distributeFlow(address(superToken), address(this), _streamRuntime[streamId].pool, 0, ""),
-            "DripCoreV3: flow pause failed"
-        );
+        // Reduce aggregate flows for all active recipients
+        for (uint256 i = 0; i < stream.recipients.length; i++) {
+            address recipient = stream.recipients[i];
+            if (_isRecipientInStream[streamId][recipient] && !_isRecipientPaused[streamId][recipient]) {
+                uint256 rate = _recipientRates[streamId][recipient];
+                _adjustFlow(recipient, -int256(rate));
+                _isRecipientPaused[streamId][recipient] = true;
+            }
+        }
 
         stream.status = StreamStatus.Paused;
         emit StreamPaused(streamId, msg.sender);
@@ -351,17 +431,24 @@ contract DripCoreV3 is IDrip, Initializable, ReentrancyGuardUpgradeable, Ownable
         Stream storage stream = _streams[streamId];
         StreamRuntime storage runtime = _streamRuntime[streamId];
 
-        require(stream.streamId != 0, "DripCoreV3: stream not found");
-        require(stream.sender == msg.sender || msg.sender == owner(), "DripCoreV3: unauthorized");
-        require(stream.status == StreamStatus.Paused, "DripCoreV3: stream not paused");
-        require(runtime.remainingBudget > 0, "DripCoreV3: no remaining budget");
-        require(block.timestamp < stream.endTime, "DripCoreV3: stream already ended");
+        require(stream.streamId != 0, "V4: stream not found");
+        require(stream.sender == msg.sender || msg.sender == owner(), "V4: unauthorized");
+        require(stream.status == StreamStatus.Paused, "V4: stream not paused");
+        require(runtime.remainingBudget > 0, "V4: no remaining budget");
+        require(block.timestamp < stream.endTime, "V4: stream already ended");
 
         runtime.lastAccountingTimestamp = block.timestamp;
-        require(
-            gdaForwarder.distributeFlow(address(superToken), address(this), runtime.pool, runtime.totalFlowRate, ""),
-            "DripCoreV3: flow resume failed"
-        );
+
+        // Restore aggregate flows for all paused recipients
+        for (uint256 i = 0; i < stream.recipients.length; i++) {
+            address recipient = stream.recipients[i];
+            if (_isRecipientInStream[streamId][recipient] && _isRecipientPaused[streamId][recipient]) {
+                uint256 rate = _recipientRates[streamId][recipient];
+                _adjustFlow(recipient, int256(rate));
+                _isRecipientPaused[streamId][recipient] = false;
+                _recipientLastWithdraw[streamId][recipient] = block.timestamp;
+            }
+        }
 
         stream.status = StreamStatus.Active;
         emit StreamResumed(streamId, msg.sender);
@@ -371,26 +458,30 @@ contract DripCoreV3 is IDrip, Initializable, ReentrancyGuardUpgradeable, Ownable
         Stream storage stream = _streams[streamId];
         StreamRuntime storage runtime = _streamRuntime[streamId];
 
-        require(stream.streamId != 0, "DripCoreV3: stream not found");
-        require(stream.sender == msg.sender || msg.sender == owner(), "DripCoreV3: unauthorized");
+        require(stream.streamId != 0, "V4: stream not found");
+        require(stream.sender == msg.sender || msg.sender == owner(), "V4: unauthorized");
         require(
             stream.status == StreamStatus.Active || stream.status == StreamStatus.Paused,
-            "DripCoreV3: stream not cancellable"
+            "V4: stream not cancellable"
         );
 
         _syncAccounting(streamId);
 
-        require(
-            gdaForwarder.distributeFlow(address(superToken), address(this), runtime.pool, 0, ""),
-            "DripCoreV3: flow stop failed"
-        );
+        // Reduce aggregate flows for all active recipients
+        for (uint256 i = 0; i < stream.recipients.length; i++) {
+            address recipient = stream.recipients[i];
+            if (_isRecipientInStream[streamId][recipient] && !_isRecipientPaused[streamId][recipient]) {
+                uint256 rate = _recipientRates[streamId][recipient];
+                _adjustFlow(recipient, -int256(rate));
+            }
+        }
 
         uint256 refundAmount = runtime.remainingBudget;
         runtime.remainingBudget = 0;
         stream.status = StreamStatus.Cancelled;
 
         if (refundAmount > 0) {
-            require(superToken.transfer(stream.sender, refundAmount), "DripCoreV3: refund failed");
+            require(superToken.transfer(stream.sender, refundAmount), "V4: refund failed");
         }
 
         emit StreamCancelled(streamId, msg.sender, refundAmount);
@@ -401,21 +492,21 @@ contract DripCoreV3 is IDrip, Initializable, ReentrancyGuardUpgradeable, Ownable
         uint256 newEndTime,
         uint256 depositAmount
     ) external payable nonReentrant {
-        require(msg.value == 0, "DripCoreV3: native not supported");
+        require(msg.value == 0, "V4: native not supported");
         Stream storage stream = _streams[streamId];
         StreamRuntime storage runtime = _streamRuntime[streamId];
 
-        require(stream.streamId != 0, "DripCoreV3: stream not found");
-        require(stream.sender == msg.sender, "DripCoreV3: only sender");
+        require(stream.streamId != 0, "V4: stream not found");
+        require(stream.sender == msg.sender, "V4: only sender");
         require(
             stream.status == StreamStatus.Active || stream.status == StreamStatus.Paused,
-            "DripCoreV3: stream immutable"
+            "V4: stream immutable"
         );
 
         _syncAccounting(streamId);
 
         if (depositAmount > 0) {
-            require(superToken.transferFrom(msg.sender, address(this), depositAmount), "DripCoreV3: deposit transfer failed");
+            require(superToken.transferFrom(msg.sender, address(this), depositAmount), "V4: deposit transfer failed");
             runtime.remainingBudget += depositAmount;
             stream.deposit += depositAmount;
         }
@@ -433,28 +524,29 @@ contract DripCoreV3 is IDrip, Initializable, ReentrancyGuardUpgradeable, Ownable
         uint256 amountPerPeriod,
         uint256 additionalDeposit
     ) external payable nonReentrant {
-        require(msg.value == 0, "DripCoreV3: native not supported");
+        require(msg.value == 0, "V4: native not supported");
         Stream storage stream = _streams[streamId];
         StreamRuntime storage runtime = _streamRuntime[streamId];
 
-        require(stream.streamId != 0, "DripCoreV3: stream not found");
-        require(stream.sender == msg.sender, "DripCoreV3: only sender");
+        require(stream.streamId != 0, "V4: stream not found");
+        require(stream.sender == msg.sender, "V4: only sender");
         require(
             stream.status == StreamStatus.Active || stream.status == StreamStatus.Paused,
-            "DripCoreV3: stream immutable"
+            "V4: stream immutable"
         );
-        require(recipient != address(0) && recipient != stream.sender, "DripCoreV3: invalid recipient");
-        require(!_isRecipientInStream[streamId][recipient], "DripCoreV3: recipient exists");
+        require(recipient != address(0) && recipient != stream.sender, "V4: invalid recipient");
+        require(!_isRecipientInStream[streamId][recipient], "V4: recipient exists");
         _requireRateUnlocked(stream);
 
         _syncAccounting(streamId);
 
         uint256 periodSeconds = stream.endTime > stream.startTime ? (stream.endTime - stream.startTime) : 0;
-        require(periodSeconds > 0, "DripCoreV3: invalid period");
+        require(periodSeconds > 0, "V4: invalid period");
 
         uint256 ratePerSecond = amountPerPeriod / periodSeconds;
-        require(ratePerSecond > 0, "DripCoreV3: rate too small");
+        require(ratePerSecond > 0, "V4: rate too small");
 
+        // Expand recipients array
         address[] memory oldRecipients = stream.recipients;
         address[] memory newRecipients = new address[](oldRecipients.length + 1);
         for (uint256 i = 0; i < oldRecipients.length; i++) {
@@ -468,22 +560,21 @@ contract DripCoreV3 is IDrip, Initializable, ReentrancyGuardUpgradeable, Ownable
         _recipientLastWithdraw[streamId][recipient] = block.timestamp;
         _recipientStreams[recipient].push(streamId);
 
-        require(runtime.pool.updateMemberUnits(recipient, uint128(ratePerSecond)), "DripCoreV3: unit update failed");
-
         int96 newFlowRate = runtime.totalFlowRate + int96(int256(ratePerSecond));
         runtime.totalFlowRate = newFlowRate;
 
         if (additionalDeposit > 0) {
-            require(superToken.transferFrom(msg.sender, address(this), additionalDeposit), "DripCoreV3: add deposit failed");
+            require(superToken.transferFrom(msg.sender, address(this), additionalDeposit), "V4: add deposit failed");
             runtime.remainingBudget += additionalDeposit;
             stream.deposit += additionalDeposit;
         }
 
+        // Start CFA flow if stream is active
         if (stream.status == StreamStatus.Active) {
-            require(
-                gdaForwarder.distributeFlow(address(superToken), address(this), runtime.pool, newFlowRate, ""),
-                "DripCoreV3: flow update failed"
-            );
+            _adjustFlow(recipient, int256(ratePerSecond));
+        } else {
+            // Stream is paused, mark recipient as paused too
+            _isRecipientPaused[streamId][recipient] = true;
         }
 
         emit RecipientAdded(streamId, recipient, amountPerPeriod, ratePerSecond);
@@ -493,13 +584,13 @@ contract DripCoreV3 is IDrip, Initializable, ReentrancyGuardUpgradeable, Ownable
         Stream storage stream = _streams[streamId];
         StreamRuntime storage runtime = _streamRuntime[streamId];
 
-        require(stream.streamId != 0, "DripCoreV3: stream not found");
-        require(stream.sender == msg.sender, "DripCoreV3: only sender");
+        require(stream.streamId != 0, "V4: stream not found");
+        require(stream.sender == msg.sender, "V4: only sender");
         require(
             stream.status == StreamStatus.Active || stream.status == StreamStatus.Paused,
-            "DripCoreV3: stream immutable"
+            "V4: stream immutable"
         );
-        require(_isRecipientInStream[streamId][recipient], "DripCoreV3: recipient missing");
+        require(_isRecipientInStream[streamId][recipient], "V4: recipient missing");
         _requireRateUnlocked(stream);
 
         _syncAccounting(streamId);
@@ -508,9 +599,9 @@ contract DripCoreV3 is IDrip, Initializable, ReentrancyGuardUpgradeable, Ownable
         _recipientRates[streamId][recipient] = 0;
         _isRecipientInStream[streamId][recipient] = false;
 
-        require(runtime.pool.updateMemberUnits(recipient, 0), "DripCoreV3: unit clear failed");
         runtime.totalFlowRate = runtime.totalFlowRate - int96(int256(rate));
 
+        // Compact recipients array
         address[] memory oldRecipients = stream.recipients;
         uint256 n = oldRecipients.length;
         address[] memory compact = new address[](n - 1);
@@ -522,12 +613,12 @@ contract DripCoreV3 is IDrip, Initializable, ReentrancyGuardUpgradeable, Ownable
         }
         stream.recipients = compact;
 
-        if (stream.status == StreamStatus.Active) {
-            require(
-                gdaForwarder.distributeFlow(address(superToken), address(this), runtime.pool, runtime.totalFlowRate, ""),
-                "DripCoreV3: flow update failed"
-            );
+        // Reduce aggregate flow if it was active
+        if (stream.status == StreamStatus.Active && !_isRecipientPaused[streamId][recipient]) {
+            _adjustFlow(recipient, -int256(rate));
         }
+
+        _isRecipientPaused[streamId][recipient] = false;
 
         emit RecipientRemoved(streamId, recipient, 0);
     }
@@ -538,78 +629,111 @@ contract DripCoreV3 is IDrip, Initializable, ReentrancyGuardUpgradeable, Ownable
         uint256 newAmountPerPeriod,
         uint256 additionalDeposit
     ) external payable nonReentrant {
-        require(msg.value == 0, "DripCoreV3: native not supported");
+        require(msg.value == 0, "V4: native not supported");
         Stream storage stream = _streams[streamId];
         StreamRuntime storage runtime = _streamRuntime[streamId];
 
-        require(stream.streamId != 0, "DripCoreV3: stream not found");
-        require(stream.sender == msg.sender, "DripCoreV3: only sender");
+        require(stream.streamId != 0, "V4: stream not found");
+        require(stream.sender == msg.sender, "V4: only sender");
         require(
             stream.status == StreamStatus.Active || stream.status == StreamStatus.Paused,
-            "DripCoreV3: stream immutable"
+            "V4: stream immutable"
         );
-        require(_isRecipientInStream[streamId][recipient], "DripCoreV3: recipient missing");
+        require(_isRecipientInStream[streamId][recipient], "V4: recipient missing");
         _requireRateUnlocked(stream);
 
         _syncAccounting(streamId);
 
         uint256 periodSeconds = stream.endTime > stream.startTime ? (stream.endTime - stream.startTime) : 0;
-        require(periodSeconds > 0, "DripCoreV3: invalid period");
+        require(periodSeconds > 0, "V4: invalid period");
 
         uint256 oldRate = _recipientRates[streamId][recipient];
         uint256 newRate = newAmountPerPeriod / periodSeconds;
-        require(newRate > 0, "DripCoreV3: rate too small");
+        require(newRate > 0, "V4: rate too small");
 
         _recipientRates[streamId][recipient] = newRate;
-        require(runtime.pool.updateMemberUnits(recipient, uint128(newRate)), "DripCoreV3: unit update failed");
         runtime.totalFlowRate = runtime.totalFlowRate - int96(int256(oldRate)) + int96(int256(newRate));
 
         if (additionalDeposit > 0) {
-            require(superToken.transferFrom(msg.sender, address(this), additionalDeposit), "DripCoreV3: add deposit failed");
+            require(superToken.transferFrom(msg.sender, address(this), additionalDeposit), "V4: add deposit failed");
             runtime.remainingBudget += additionalDeposit;
             stream.deposit += additionalDeposit;
         }
 
-        if (stream.status == StreamStatus.Active) {
-            require(
-                gdaForwarder.distributeFlow(address(superToken), address(this), runtime.pool, runtime.totalFlowRate, ""),
-                "DripCoreV3: flow update failed"
-            );
+        // Adjust aggregate flow if stream is active and recipient not paused
+        if (stream.status == StreamStatus.Active && !_isRecipientPaused[streamId][recipient]) {
+            int256 rateDelta = int256(newRate) - int256(oldRate);
+            _adjustFlow(recipient, rateDelta);
         }
 
         emit RecipientRateUpdated(streamId, recipient, oldRate, newRate);
     }
 
-    function withdrawFromStream(uint256 streamId, address recipient) external nonReentrant returns (uint256 withdrawn) {
+    /// @notice Pause streaming to a single recipient without affecting others.
+    function pauseRecipient(uint256 streamId, address recipient) external {
         Stream storage stream = _streams[streamId];
-        require(stream.streamId != 0, "DripCoreV3: stream not found");
-        require(_isRecipientInStream[streamId][recipient], "DripCoreV3: recipient not in stream");
-        require(msg.sender == recipient, "DripCoreV3: only recipient can withdraw");
-        require(
-            stream.status == StreamStatus.Active ||
-            stream.status == StreamStatus.Paused ||
-            stream.status == StreamStatus.Completed,
-            "DripCoreV3: stream not withdrawable"
-        );
+        require(stream.streamId != 0, "V4: stream not found");
+        require(stream.sender == msg.sender || msg.sender == owner(), "V4: unauthorized");
+        require(_isRecipientInStream[streamId][recipient], "V4: recipient not in stream");
+        require(!_isRecipientPaused[streamId][recipient], "V4: already paused");
+        require(stream.status == StreamStatus.Active, "V4: stream not active");
 
         _syncAccounting(streamId);
 
-        uint256 beforeBal = superToken.balanceOf(recipient);
-        require(_streamRuntime[streamId].pool.claimAll(recipient), "DripCoreV3: claim failed");
-        uint256 afterBal = superToken.balanceOf(recipient);
-        withdrawn = afterBal > beforeBal ? afterBal - beforeBal : 0;
+        uint256 rate = _recipientRates[streamId][recipient];
+        _adjustFlow(recipient, -int256(rate));
 
-        if (withdrawn > 0) {
-            _recipientTotalWithdrawn[streamId][recipient] += withdrawn;
-            _recipientLastWithdraw[streamId][recipient] = block.timestamp;
-            emit StreamWithdrawn(streamId, recipient, withdrawn);
-        }
+        _isRecipientPaused[streamId][recipient] = true;
+        emit RecipientPaused(streamId, recipient);
+    }
+
+    /// @notice Resume streaming to a previously paused recipient.
+    function resumeRecipient(uint256 streamId, address recipient) external {
+        Stream storage stream = _streams[streamId];
+        require(stream.streamId != 0, "V4: stream not found");
+        require(stream.sender == msg.sender || msg.sender == owner(), "V4: unauthorized");
+        require(_isRecipientInStream[streamId][recipient], "V4: recipient not in stream");
+        require(_isRecipientPaused[streamId][recipient], "V4: not paused");
+        require(stream.status == StreamStatus.Active, "V4: stream not active");
+
+        _syncAccounting(streamId);
+
+        uint256 rate = _recipientRates[streamId][recipient];
+        require(rate > 0, "V4: invalid rate");
+
+        require(
+            cfaForwarder.createFlow(
+                address(superToken),
+                address(this),
+                recipient,
+                int96(int256(rate)),
+                ""
+            ),
+            "V4: flow creation failed"
+        );
+
+        _isRecipientPaused[streamId][recipient] = false;
+        _recipientLastWithdraw[streamId][recipient] = block.timestamp;
+        emit RecipientResumed(streamId, recipient);
+    }
+
+    /// @notice No-op for backward compatibility. CFA streams directly to wallets.
+    function withdrawFromStream(uint256 streamId, address recipient) external nonReentrant returns (uint256 withdrawn) {
+        Stream storage stream = _streams[streamId];
+        require(stream.streamId != 0, "V4: stream not found");
+        require(_isRecipientInStream[streamId][recipient], "V4: recipient not in stream");
+        require(msg.sender == recipient, "V4: only recipient can call");
+
+        _syncAccounting(streamId);
+
+        // Tokens already streaming directly to recipient via CFA — nothing to withdraw
+        return 0;
     }
 
     function lockStreamRate(uint256 streamId, uint256 lockDuration) external {
         Stream storage stream = _streams[streamId];
-        require(stream.streamId != 0, "DripCoreV3: stream not found");
-        require(stream.sender == msg.sender || msg.sender == owner(), "DripCoreV3: unauthorized");
+        require(stream.streamId != 0, "V4: stream not found");
+        require(stream.sender == msg.sender || msg.sender == owner(), "V4: unauthorized");
         stream.rateLockUntil = block.timestamp + lockDuration;
         emit StreamRateLocked(streamId, stream.rateLockUntil);
     }
@@ -620,15 +744,7 @@ contract DripCoreV3 is IDrip, Initializable, ReentrancyGuardUpgradeable, Ownable
 
     function getStream(uint256 streamId) external view returns (Stream memory stream) {
         stream = _streams[streamId];
-        require(stream.streamId != 0, "DripCoreV3: stream not found");
-    }
-
-    /// @notice Returns the Superfluid GDA pool address for a stream.
-    ///         Recipients can call gdaForwarder.connectPool(pool, "0x") with this
-    ///         address to receive tokens in real-time instead of claiming manually.
-    function getStreamPool(uint256 streamId) external view returns (address pool) {
-        require(_streams[streamId].streamId != 0, "DripCoreV3: stream not found");
-        pool = address(_streamRuntime[streamId].pool);
+        require(stream.streamId != 0, "V4: stream not found");
     }
 
     function getSenderStreams(address sender) external view returns (uint256[] memory streamIds) {
@@ -658,47 +774,66 @@ contract DripCoreV3 is IDrip, Initializable, ReentrancyGuardUpgradeable, Ownable
     function getRecipientBalance(uint256 streamId, address recipient) external view returns (uint256 balance) {
         Stream memory stream = _streams[streamId];
         if (stream.streamId == 0 || !_isRecipientInStream[streamId][recipient]) return 0;
-        (int256 claimable, ) = _streamRuntime[streamId].pool.getClaimableNow(recipient);
-        if (claimable <= 0) return 0;
-        return uint256(claimable);
+
+        // CFA streams directly — calculate total streamed based on rate and elapsed time
+        uint256 rate = _recipientRates[streamId][recipient];
+        if (rate == 0) return 0;
+
+        uint256 lastTime = _recipientLastWithdraw[streamId][recipient];
+        uint256 effectiveNow = block.timestamp;
+        if (effectiveNow > stream.endTime) effectiveNow = stream.endTime;
+
+        uint256 elapsed = effectiveNow > lastTime ? effectiveNow - lastTime : 0;
+        return elapsed * rate;
     }
 
     function getRecipientInfo(uint256 streamId, address recipient) external view returns (RecipientInfo memory info) {
         Stream memory stream = _streams[streamId];
-        require(stream.streamId != 0, "DripCoreV3: stream not found");
-        require(_isRecipientInStream[streamId][recipient], "DripCoreV3: recipient not in stream");
+        require(stream.streamId != 0, "V4: stream not found");
+        require(_isRecipientInStream[streamId][recipient], "V4: recipient not in stream");
 
-        uint256 claimable;
-        (int256 claimableSigned, ) = _streamRuntime[streamId].pool.getClaimableNow(recipient);
-        if (claimableSigned > 0) claimable = uint256(claimableSigned);
+        uint256 rate = _recipientRates[streamId][recipient];
+        uint256 lastTime = _recipientLastWithdraw[streamId][recipient];
+        uint256 effectiveNow = block.timestamp;
+        if (effectiveNow > stream.endTime) effectiveNow = stream.endTime;
+        uint256 elapsed = effectiveNow > lastTime ? effectiveNow - lastTime : 0;
+        uint256 totalStreamed = elapsed * rate;
 
         info = RecipientInfo({
             recipient: recipient,
-            ratePerSecond: _recipientRates[streamId][recipient],
-            totalWithdrawn: _recipientTotalWithdrawn[streamId][recipient],
-            lastWithdrawTime: _recipientLastWithdraw[streamId][recipient],
-            currentAccrued: claimable
+            ratePerSecond: rate,
+            totalWithdrawn: totalStreamed,
+            lastWithdrawTime: lastTime,
+            currentAccrued: 0  // Always 0 — tokens auto-delivered via CFA
         });
     }
 
     function getAllRecipientsInfo(uint256 streamId) external view returns (RecipientInfo[] memory recipients) {
         Stream memory stream = _streams[streamId];
-        require(stream.streamId != 0, "DripCoreV3: stream not found");
+        require(stream.streamId != 0, "V4: stream not found");
 
         recipients = new RecipientInfo[](stream.recipients.length);
         for (uint256 i = 0; i < stream.recipients.length; i++) {
             address recipient = stream.recipients[i];
-            uint256 claimable;
-            (int256 claimableSigned, ) = _streamRuntime[streamId].pool.getClaimableNow(recipient);
-            if (claimableSigned > 0) claimable = uint256(claimableSigned);
+            uint256 rate = _recipientRates[streamId][recipient];
+            uint256 lastTime = _recipientLastWithdraw[streamId][recipient];
+            uint256 effectiveNow = block.timestamp;
+            if (effectiveNow > stream.endTime) effectiveNow = stream.endTime;
+            uint256 elapsed = effectiveNow > lastTime ? effectiveNow - lastTime : 0;
+            uint256 totalStreamed = elapsed * rate;
+
             recipients[i] = RecipientInfo({
                 recipient: recipient,
-                ratePerSecond: _recipientRates[streamId][recipient],
-                totalWithdrawn: _recipientTotalWithdrawn[streamId][recipient],
-                lastWithdrawTime: _recipientLastWithdraw[streamId][recipient],
-                currentAccrued: claimable
+                ratePerSecond: rate,
+                totalWithdrawn: totalStreamed,
+                lastWithdrawTime: lastTime,
+                currentAccrued: 0
             });
         }
+    }
+
+    function isRecipientPaused(uint256 streamId, address recipient) external view returns (bool) {
+        return _isRecipientPaused[streamId][recipient];
     }
 
     function getContractBalances(address[] calldata tokens) external view returns (uint256[] memory balances) {
@@ -707,79 +842,30 @@ contract DripCoreV3 is IDrip, Initializable, ReentrancyGuardUpgradeable, Ownable
             if (tokens[i] == address(0)) {
                 balances[i] = address(this).balance;
             } else {
-                balances[i] = ISuperToken(tokens[i]).balanceOf(address(this));
+                balances[i] = ISuperTokenV4(tokens[i]).balanceOf(address(this));
             }
         }
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // PHONE MAPPING — write/view functions
-    // ═══════════════════════════════════════════════════════════════
-
-    /// @notice Register a phone hash to msg.sender.
-    /// @dev Enforces one phone hash per address and one address per phone hash.
-    ///      `phoneHash` should be produced from normalized E.164 input off-chain.
-    function registerPhone(bytes32 phoneHash) external {
-        require(phoneHash != bytes32(0), "DripCoreV3: invalid phone hash");
-        require(_phoneToAddress[phoneHash] == address(0), "DripCoreV3: phone already mapped");
-        require(_addressToPhone[msg.sender] == bytes32(0), "DripCoreV3: address already mapped");
-
-        _phoneToAddress[phoneHash] = msg.sender;
-        _addressToPhone[msg.sender] = phoneHash;
-
-        emit PhoneMapped(phoneHash, msg.sender);
-    }
-
-    /// @notice Remove caller's phone mapping.
-    function unregisterPhone() external {
-        bytes32 phoneHash = _addressToPhone[msg.sender];
-        require(phoneHash != bytes32(0), "DripCoreV3: no phone mapping");
-
-        delete _addressToPhone[msg.sender];
-        delete _phoneToAddress[phoneHash];
-
-        emit PhoneUnmapped(phoneHash, msg.sender);
-    }
-
-    /// @notice Resolve a phone hash to wallet address.
-    function resolveAddressByPhone(bytes32 phoneHash) external view returns (address user) {
-        user = _phoneToAddress[phoneHash];
-    }
-
-    /// @notice Resolve a wallet address to its mapped phone hash.
-    function resolvePhoneByAddress(address user) external view returns (bytes32 phoneHash) {
-        phoneHash = _addressToPhone[user];
-    }
-
-    /// @notice Check whether a phone hash is already mapped.
-    function isPhoneRegistered(bytes32 phoneHash) external view returns (bool) {
-        return _phoneToAddress[phoneHash] != address(0);
-    }
-
-    /// @notice Check whether an address has already mapped a phone hash.
-    function isAddressPhoneRegistered(address user) external view returns (bool) {
-        return _addressToPhone[user] != bytes32(0);
     }
 
     // ═══════════════════════════════════════════════════════════════
     // STREAMING — admin
     // ═══════════════════════════════════════════════════════════════
 
-    function setSuperfluidConfig(address _superToken, address _gdaForwarder) external onlyOwner {
-        require(_superToken != address(0), "DripCoreV3: invalid super token");
-        require(_gdaForwarder != address(0), "DripCoreV3: invalid forwarder");
-        superToken = ISuperToken(_superToken);
-        gdaForwarder = IGDAv1Forwarder(_gdaForwarder);
-        emit SuperfluidConfigUpdated(_superToken, _gdaForwarder);
+    function setSuperfluidConfig(address _superToken, address _cfaForwarder) external onlyOwner {
+        require(_superToken != address(0), "V4: invalid super token");
+        require(_cfaForwarder != address(0), "V4: invalid forwarder");
+        superToken = ISuperTokenV4(_superToken);
+        cfaForwarder = ICFAv1Forwarder(_cfaForwarder);
+        emit SuperfluidConfigUpdated(_superToken, _cfaForwarder);
     }
 
     function setPlatformFee(uint256 newFeeBps) external onlyOwner {
-        require(newFeeBps <= 1000, "DripCoreV3: fee too high");
+        require(newFeeBps <= 1000, "V4: fee too high");
         platformFeeBps = newFeeBps;
     }
 
     function setPlatformFeeRecipient(address newRecipient) external onlyOwner {
-        require(newRecipient != address(0), "DripCoreV3: invalid recipient");
+        require(newRecipient != address(0), "V4: invalid recipient");
         platformFeeRecipient = newRecipient;
     }
 
@@ -803,15 +889,15 @@ contract DripCoreV3 is IDrip, Initializable, ReentrancyGuardUpgradeable, Ownable
     }
 
     function emergencyWithdrawAll(address[] calldata tokens, address payable to) external onlyOwner {
-        require(to != address(0), "DripCoreV3: invalid recipient");
+        require(to != address(0), "V4: invalid recipient");
         for (uint256 i = 0; i < tokens.length; i++) {
             if (tokens[i] == address(0)) continue;
-            uint256 bal = ISuperToken(tokens[i]).balanceOf(address(this));
-            if (bal > 0) ISuperToken(tokens[i]).transfer(to, bal);
+            uint256 bal = ISuperTokenV4(tokens[i]).balanceOf(address(this));
+            if (bal > 0) ISuperTokenV4(tokens[i]).transfer(to, bal);
         }
         if (address(this).balance > 0) {
             (bool ok, ) = to.call{value: address(this).balance}("");
-            require(ok, "DripCoreV3: native transfer failed");
+            require(ok, "V4: native transfer failed");
         }
     }
 
@@ -840,65 +926,59 @@ contract DripCoreV3 is IDrip, Initializable, ReentrancyGuardUpgradeable, Ownable
     // STAKING — write functions
     // ═══════════════════════════════════════════════════════════════
 
-    /// @notice Stake tokens to start earning points.
     function stake(uint256 amount) external nonReentrant {
-        require(amount > 0, "DripCoreV3: amount must be > 0");
-        require(address(stakingToken) != address(0), "DripCoreV3: staking not initialized");
+        require(amount > 0, "V4: amount must be > 0");
+        require(address(stakingToken) != address(0), "V4: staking not initialized");
 
         _checkpointPoints(msg.sender);
         stakers[msg.sender].stakedAmount += amount;
         totalStaked += amount;
 
-        require(stakingToken.transferFrom(msg.sender, address(this), amount), "DripCoreV3: stake transfer failed");
+        require(stakingToken.transferFrom(msg.sender, address(this), amount), "V4: stake transfer failed");
 
         emit Staked(msg.sender, amount, totalStaked, stakers[msg.sender].snapshotPoints);
     }
 
-    /// @notice Unstake tokens. Accrued points are preserved.
     function unstake(uint256 amount) external nonReentrant {
-        require(amount > 0, "DripCoreV3: amount must be > 0");
-        require(stakers[msg.sender].stakedAmount >= amount, "DripCoreV3: insufficient stake");
+        require(amount > 0, "V4: amount must be > 0");
+        require(stakers[msg.sender].stakedAmount >= amount, "V4: insufficient stake");
 
         _checkpointPoints(msg.sender);
         stakers[msg.sender].stakedAmount -= amount;
         totalStaked -= amount;
 
-        require(stakingToken.transfer(msg.sender, amount), "DripCoreV3: unstake transfer failed");
+        require(stakingToken.transfer(msg.sender, amount), "V4: unstake transfer failed");
 
         emit Unstaked(msg.sender, amount, totalStaked, stakers[msg.sender].snapshotPoints);
     }
 
-    /// @notice Manually checkpoint points without moving tokens.
     function checkpointPoints() external nonReentrant {
         _checkpointPoints(msg.sender);
     }
 
-    /// @notice Emergency full unstake — banks all points then returns entire stake.
     function emergencyUnstake() external nonReentrant {
         uint256 amount = stakers[msg.sender].stakedAmount;
-        require(amount > 0, "DripCoreV3: no stake");
+        require(amount > 0, "V4: no stake");
 
         _checkpointPoints(msg.sender);
         stakers[msg.sender].stakedAmount = 0;
         totalStaked -= amount;
 
-        require(stakingToken.transfer(msg.sender, amount), "DripCoreV3: emergency unstake failed");
+        require(stakingToken.transfer(msg.sender, amount), "V4: emergency unstake failed");
 
         emit Unstaked(msg.sender, amount, totalStaked, stakers[msg.sender].snapshotPoints);
     }
 
-    /// @notice Owner can recover tokens sent to this contract that are not staking tokens or stream tokens.
     function recoverExcess(address tokenAddr, address to) external onlyOwner {
-        require(to != address(0), "DripCoreV3: invalid recipient");
+        require(to != address(0), "V4: invalid recipient");
         uint256 bal;
         if (tokenAddr == address(stakingToken)) {
-            // Only recover tokens above the staked balance
             bal = stakingToken.balanceOf(address(this));
-            require(bal > totalStaked, "DripCoreV3: no excess");
+            require(bal > totalStaked, "V4: no excess");
             bal = bal - totalStaked;
         } else {
             bal = IERC20(tokenAddr).balanceOf(address(this));
-            require(bal > 0, "DripCoreV3: no balance");
+            require(bal > 0, "V4: no balance");
         }
         IERC20(tokenAddr).transfer(to, bal);
         emit ExcessRecovered(to, bal);
@@ -908,13 +988,11 @@ contract DripCoreV3 is IDrip, Initializable, ReentrancyGuardUpgradeable, Ownable
     // STAKING — view functions
     // ═══════════════════════════════════════════════════════════════
 
-    /// @notice Live total points for a staker (banked + accruing since last checkpoint).
     function getPoints(address staker) external view returns (uint256 total) {
         StakerInfo storage info = stakers[staker];
         return info.snapshotPoints + _accruedSince(info);
     }
 
-    /// @notice Full staker info: (stakedAmount, totalPoints, pointsPerSecond, lastUpdateTime).
     function getStakerInfo(address staker) external view returns (
         uint256 stakedAmount,
         uint256 totalPoints,

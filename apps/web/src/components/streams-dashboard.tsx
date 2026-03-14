@@ -2,14 +2,12 @@
 
 import { useAccount } from "wagmi";
 import { useAllUserStreams } from "@/lib/contracts";
-import { StreamCardEnhanced } from "@/components/stream-card-enhanced";
+import { StreamCardPreview } from "@/components/stream-card-preview";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { Plus, Loader2 } from "lucide-react";
+import { Plus, Loader2, ArrowUpRight, ArrowDownLeft } from "lucide-react";
 import { useMemo } from "react";
-
-type StreamStatus = "active" | "paused" | "completed" | "cancelled";
 
 interface Stream {
   streamId: bigint;
@@ -19,44 +17,57 @@ interface Stream {
   deposit: bigint;
   startTime: bigint;
   endTime: bigint;
-  status: number; // 0 = Pending, 1 = Active, 2 = Paused, 3 = Cancelled, 4 = Completed
+  status: number;
   title: string;
   description: string;
   userRole?: "sender" | "recipient" | "both";
 }
 
+type RoleGroup = { active: Stream[]; paused: Stream[]; history: Stream[] };
+
+function groupByStatus(streams: Stream[]): RoleGroup {
+  const result: RoleGroup = { active: [], paused: [], history: [] };
+  streams.forEach((s: any) => {
+    if (s.status === 1) result.active.push(s);
+    else if (s.status === 2) result.paused.push(s);
+    else if (s.status === 3 || s.status === 4) result.history.push(s);
+  });
+  return result;
+}
+
 export function StreamsDashboard() {
   const { address, isConnected } = useAccount();
-  const { streams, isLoading, error } = useAllUserStreams(address);
+  const { streams: allStreams, isLoading, error } = useAllUserStreams(address);
 
-  const groupedStreams = useMemo(() => {
-    // If no address or streams is undefined/null, return empty groups
-    if (!address || !streams) return { active: [], paused: [], completed: [], cancelled: [] };
-    
-    // If streams is an empty array, return empty groups
-    if (Array.isArray(streams) && streams.length === 0) {
-      return { active: [], paused: [], completed: [], cancelled: [] };
-    }
-
-    const grouped: Record<StreamStatus, Stream[]> = {
-      active: [],
-      paused: [],
-      completed: [],
-      cancelled: [],
+  const { sending, receiving, stats } = useMemo(() => {
+    const empty = {
+      sending: groupByStatus([]),
+      receiving: groupByStatus([]),
+      stats: { total: 0, active: 0 },
     };
+    if (!address || !allStreams || !Array.isArray(allStreams)) return empty;
 
-    streams.forEach((stream: any) => {
-      const status = stream.status;
-      // Contract enum: 0 = Pending, 1 = Active, 2 = Paused, 3 = Cancelled, 4 = Completed
-      if (status === 1) grouped.active.push(stream);
-      else if (status === 2) grouped.paused.push(stream);
-      else if (status === 4) grouped.completed.push(stream);
-      else if (status === 3) grouped.cancelled.push(stream);
-      // Note: status === 0 (Pending) streams are not shown in any group
+    const sentList: Stream[] = [];
+    const recvList: Stream[] = [];
+
+    allStreams.forEach((s: any) => {
+      if (s.userRole === "sender") sentList.push(s);
+      else if (s.userRole === "recipient") recvList.push(s);
+      else if (s.userRole === "both") {
+        sentList.push(s);
+        recvList.push(s);
+      }
     });
 
-    return grouped;
-  }, [streams, address]);
+    return {
+      sending: groupByStatus(sentList),
+      receiving: groupByStatus(recvList),
+      stats: {
+        total: allStreams.length,
+        active: allStreams.filter((s: any) => s.status === 1).length,
+      },
+    };
+  }, [allStreams, address]);
 
   if (!isConnected || !address) {
     return (
@@ -91,10 +102,7 @@ export function StreamsDashboard() {
     );
   }
 
-  const totalStreams = streams?.length || 0;
-  const hasStreams = totalStreams > 0;
-
-  if (!hasStreams) {
+  if (stats.total === 0) {
     return (
       <div className="text-center py-12 border rounded-lg">
         <p className="text-muted-foreground mb-4">No streams yet</p>
@@ -108,149 +116,102 @@ export function StreamsDashboard() {
     );
   }
 
+  const sendingCount = sending.active.length + sending.paused.length + sending.history.length;
+  const receivingCount = receiving.active.length + receiving.paused.length + receiving.history.length;
+
   return (
     <div className="space-y-8">
-      {/* Summary Stats - DeFi Style */}
+      {/* Summary Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
         <Card className="glass-card card-hover">
           <CardContent className="pt-4 md:pt-6 px-3 md:px-6">
-            <div className="text-xl md:text-2xl font-bold text-foreground">{totalStreams}</div>
-            <div className="text-xs md:text-sm text-muted-foreground mt-1">Total Streams</div>
+            <div className="text-xl md:text-2xl font-bold text-foreground">{stats.total}</div>
+            <div className="text-xs md:text-sm text-muted-foreground mt-1">Total</div>
           </CardContent>
         </Card>
         <Card className="glass-card card-hover">
           <CardContent className="pt-4 md:pt-6 px-3 md:px-6">
-            <div className="text-xl md:text-2xl font-bold text-green">
-              {groupedStreams.active.length}
-            </div>
+            <div className="text-xl md:text-2xl font-bold text-blue-400">{sendingCount}</div>
+            <div className="text-xs md:text-sm text-muted-foreground mt-1">Sending</div>
+          </CardContent>
+        </Card>
+        <Card className="glass-card card-hover">
+          <CardContent className="pt-4 md:pt-6 px-3 md:px-6">
+            <div className="text-xl md:text-2xl font-bold text-purple-400">{receivingCount}</div>
+            <div className="text-xs md:text-sm text-muted-foreground mt-1">Receiving</div>
+          </CardContent>
+        </Card>
+        <Card className="glass-card card-hover">
+          <CardContent className="pt-4 md:pt-6 px-3 md:px-6">
+            <div className="text-xl md:text-2xl font-bold text-green">{stats.active}</div>
             <div className="text-xs md:text-sm text-muted-foreground mt-1">Active</div>
-          </CardContent>
-        </Card>
-        <Card className="glass-card card-hover">
-          <CardContent className="pt-4 md:pt-6 px-3 md:px-6">
-            <div className="text-xl md:text-2xl font-bold text-orange">
-              {groupedStreams.paused.length}
-            </div>
-            <div className="text-xs md:text-sm text-muted-foreground mt-1">Paused</div>
-          </CardContent>
-        </Card>
-        <Card className="glass-card card-hover">
-          <CardContent className="pt-4 md:pt-6 px-3 md:px-6">
-            <div className="text-xl md:text-2xl font-bold text-muted-foreground">
-              {groupedStreams.completed.length + groupedStreams.cancelled.length}
-            </div>
-            <div className="text-xs md:text-sm text-muted-foreground mt-1">Completed</div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Active Streams */}
-      {groupedStreams.active.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-foreground">Active Streams</h2>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span className="text-green">●</span>
-              <span>{groupedStreams.active.length} Active</span>
-            </div>
+      {/* Streams I Send */}
+      {sendingCount > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 pb-1 border-b border-border">
+            <ArrowUpRight className="h-5 w-5 text-blue-400" />
+            <h2 className="text-lg font-semibold text-foreground">Streams I Send</h2>
+            <span className="text-sm text-muted-foreground">({sendingCount})</span>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {groupedStreams.active
-              .filter((stream: any) => stream.streamId != null)
-              .map((stream: any) => (
-              <Link
-                key={Number(stream.streamId)}
-                href={`/streams/${stream.streamId.toString()}`}
-                className="block w-full"
-              >
-                <StreamCardEnhanced
-                  streamId={stream.streamId}
-                  sender={stream.sender}
-                  recipients={stream.recipients}
-                  token={stream.token}
-                  startTime={stream.startTime}
-                  endTime={stream.endTime}
-                  status={stream.status}
-                  title={stream.title}
-                  userRole={stream.userRole}
-                />
-              </Link>
-            ))}
-          </div>
+          <StreamGroup label="Active" dot="text-green" streams={sending.active} />
+          <StreamGroup label="Paused" dot="text-orange" streams={sending.paused} />
+          <StreamGroup label="History" dot="text-muted-foreground" streams={sending.history} />
         </div>
       )}
 
-      {/* Paused Streams */}
-      {groupedStreams.paused.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-foreground">Paused Streams</h2>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span className="text-orange">●</span>
-              <span>{groupedStreams.paused.length} Paused</span>
-            </div>
+      {/* Streams I Receive */}
+      {receivingCount > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 pb-1 border-b border-border">
+            <ArrowDownLeft className="h-5 w-5 text-purple-400" />
+            <h2 className="text-lg font-semibold text-foreground">Streams I Receive</h2>
+            <span className="text-sm text-muted-foreground">({receivingCount})</span>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {groupedStreams.paused
-              .filter((stream: any) => stream.streamId != null)
-              .map((stream: any) => (
-              <Link
-                key={Number(stream.streamId)}
-                href={`/streams/${stream.streamId.toString()}`}
-                className="block"
-              >
-                <StreamCardEnhanced
-                  streamId={stream.streamId}
-                  sender={stream.sender}
-                  recipients={stream.recipients}
-                  token={stream.token}
-                  startTime={stream.startTime}
-                  endTime={stream.endTime}
-                  status={stream.status}
-                  title={stream.title}
-                  userRole={stream.userRole}
-                />
-              </Link>
-            ))}
-          </div>
+          <StreamGroup label="Active" dot="text-green" streams={receiving.active} />
+          <StreamGroup label="Paused" dot="text-orange" streams={receiving.paused} />
+          <StreamGroup label="History" dot="text-muted-foreground" streams={receiving.history} />
         </div>
       )}
+    </div>
+  );
+}
 
-      {/* Completed/Cancelled Streams */}
-      {(groupedStreams.completed.length > 0 || groupedStreams.cancelled.length > 0) && (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-foreground">Completed Streams</h2>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span>●</span>
-              <span>{groupedStreams.completed.length + groupedStreams.cancelled.length} Completed</span>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[...groupedStreams.completed, ...groupedStreams.cancelled]
-              .filter((stream: any) => stream.streamId != null)
-              .map((stream: any) => (
-              <Link
-                key={Number(stream.streamId)}
-                href={`/streams/${stream.streamId.toString()}`}
-                className="block w-full"
-              >
-                <StreamCardEnhanced
-                  streamId={stream.streamId}
-                  sender={stream.sender}
-                  recipients={stream.recipients}
-                  token={stream.token}
-                  startTime={stream.startTime}
-                  endTime={stream.endTime}
-                  status={stream.status}
-                  title={stream.title}
-                  userRole={stream.userRole}
-                />
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
+function StreamGroup({ label, dot, streams }: { label: string; dot: string; streams: Stream[] }) {
+  if (streams.length === 0) return null;
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <span className={`text-xs ${dot}`}>●</span>
+        <span className="text-sm font-medium text-muted-foreground">{label}</span>
+        <span className="text-xs text-muted-foreground">({streams.length})</span>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {streams
+          .filter((stream: any) => stream.streamId != null)
+          .map((stream: any) => (
+            <Link
+              key={`${stream.userRole}-${Number(stream.streamId)}`}
+              href={`/streams/${stream.streamId.toString()}`}
+              className="block h-full"
+            >
+              <StreamCardPreview
+                streamId={stream.streamId}
+                sender={stream.sender}
+                recipients={stream.recipients}
+                token={stream.token}
+                startTime={stream.startTime}
+                endTime={stream.endTime}
+                status={stream.status}
+                title={stream.title}
+                userRole={stream.userRole}
+              />
+            </Link>
+          ))}
+      </div>
     </div>
   );
 }

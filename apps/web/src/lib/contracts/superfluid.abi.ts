@@ -50,10 +50,17 @@ export const SUPERFLUID_GDA_ABI = [
     ],
     name: "getRecipientInfo",
     outputs: [
-      { type: "uint256", name: "ratePerSecond" },
-      { type: "uint256", name: "totalWithdrawn" },
-      { type: "uint256", name: "lastWithdrawTime" },
-      { type: "uint256", name: "currentAccrued" }
+      {
+        type: "tuple",
+        name: "info",
+        components: [
+          { type: "address", name: "recipient" },
+          { type: "uint256", name: "ratePerSecond" },
+          { type: "uint256", name: "totalWithdrawn" },
+          { type: "uint256", name: "lastWithdrawTime" },
+          { type: "uint256", name: "currentAccrued" }
+        ]
+      }
     ],
     stateMutability: "view",
     type: "function"
@@ -91,9 +98,12 @@ export const SUPERFLUID_GDA_ABI = [
     type: "function"
   },
   {
-    inputs: [{ type: "uint256", name: "streamId" }],
+    inputs: [
+      { type: "uint256", name: "streamId" },
+      { type: "address", name: "recipient" }
+    ],
     name: "withdrawFromStream",
-    outputs: [],
+    outputs: [{ type: "uint256", name: "withdrawn" }],
     stateMutability: "nonpayable",
     type: "function"
   },
@@ -117,5 +127,46 @@ export const SUPERFLUID_GDA_ABI = [
     outputs: [{ type: "uint256" }],
     stateMutability: "view",
     type: "function"
-  }
+  },
+  {
+    inputs: [{ type: "uint256", name: "streamId" }],
+    name: "getStreamPool",
+    outputs: [{ type: "address", name: "pool" }],
+    stateMutability: "view",
+    type: "function"
+  },
+  {
+    inputs: [],
+    name: "gdaForwarder",
+    outputs: [{ type: "address" }],
+    stateMutability: "view",
+    type: "function"
+  },
+] as const;
+
+/**
+ * Superfluid GDAv1Forwarder ABI — only the connectPool function needed by recipients
+ * GDAv1Forwarder on Celo Mainnet: 0x6DA13Bde224A05a288748d857b9e7DDEffd1dE08
+ */
+export const GDA_FORWARDER_ABI = [
+  {
+    inputs: [
+      { type: "address", name: "pool" },
+      { type: "bytes", name: "userData" },
+    ],
+    name: "connectPool",
+    outputs: [{ type: "bool", name: "success" }],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      { type: "address", name: "pool" },
+      { type: "address", name: "memberAddr" },
+    ],
+    name: "isMemberConnected",
+    outputs: [{ type: "bool", name: "connected" }],
+    stateMutability: "view",
+    type: "function",
+  },
 ] as const;

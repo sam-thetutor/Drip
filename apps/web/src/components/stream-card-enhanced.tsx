@@ -3,7 +3,7 @@
 import { useAccount } from "wagmi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Pause, Play, X, Download, ExternalLink, Lock } from "lucide-react";
+import { Pause, Play, X, Download, ExternalLink, Lock, Settings } from "lucide-react";
 import { formatEther, formatUnits } from "viem";
 import { formatTokenAmount } from "@/lib/utils/format";
 import { useDrip, useRecipientBalance, useStreamRateLockStatus } from "@/lib/contracts";
@@ -404,6 +404,20 @@ export function StreamCardEnhanced({
             >
               <Download className="h-4 w-4 mr-2" />
               Withdraw
+            </Button>
+          )}
+          {isUserSender && (
+            <Button
+              variant="ghost"
+              size="sm"
+              asChild
+              onClick={(e) => e.stopPropagation()}
+              className="flex-1"
+            >
+              <Link href={`/streams/${streamId.toString()}`}>
+                <Settings className="h-4 w-4 mr-2" />
+                Manage
+              </Link>
             </Button>
           )}
         </div>

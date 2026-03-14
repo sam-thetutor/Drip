@@ -77,11 +77,11 @@ export const liskMainnet = defineChain({
  */
 export const CONTRACT_ADDRESSES = {
   [CELO_MAINNET_ID]: {
-    DripCore: "0x19a05b5bCD18A2A14c620F86356C44ecD5946203" as `0x${string}`,
+    DripCore: "0x5530975fDe062FE6706298fF3945E3d1a17A310a" as `0x${string}`, // proxy — the only contract to use
     SubscriptionManager: "0x3b247FACa2E9DF6c3e9660705176A841933Ae695" as `0x${string}`,
     DripStaking: "0x8deF81b277590Be389bB4B3b7137c8554F93992a" as `0x${string}`,
-    DripCoreSuperfluid: "0x5530975fDe062FE6706298fF3945E3d1a17A310a" as `0x${string}`, // DripCoreV3 — streaming + staking merged
-    DripStakingV2: "0x5530975fDe062FE6706298fF3945E3d1a17A310a" as `0x${string}`, // same proxy — staking now lives here
+    DripCoreSuperfluid: "0x5530975fDe062FE6706298fF3945E3d1a17A310a" as `0x${string}`, // same proxy
+    DripStakingV2: "0x5530975fDe062FE6706298fF3945E3d1a17A310a" as `0x${string}`, // same proxy
   },
   [CELO_SEPOLIA_ID]: {
     DripCore: "0xfAaB5005f7844eC5499cF258F52dE29EDc74aa31" as `0x${string}`,
@@ -92,6 +92,21 @@ export const CONTRACT_ADDRESSES = {
     SubscriptionManager: "0x009AB24eC563d05cfD3345E6128cBaFAb8b62299" as `0x${string}`,
   },
 } as const;
+
+/**
+ * Superfluid GDAv1Forwarder addresses by network
+ * Recipients call connectPool() on this contract to receive tokens automatically
+ */
+export const GDA_FORWARDER_ADDRESSES: Record<number, `0x${string}`> = {
+  [CELO_MAINNET_ID]: "0x6DA13Bde224A05a288748d857b9e7DDEffd1dE08",
+};
+
+/**
+ * Get GDA forwarder address for current network
+ */
+export function getGDAForwarderAddress(chainId: number): `0x${string}` | null {
+  return GDA_FORWARDER_ADDRESSES[chainId] || null;
+}
 
 /**
  * Engagement Rewards contract addresses by network and environment

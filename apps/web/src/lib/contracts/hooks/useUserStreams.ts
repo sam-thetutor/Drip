@@ -1,126 +1,150 @@
 "use client";
 
-import { useAccount, useChainId, useReadContract } from "wagmi";
+import { useChainId, useReadContract } from "wagmi";
 import { useMemo } from "react";
 import { getContractAddress } from "../config";
 import { DRIP_CORE_ABI } from "../abis";
 
-/**
- * Hook for getting streams where user is the sender
- */
-export function useUserSentStreams(userAddress: `0x${string}` | undefined) {
-  const chainId = useChainId();
-  const contractAddress = useMemo(() => {
-    return getContractAddress(chainId, "DripCore");
-  }, [chainId]);
+const QUERY_OPTIONS = {
+  refetchInterval: 30000,
+  refetchOnMount: true,
+  refetchOnWindowFocus: false,
+  staleTime: 20 * 1000,
+};
 
-  const { data: streams, isLoading, error, refetch } = useReadContract({
+/**
+ * Hook for getting streams where user is the sender — queries a single contract address.
+ */
+function useSentStreamsFromContract(
+  userAddress: `0x${string}` | undefined,
+  contractAddress: `0x${string}` | null | undefined
+) {
+  const { data, isLoading, error, refetch } = useReadContract({
     address: contractAddress || undefined,
     abi: DRIP_CORE_ABI,
     functionName: "getUserSentStreams",
     args: userAddress ? [userAddress] : undefined,
-    query: {
-      enabled: !!userAddress && !!contractAddress,
-      // Reduce polling to 30 seconds for better performance
-      refetchInterval: 30000,
-      // Only refetch on mount if data is stale
-      refetchOnMount: true,
-      // Don't refetch on window focus to reduce unnecessary calls
-      refetchOnWindowFocus: false,
-      // Cache for 20 seconds
-      staleTime: 20 * 1000,
-    },
+    query: { enabled: !!userAddress && !!contractAddress, ...QUERY_OPTIONS },
   });
-
-  // React Query automatically refetches when query key changes (userAddress/contractAddress)
-  // No need for manual refetch - this reduces unnecessary calls
-
-  return { streams, isLoading, error, refetch };
+  return { streams: data as any[] | undefined, isLoading, error, refetch };
 }
 
 /**
- * Hook for getting streams where user is a recipient
+ * Hook for getting streams where user is a recipient — queries a single contract address.
  */
-export function useUserReceivedStreams(userAddress: `0x${string}` | undefined) {
-  const chainId = useChainId();
-  const contractAddress = useMemo(() => {
-    return getContractAddress(chainId, "DripCore");
-  }, [chainId]);
-
-  const { data: streams, isLoading, error, refetch } = useReadContract({
+function useReceivedStreamsFromContract(
+  userAddress: `0x${string}` | undefined,
+  contractAddress: `0x${string}` | null | undefined
+) {
+  const { data, isLoading, error, refetch } = useReadContract({
     address: contractAddress || undefined,
     abi: DRIP_CORE_ABI,
     functionName: "getUserReceivedStreams",
     args: userAddress ? [userAddress] : undefined,
-    query: {
-      enabled: !!userAddress && !!contractAddress,
-      // Reduce polling to 30 seconds for better performance
-      refetchInterval: 30000,
-      // Only refetch on mount if data is stale
-      refetchOnMount: true,
-      // Don't refetch on window focus to reduce unnecessary calls
-      refetchOnWindowFocus: false,
-      // Cache for 20 seconds
-      staleTime: 20 * 1000,
-    },
+    query: { enabled: !!userAddress && !!contractAddress, ...QUERY_OPTIONS },
   });
+  return { streams: data as any[] | undefined, isLoading, error, refetch };
+}
 
-  // React Query automatically refetches when query key changes (userAddress/contractAddress)
-  // No need for manual refetch - this reduces unnecessary calls
+// ─── Public hooks (kept for backward compat) ────────────────────────────────
 
-  return { streams, isLoading, error, refetch };
+export function useUserSentStreams(userAddress: `0x${string}` | undefined) {
+  const chainId = useChainId();
+  const contractAddress = useMemo(() => getContractAddress(chainId, "DripCore"), [chainId]);
+  return useSentStreamsFromContract(userAddress, contractAddress);
+}
+
+export function useUserReceivedStreams(userAddress: `0x${string}` | undefined) {
+  const chainId = useChainId();
+  const contractAddress = useMemo(() => getContractAddress(chainId, "DripCore"), [chainId]);
+  return useReceivedStreamsFromContract(userAddress, contractAddress);
 }
 
 /**
- * Hook for getting all streams (sent + received) for a user
+ * Queries ALL known contract addresses (DripCore + DripCoreSuperfluid legacy) and 
+ * merges results so streams created on either deployment are always visible.
  */
 export function useAllUserStreams(userAddress: `0x${string}` | undefined) {
-  const sentStreams = useUserSentStreams(userAddress);
-  const receivedStreams = useUserReceivedStreams(userAddress);
+  const chainId = useChainId();
+
+  const primaryAddr = useMemo(() => getContractAddress(chainId, "DripCore"), [chainId]);
+  // Legacy address: older streams may have been created here before the V4 redeployment
+  const legacyAddr = useMemo(() => {
+    const superfluid = getContractAddress(chainId, "DripCoreSuperfluid");
+    // Only add as legacy if it is a DIFFERENT address from the primary
+    return superfluid && superfluid !== primaryAddr ? superfluid : null;
+  }, [chainId, primaryAddr]);
+
+  // Primary contract
+  const primarySent = useSentStreamsFromContract(userAddress, primaryAddr);
+  const primaryRecv = useReceivedStreamsFromContract(userAddress, primaryAddr);
+
+  // Legacy contract (only fires actual requests when legacyAddr is non-null)
+  const legacySent = useSentStreamsFromContract(userAddress, legacyAddr);
+  const legacyRecv = useReceivedStreamsFromContract(userAddress, legacyAddr);
+
+  const isLoading =
+    primarySent.isLoading ||
+    primaryRecv.isLoading ||
+    (!!legacyAddr && (legacySent.isLoading || legacyRecv.isLoading));
 
   const allStreams = useMemo(() => {
-    // If no address, return undefined immediately
     if (!userAddress) return undefined;
-    
-    // If both are still loading or undefined, return undefined
-    if (sentStreams.isLoading || receivedStreams.isLoading) {
-      return undefined;
-    }
-    
-    const sent = (sentStreams.streams || []) as any[];
-    const received = (receivedStreams.streams || []) as any[];
-    
-    // If both are empty arrays, return empty array
-    if (sent.length === 0 && received.length === 0) {
-      return [];
-    }
-    
-    // Combine and deduplicate by streamId
-    const streamMap = new Map();
-    
-    sent.forEach((stream: any) => {
-      streamMap.set(Number(stream.streamId), { ...stream, userRole: "sender" });
+    if (isLoading) return undefined;
+
+    const sentArrays: any[] = [
+      ...(primarySent.streams || []),
+      ...(legacyAddr ? legacySent.streams || [] : []),
+    ];
+    const recvArrays: any[] = [
+      ...(primaryRecv.streams || []),
+      ...(legacyAddr ? legacyRecv.streams || [] : []),
+    ];
+
+    if (sentArrays.length === 0 && recvArrays.length === 0) return [];
+
+    // Deduplicate by streamId — prefer the first occurrence (primary over legacy)
+    const streamMap = new Map<number, any>();
+
+    sentArrays.forEach((stream: any) => {
+      const id = Number(stream.streamId);
+      if (!streamMap.has(id)) {
+        streamMap.set(id, { ...stream, userRole: "sender" });
+      }
     });
-    
-    received.forEach((stream: any) => {
-      const existing = streamMap.get(Number(stream.streamId));
+
+    recvArrays.forEach((stream: any) => {
+      const id = Number(stream.streamId);
+      const existing = streamMap.get(id);
       if (existing) {
         existing.userRole = "both";
       } else {
-        streamMap.set(Number(stream.streamId), { ...stream, userRole: "recipient" });
+        streamMap.set(id, { ...stream, userRole: "recipient" });
       }
     });
-    
+
     return Array.from(streamMap.values());
-  }, [userAddress, sentStreams.streams, sentStreams.isLoading, receivedStreams.streams, receivedStreams.isLoading]);
+  }, [
+    userAddress,
+    isLoading,
+    primarySent.streams,
+    primaryRecv.streams,
+    legacySent.streams,
+    legacyRecv.streams,
+    legacyAddr,
+  ]);
 
   return {
     streams: allStreams,
-    isLoading: sentStreams.isLoading || receivedStreams.isLoading,
-    error: sentStreams.error || receivedStreams.error,
+    isLoading,
+    error: primarySent.error || primaryRecv.error,
     refetch: () => {
-      sentStreams.refetch();
-      receivedStreams.refetch();
+      primarySent.refetch();
+      primaryRecv.refetch();
+      if (legacyAddr) {
+        legacySent.refetch();
+        legacyRecv.refetch();
+      }
     },
   };
 }

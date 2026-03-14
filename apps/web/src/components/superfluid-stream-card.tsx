@@ -1,13 +1,12 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Download, ExternalLink, Loader2, ArrowRight } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Loader2, Wifi } from "lucide-react";
 import { formatEther } from "viem";
-import { useAutoRefreshStreamData, useSuperfluidClaim } from "@/lib/contracts";
+import { useAutoRefreshStreamData } from "@/lib/contracts";
+import { usePoolConnection } from "@/lib/contracts/hooks/useSuperfluid";
 import { useAccount } from "wagmi";
-import { toast } from "sonner";
-import { useEffect, useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
 
 interface SuperfluidStreamCardProps {
@@ -17,63 +16,75 @@ interface SuperfluidStreamCardProps {
 export function SuperfluidStreamCard({ streamId }: SuperfluidStreamCardProps) {
   const { address } = useAccount();
   const { streamData, isLoading } = useAutoRefreshStreamData(streamId, address);
-  const { claim, isPending, isConfirming, isConfirmed, error } = useSuperfluidClaim();
+  const { isConnected } = usePoolConnection(streamId, address);
+
+  const isRecipient = address && streamData?.recipients.some(
+    (r: string) => r.toLowerCase() === address.toLowerCase()
+  );
 
   const statusText = ["Pending", "Active", "Paused", "Cancelled", "Completed"];
-  const statusColors = {
-    0: "bg-yellow-100 text-yellow-800",
-    1: "bg-green-100 text-green-800",
-    2: "bg-orange-100 text-orange-800",
-    3: "bg-red-100 text-red-800",
-    4: "bg-gray-100 text-gray-800",
+  const statusColors: Record<number, string> = {
+    0: "bg-yellow-500/10 text-yellow-500",
+    1: "bg-green-500/10 text-green-500",
+    2: "bg-orange-500/10 text-orange-500",
+    3: "bg-red-500/10 text-red-500",
+    4: "bg-gray-500/10 text-gray-400",
   };
 
-  const calculations = useMemo(() => {
-    if (!streamData?.recipientInfo) return null;
-
-    const flowRatePerHour = streamData.recipientInfo.ratePerSecond * 3600n;
-    const flowRatePerDay = streamData.recipientInfo.ratePerSecond * 86400n;
-
+  const timeRemaining = useMemo(() => {
+    if (!streamData) return null;
     const now = BigInt(Math.floor(Date.now() / 1000));
-    const timeRemainingSeconds = streamData.endTime > now ? Number(streamData.endTime - now) : 0;
-    const projectedTotal = 
-      streamData.recipientInfo.totalWithdrawn + 
-      streamData.claimableNow + 
-      (streamData.recipientInfo.ratePerSecond * BigInt(timeRemainingSeconds));
-
-    const progress = streamData.endTime > streamData.startTime
-      ? ((Number(now - streamData.startTime) / Number(streamData.endTime - streamData.startTime)) * 100)
-      : 0;
-
-    return {
-      flowRatePerHour,
-      flowRatePerDay,
-      timeRemainingSeconds,
-      projectedTotal,
-      progress: Math.min(progress, 100),
-    };
+    const secsLeft = streamData.endTime > now ? Number(streamData.endTime - now) : 0;
+    if (secsLeft <= 0) return "Ended";
+    const days = Math.floor(secsLeft / 86400);
+    const hours = Math.floor((secsLeft % 86400) / 3600);
+    const mins = Math.floor((secsLeft % 3600) / 60);
+    if (days > 0) return `${days}d ${hours}h`;
+    if (hours > 0) return `${hours}h ${mins}m`;
+    return `${mins}m`;
   }, [streamData]);
 
-  useEffect(() => {
-    if (isConfirmed) {
-      toast.success("Successfully claimed tokens!");
-    }
-    if (error) {
-      toast.error(`Failed to claim: ${error.message}`);
-    }
-  }, [isConfirmed, error]);
+  const flowRatePerHour = useMemo(() => {
+    if (!streamData?.recipientInfo) return null;
+    return streamData.recipientInfo.ratePerSecond * 3600n;
+  }, [streamData]);
 
-  const handleClaim = () => {
-    if (!streamData) return;
-    claim(streamData.streamId);
-    toast.info("Claiming tokens...");
-  };
+  const progress = useMemo(() => {
+    if (!streamData) return 0;
+    const now = BigInt(Math.floor(Date.now() / 1000));
+    if (streamData.endTime <= streamData.startTime) return 0;
+    const pct = Number(now - streamData.startTime) / Number(streamData.endTime - streamData.startTime) * 100;
+    return Math.min(Math.max(pct, 0), 100);
+  }, [streamData]);
+
+  const [realtimeClaimable, setRealtimeClaimable] = useState<bigint>(0n);
+
+  useEffect(() => {
+    const rate = streamData?.recipientInfo?.ratePerSecond ?? 0n;
+    const base = streamData?.claimableNow ?? 0n;
+    const isActive = streamData?.status === 1;
+
+    setRealtimeClaimable(base);
+
+    if (!isActive || rate === 0n) return;
+
+    const snapshot = Date.now();
+    const endMs = Number(streamData!.endTime) * 1000;
+
+    const interval = setInterval(() => {
+      const cappedNow = Math.min(Date.now(), endMs);
+      const elapsedSecs = BigInt(Math.max(0, Math.floor((cappedNow - snapshot) / 1000)));
+      setRealtimeClaimable(base + rate * elapsedSecs);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [streamData]);
 
   if (isLoading) {
     return (
       <Card className="glass-card">
-        <CardContent className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <CardContent className="flex items-center justify-center py-8">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </CardContent>
       </Card>
     );
@@ -83,154 +94,71 @@ export function SuperfluidStreamCard({ streamId }: SuperfluidStreamCardProps) {
     return (
       <Card className="glass-card">
         <CardContent className="py-6">
-          <p className="text-center text-muted-foreground">Stream not found</p>
+          <p className="text-center text-sm text-muted-foreground">Stream not found</p>
         </CardContent>
       </Card>
     );
   }
 
   return (
-    <Card className="glass-card hover:shadow-lg transition-shadow">
-      <CardHeader>
-        <div className="flex justify-between items-start">
-          <div>
-            <CardTitle className="text-xl mb-2">{streamData.title}</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Stream #{streamData.streamId}
-            </p>
-          </div>
-          <span
-            className={`px-3 py-1 rounded-full text-xs font-medium ${
-              statusColors[streamData.status as keyof typeof statusColors]
-            }`}
-          >
-            {statusText[streamData.status]}
-          </span>
-        </div>
-      </CardHeader>
-
-      <CardContent className="space-y-6">
-        {/* Flow Rate Metrics */}
-        {calculations && (
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
-                Flow Rate
-              </p>
-              <p className="text-lg font-semibold">
-                {parseFloat(formatEther(calculations.flowRatePerHour)).toFixed(4)} G$/hr
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {parseFloat(formatEther(calculations.flowRatePerDay)).toFixed(2)} G$/day
-              </p>
+    <Link href={`/streams/${streamData.streamId}`}>
+      <Card className="glass-card hover:shadow-lg hover:border-primary/30 transition-all cursor-pointer">
+        <CardContent className="p-4 space-y-3">
+          {/* Title row */}
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="font-semibold truncate">{streamData.title || `Stream #${streamData.streamId}`}</p>
+              <p className="text-xs text-muted-foreground">#{streamData.streamId}</p>
             </div>
-
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
-                Claimable Now
-              </p>
-              <p className="text-lg font-semibold text-green-600">
-                {parseFloat(formatEther(streamData.claimableNow)).toFixed(4)} G$
-              </p>
-            </div>
-
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
-                Total Withdrawn
-              </p>
-              <p className="text-lg font-semibold">
-                {streamData.recipientInfo 
-                  ? parseFloat(formatEther(streamData.recipientInfo.totalWithdrawn)).toFixed(2)
-                  : '0'} G$
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Progress Bar */}
-        {calculations && (
-          <div>
-            <div className="flex justify-between text-xs text-muted-foreground mb-2">
-              <span>Started: {new Date(Number(streamData.startTime) * 1000).toLocaleDateString()}</span>
-              <span>Ends: {new Date(Number(streamData.endTime) * 1000).toLocaleDateString()}</span>
-            </div>
-            <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-green-500 to-emerald-600 transition-all duration-300"
-                style={{ width: `${calculations.progress}%` }}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Projection */}
-        {calculations && (
-          <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-4 text-center">
-            <p className="text-xs text-emerald-700 uppercase tracking-wide mb-1">
-              Projected Total
-            </p>
-            <p className="text-2xl font-bold text-emerald-800">
-              {parseFloat(formatEther(calculations.projectedTotal)).toFixed(2)} G$
-            </p>
-            <p className="text-xs text-emerald-600 mt-1">
-              {Math.floor(calculations.timeRemainingSeconds / 3600)} hours remaining
-            </p>
-          </div>
-        )}
-
-        {/* Actions */}
-        <div className="flex gap-2">
-          {streamData.claimableNow > 0n && (
-            <Button
-              className="flex-1"
-              onClick={handleClaim}
-              disabled={isPending || isConfirming}
-            >
-              {isPending || isConfirming ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Claiming...
-                </>
-              ) : (
-                <>
-                  <Download className="mr-2 h-4 w-4" />
-                  Claim {parseFloat(formatEther(streamData.claimableNow)).toFixed(4)} G$
-                </>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              {isRecipient && isConnected && streamData.status === 1 && (
+                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-500 border border-green-500/20">
+                  <Wifi className="h-2.5 w-2.5 animate-pulse" />
+                  Live
+                </span>
               )}
-            </Button>
-          )}
-          
-          <Button asChild variant="outline">
-            <Link href={`/streams/${streamData.streamId}`}>
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </Button>
-          
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => window.open(`https://console.superfluid.finance/celo/accounts/${address}`, '_blank')}
-          >
-            <ExternalLink className="h-4 w-4" />
-          </Button>
-        </div>
+              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[streamData.status] ?? ""}`}>
+                {statusText[streamData.status]}
+              </span>
+            </div>
+          </div>
 
-        {/* Pool Info */}
-        <div className="text-xs text-muted-foreground space-y-1 pt-4 border-t">
-          <div className="flex justify-between">
-            <span>Sender:</span>
-            <span className="font-mono">{streamData.sender.slice(0, 6)}...{streamData.sender.slice(-4)}</span>
+          {/* Flow rate + ends in */}
+          <div className="flex items-center justify-between text-sm">
+            <div>
+              <p className="text-xs text-muted-foreground mb-0.5">Flow rate</p>
+              <p className="font-semibold">
+                {flowRatePerHour !== null
+                  ? `${parseFloat(formatEther(flowRatePerHour)).toFixed(2)} G$/hr`
+                  : "—"}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-muted-foreground mb-0.5">Ends in</p>
+              <p className="font-semibold">{timeRemaining ?? "—"}</p>
+            </div>
           </div>
-          <div className="flex justify-between">
-            <span>Total Deposit:</span>
-            <span>{parseFloat(formatEther(streamData.deposit)).toFixed(2)} G$</span>
+
+          {/* Live streaming amount — only shown for active streams */}
+          {streamData.status === 1 && streamData.recipientInfo && (
+            <div className="flex items-center gap-1.5 text-xs text-green-500">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse flex-shrink-0" />
+              <span className="tabular-nums font-medium">
+                {parseFloat(formatEther(realtimeClaimable)).toFixed(4)} G$
+              </span>
+              <span className="text-muted-foreground">{isConnected ? 'streaming' : 'claimable'}</span>
+            </div>
+          )}
+
+          {/* Progress bar */}
+          <div className="w-full h-1.5 bg-muted/30 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-primary to-primary/70 transition-all duration-300"
+              style={{ width: `${progress}%` }}
+            />
           </div>
-          <div className="flex justify-between">
-            <span>Recipients:</span>
-            <span>{streamData.recipients.length}</span>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </Link>
   );
 }
