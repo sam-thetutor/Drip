@@ -466,6 +466,85 @@
     pointer-events: none;
   }
 
+  .hero-card-drips {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 1;
+    opacity: 0.4;
+  }
+
+  .hero-card-drip {
+    position: absolute;
+    top: -20%;
+    width: 2px;
+    height: 34%;
+    border-radius: 999px;
+    background: linear-gradient(
+      to bottom,
+      rgba(16, 185, 129, 0),
+      rgba(16, 185, 129, 0.45),
+      rgba(45, 212, 191, 0)
+    );
+    filter: blur(0.25px);
+    animation: heroCardDrip 7s linear infinite;
+  }
+
+  .hero-card-drip::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: -7px;
+    width: 5px;
+    height: 5px;
+    border-radius: 999px;
+    transform: translateX(-50%);
+    background: rgba(45, 212, 191, 0.7);
+    box-shadow: 0 0 10px rgba(45, 212, 191, 0.45);
+  }
+
+  .hero-card-drip-1 {
+    left: 15%;
+    animation-delay: 0s;
+    animation-duration: 6.6s;
+  }
+
+  .hero-card-drip-2 {
+    left: 38%;
+    animation-delay: 1.2s;
+    animation-duration: 7.4s;
+  }
+
+  .hero-card-drip-3 {
+    left: 63%;
+    animation-delay: 2.3s;
+    animation-duration: 6.9s;
+  }
+
+  .hero-card-drip-4 {
+    left: 84%;
+    animation-delay: 0.8s;
+    animation-duration: 8.1s;
+  }
+
+  @keyframes heroCardDrip {
+    0% {
+      transform: translateY(-20%) scaleY(0.8);
+      opacity: 0;
+    }
+    12% {
+      opacity: 0.9;
+    }
+    75% {
+      opacity: 0.35;
+    }
+    100% {
+      transform: translateY(150%) scaleY(1.05);
+      opacity: 0;
+    }
+  }
+
   .animate-pulse-soft {
     animation: pulseSoft 3.2s ease-in-out infinite;
   }

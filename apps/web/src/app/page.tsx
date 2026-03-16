@@ -2,105 +2,43 @@
 
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { useChainId, useReadContracts } from "wagmi";
 import { Button } from "@/components/ui/button";
-import { getContractAddress } from "@/lib/contracts/config";
-import { DRIP_CORE_ABI, DRIP_CORE_V3_ABI, DRIP_STAKING_ABI } from "@/lib/contracts/abis";
-import { getTokenAddressBySymbol } from "@/lib/tokens/config";
+import { useSuperfluidContractStats } from "@/lib/contracts";
 import { formatTokenAmountWithDecimals } from "@/lib/utils/format";
 
-const sparklinePath =
-  "M2 24C8 10 18 6 30 16C42 26 52 12 64 18C76 24 86 8 98 14";
-
-function useContractTreasury() {
-  const chainId = useChainId();
-  const gDollarAddress = getTokenAddressBySymbol("G$", chainId);
-  const dripCoreAddress = getContractAddress(chainId, "DripCore");
-  const dripCoreV3Address = getContractAddress(chainId, "DripCoreSuperfluid");
-  const dripStakingAddress = getContractAddress(chainId, "DripStaking");
-
-  const { data, isLoading } = useReadContracts({
-    contracts: [
-      {
-        address: dripCoreAddress || undefined,
-        abi: DRIP_CORE_ABI as any,
-        functionName: "getContractBalances",
-        args: gDollarAddress ? [[gDollarAddress]] : undefined,
-      },
-      {
-        address: dripCoreV3Address || undefined,
-        abi: DRIP_CORE_V3_ABI as any,
-        functionName: "getContractBalances",
-        args: gDollarAddress ? [[gDollarAddress]] : undefined,
-      },
-      {
-        address: dripCoreV3Address || undefined,
-        abi: DRIP_CORE_V3_ABI as any,
-        functionName: "totalStaked",
-        args: [],
-      },
-      {
-        address: dripCoreV3Address || undefined,
-        abi: DRIP_CORE_V3_ABI as any,
-        functionName: "totalPointsIssued",
-        args: [],
-      },
-      {
-        address: dripCoreV3Address || undefined,
-        abi: DRIP_CORE_V3_ABI as any,
-        functionName: "platformFeeBps",
-        args: [],
-      },
-      {
-        address: dripCoreV3Address || undefined,
-        abi: DRIP_CORE_V3_ABI as any,
-        functionName: "engagementRewardsEnabled",
-        args: [],
-      },
-      {
-        address: dripStakingAddress || undefined,
-        abi: DRIP_STAKING_ABI as any,
-        functionName: "totalStaked",
-        args: [],
-      },
-    ],
-    query: {
-      enabled: !!gDollarAddress && (!!dripCoreAddress || !!dripCoreV3Address),
-      refetchInterval: 30000,
-      staleTime: 20 * 1000,
-    },
-  });
-
-  const balanceFrom = (result: typeof data extends (infer T)[] | undefined ? T : never) =>
-    result?.status === "success" && Array.isArray(result.result) && result.result.length > 0
-      ? BigInt((result.result as bigint[])[0])
-      : 0n;
-
-  const proxyBalance: bigint = data ? balanceFrom(data[1]) : 0n;
-  const stakingBalance: bigint =
-    data?.[6]?.status === "success" ? BigInt(data[6].result as bigint) : 0n;
-  const balance: bigint = data ? balanceFrom(data[0]) + proxyBalance + stakingBalance : 0n;
-  const totalPointsIssuedRaw: bigint =
-    data?.[3]?.status === "success" ? BigInt(data[3].result as bigint) : 0n;
-  const platformFeeBpsRaw: bigint =
-    data?.[4]?.status === "success" ? BigInt(data[4].result as bigint) : 0n;
-  const rewardsActive: boolean =
-    data?.[5]?.status === "success" ? Boolean(data[5].result) : false;
-
-  return {
-    balance,
-    formatted: formatTokenAmountWithDecimals(balance, 18, 2),
-    proxyBalance: formatTokenAmountWithDecimals(proxyBalance, 18, 2),
-    stakingBalance: formatTokenAmountWithDecimals(stakingBalance, 18, 2),
-    totalPointsIssued: formatTokenAmountWithDecimals(totalPointsIssuedRaw, 18, 2),
-    platformFee: platformFeeBpsRaw > 0n ? `${(Number(platformFeeBpsRaw) / 100).toFixed(2)}%` : "0%",
-    rewardsActive,
-    isLoading,
-  };
-}
-
 export default function HomePage() {
-  const treasury = useContractTreasury();
+  const superfluidStats = useSuperfluidContractStats();
+
+  const streamsCreated = superfluidStats.data?.streamsCreated ?? 0;
+  const streamedValueWei = superfluidStats.data?.streamedValueWei ?? 0n;
+  const outflowRateWeiPerSecond = superfluidStats.data?.outflowRateWeiPerSecond ?? 0n;
+  const lastUpdatedTimestampSec = superfluidStats.data?.lastUpdatedTimestampSec ?? 0;
+
+  const streamedValueFormatted = formatTokenAmountWithDecimals(
+    streamedValueWei,
+    18,
+    2
+  );
+
+  const outflowPerDayFormatted = formatTokenAmountWithDecimals(
+    outflowRateWeiPerSecond * 86400n,
+    18,
+    2
+  );
+
+  const avgPerStreamFormatted = formatTokenAmountWithDecimals(
+    streamsCreated > 0 ? streamedValueWei / BigInt(streamsCreated) : 0n,
+    18,
+    2
+  );
+
+  const lastSyncLabel =
+    lastUpdatedTimestampSec > 0
+      ? new Date(lastUpdatedTimestampSec * 1000).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : "--:--";
 
   return (
     <main className="relative overflow-hidden">
@@ -162,62 +100,80 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="relative">
-            <div className="hero-card hero-spotlight card-glow">
+          <div className="relative h-full">
+            <div className="hero-card hero-spotlight card-glow h-full">
+              <div className="relative flex h-full flex-col">
+                <div className="absolute -top-10 -right-16 h-36 w-36 rounded-full bg-green/20 blur-3xl" aria-hidden="true" />
+                <div className="absolute bottom-8 -left-14 h-28 w-28 rounded-full bg-teal-400/20 blur-3xl" aria-hidden="true" />
 
-              {/* TVL header */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.4em] text-foreground/50">TVL</p>
-                  <p className="text-3xl font-bold text-white">
-                    {treasury.isLoading ? "…" : `${treasury.formatted} G$`}
-                  </p>
-                </div>
-                <span className="flex items-center gap-1.5 rounded-full border border-green/30 bg-green/10 px-3 py-1 text-xs font-medium text-green">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green" />
-                  Live
-                </span>
-              </div>
-
-              {/* 4 mini stats — global, no wallet required */}
-              <div className="mt-6 grid gap-3 text-xs text-foreground/80 sm:grid-cols-2">
-                <div className="hero-mini-card">
-                  <p>G$ (Streaming)</p>
-                  <p className="text-lg font-semibold text-green">
-                    {treasury.isLoading ? "…" : treasury.proxyBalance}
-                  </p>
-                </div>
-                <div className="hero-mini-card">
-                  <p>G$ (Staking)</p>
-                  <p className="text-lg font-semibold text-green">
-                    {treasury.isLoading ? "…" : treasury.stakingBalance}
-                  </p>
-                </div>
-                <div className="hero-mini-card">
-                  <p>Points Issued</p>
-                  <p className="text-lg font-semibold text-white">
-                    {treasury.isLoading ? "…" : treasury.totalPointsIssued}
-                  </p>
-                </div>
-                <div className="hero-mini-card">
-                  <p>Platform Fee</p>
-                  <p className="text-lg font-semibold text-white">
-                    {treasury.isLoading ? "…" : treasury.platformFee}
-                  </p>
-                </div>
-              </div>
-
-              {/* Wallet CTA */}
-              <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-xs text-foreground/80">
                 <div className="flex items-center justify-between">
-                  <span className="uppercase tracking-[0.35em] text-foreground/50">Your streams</span>
+                  <p className="text-xs font-semibold uppercase tracking-[0.42em] text-foreground/55">
+                    Live Stream Metrics
+                  </p>
+                  <span className="flex items-center gap-1.5 rounded-full border border-green/35 bg-green/10 px-3 py-1 text-[11px] font-medium text-green">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green" />
+                    Celo Mainnet
+                  </span>
                 </div>
-                <div className="mt-2 flex items-center justify-between text-sm">
-                  <span className="font-semibold text-white">Connect wallet to view your streams</span>
-                  <Link href="/dashboard" className="text-green hover:underline">Open →</Link>
+
+                <div className="mt-6 grid gap-4">
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                    <p className="text-[11px] uppercase tracking-[0.35em] text-foreground/50">
+                      Value in Streams
+                    </p>
+                    <p className="mt-2 text-4xl font-black leading-none text-white sm:text-5xl">
+                      {superfluidStats.isLoading ? "…" : streamedValueFormatted}
+                      <span className="ml-2 text-xl font-semibold text-green sm:text-2xl">G$</span>
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-green/25 bg-green/[0.04] p-4">
+                    <p className="text-[11px] uppercase tracking-[0.35em] text-foreground/55">
+                      Streams Created
+                    </p>
+                    <div className="mt-2 flex items-end justify-between">
+                      <p className="text-4xl font-bold leading-none text-green">
+                        {superfluidStats.isLoading ? "…" : streamsCreated}
+                      </p>
+                      <p className="text-xs uppercase tracking-[0.22em] text-foreground/60">
+                        Total
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+                    <div className="hero-mini-card">
+                      <p className="uppercase tracking-[0.2em] text-foreground/55">Outflow / Day</p>
+                      <p className="mt-2 text-base font-semibold text-white">
+                        {superfluidStats.isLoading ? "…" : `${outflowPerDayFormatted} G$`}
+                      </p>
+                    </div>
+                    <div className="hero-mini-card">
+                      <p className="uppercase tracking-[0.2em] text-foreground/55">Avg / Stream</p>
+                      <p className="mt-2 text-base font-semibold text-white">
+                        {superfluidStats.isLoading ? "…" : `${avgPerStreamFormatted} G$`}
+                      </p>
+                    </div>
+                    <div className="hero-mini-card">
+                      <p className="uppercase tracking-[0.2em] text-foreground/55">Last Sync</p>
+                      <p className="mt-2 text-base font-semibold text-green">
+                        {superfluidStats.isLoading ? "…" : lastSyncLabel}
+                      </p>
+                    </div>
+                    <div className="hero-mini-card">
+                      <p className="uppercase tracking-[0.2em] text-foreground/55">Data Source</p>
+                      <p className="mt-2 text-base font-semibold text-green">Subgraph</p>
+                    </div>
+                  </div>
+
+                <div className="mt-auto pt-4">
+                  <div className="h-px w-full bg-gradient-to-r from-transparent via-green/70 to-transparent" />
+                  <p className="mt-3 text-xs tracking-[0.08em] text-foreground/60">
+                    Powered by Superfluid on Celo Mainnet
+                  </p>
                 </div>
               </div>
-
             </div>
             <div className="absolute -right-6 -bottom-8 h-24 w-24 rounded-full bg-gradient-to-br from-green/60 to-teal/60 blur-[60px]"></div>
           </div>

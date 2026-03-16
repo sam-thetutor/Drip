@@ -5,6 +5,7 @@ export * from "./useUserStreams";
 export * from "./useStreamRecipients";
 export * from "./useTreasury";
 export * from "./useSuperfluid";
+export * from "./useSuperfluidContractStats";
 export * from "./useStakingV2";
 export * from "./usePhoneMapping";
 

@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, PlusCircle, Wallet, User, TrendingUp, Shield } from "lucide-react"
+import { Home, PlusCircle, Wallet, User, Shield } from "lucide-react"
 
 import { ConnectButton } from "@/components/connect-button"
 import { WalletButton } from "@/components/wallet-button"
@@ -11,7 +11,6 @@ import { useIsAdmin } from "@/lib/admin/auth"
 const navLinks = [
   { name: "Home", href: "/dashboard", icon: Home },
   { name: "Create", href: "/streams/create", icon: PlusCircle },
-  { name: "Stake", href: "/stake", icon: TrendingUp },
   { name: "Wallet", href: "/wallet", icon: Wallet },
   { name: "Profile", href: "/profile", icon: User },
 ]

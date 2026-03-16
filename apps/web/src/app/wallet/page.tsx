@@ -3,14 +3,12 @@
 import Link from "next/link";
 import { useMemo } from "react";
 import { useAccount, useBalance, useChainId } from "wagmi";
-import { formatEther } from "viem";
 import {
   ArrowRight,
   Wallet,
   TrendingUp,
   Clock,
   Coins,
-  Lock,
   Activity,
   ExternalLink,
 } from "lucide-react";
@@ -18,7 +16,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAllUserStreams } from "@/lib/contracts";
-import { useStaking } from "@/lib/contracts/hooks/useStaking";
 import { getTokenAddressBySymbol } from "@/lib/tokens/config";
 import { formatTokenAmountWithDecimals } from "@/lib/utils/format";
 
@@ -28,7 +25,6 @@ export default function WalletPage() {
   const { streams, isLoading: streamsLoading } = useAllUserStreams(
     address as `0x${string}` | undefined
   );
-  const staking = useStaking();
 
   const goodDollarAddress = getTokenAddressBySymbol("G$", chainId);
 
@@ -196,11 +192,11 @@ export default function WalletPage() {
           <Card className="glass-card">
             <CardContent className="pt-5 pb-4">
               <div className="flex items-center gap-2 text-xs text-foreground/60 mb-2">
-                <Lock className="h-3.5 w-3.5 text-foreground/40" />
-                <span>Staked</span>
+                <Activity className="h-3.5 w-3.5 text-foreground/40" />
+                <span>Staking</span>
               </div>
               <p className="text-2xl font-bold text-foreground/40">--</p>
-              <p className="text-xs text-foreground/50 mt-1">Coming soon</p>
+              <p className="text-xs text-foreground/50 mt-1">Temporarily disabled</p>
             </CardContent>
           </Card>
         </div>
@@ -223,20 +219,13 @@ export default function WalletPage() {
 
         {/* Tabs */}
         <Tabs defaultValue="streams" className="w-full">
-          <TabsList className="w-full grid grid-cols-3 bg-white/5 border border-white/10 rounded-xl mb-6">
+          <TabsList className="w-full grid grid-cols-2 bg-white/5 border border-white/10 rounded-xl mb-6">
             <TabsTrigger
               value="streams"
               className="data-[state=active]:bg-green/20 data-[state=active]:text-green rounded-lg"
             >
               <TrendingUp className="h-4 w-4 mr-2" />
               Streams
-            </TabsTrigger>
-            <TabsTrigger
-              value="stake"
-              className="data-[state=active]:bg-green/20 data-[state=active]:text-green rounded-lg"
-            >
-              <Lock className="h-4 w-4 mr-2" />
-              Stake
             </TabsTrigger>
             <TabsTrigger
               value="activity"
@@ -370,117 +359,6 @@ export default function WalletPage() {
                 </div>
               </>
             )}
-          </TabsContent>
-
-          {/* Stake Tab */}
-          <TabsContent value="stake">
-            <div className="space-y-4">
-              {/* Quick Stats */}
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Card className="glass-card">
-                  <CardContent className="pt-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-xs text-foreground/50 mb-1">Your Staked</p>
-                        <p className="text-2xl font-semibold text-white">
-                          {formatEther(staking.stakedAmount)} G$
-                        </p>
-                        <p className="text-xs text-foreground/50 mt-1">
-                          Pool Units: {staking.poolUnits.toString()}
-                        </p>
-                      </div>
-                      <Lock className="h-8 w-8 text-green/50" />
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card className="glass-card">
-                  <CardContent className="pt-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-xs text-foreground/50 mb-1">Current APY</p>
-                        <p className="text-2xl font-semibold text-green">
-                          {staking.apy.toFixed(2)}%
-                        </p>
-                        <p className="text-xs text-foreground/50 mt-1">
-                          ~{formatEther(staking.rewardFlowRate * 86400n)} G$/day
-                        </p>
-                      </div>
-                      <TrendingUp className="h-8 w-8 text-green/50" />
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Claimable Rewards */}
-              {staking.claimableRewards > 0n && (
-                <Card className="glass-card border-green/30">
-                  <CardContent className="pt-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-xs text-foreground/50 mb-1">Claimable Rewards</p>
-                        <p className="text-xl font-semibold text-green">
-                          {formatEther(staking.claimableRewards)} G$
-                        </p>
-                      </div>
-                      <Button
-                        onClick={() => staking.claimRewards()}
-                        disabled={staking.isClaimPending || staking.isClaimConfirming}
-                        className="hero-cta-button"
-                      >
-                        {staking.isClaimPending
-                          ? "Confirming..."
-                          : staking.isClaimConfirming
-                          ? "Processing..."
-                          : "Claim"}
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* CTA to Full Stake Page */}
-              <Card className="glass-card bg-gradient-to-br from-green/10 to-transparent border-green/30">
-                <CardContent className="py-8 text-center">
-                  <Lock className="h-12 w-12 mx-auto text-green mb-4" />
-                  <h3 className="text-lg font-semibold text-white mb-2">
-                    Manage Your Stake
-                  </h3>
-                  <p className="text-sm text-foreground/60 max-w-md mx-auto mb-6">
-                    Visit the full staking page to stake, unstake, view live earnings, and track pool statistics.
-                  </p>
-                  <Button className="hero-cta-button" asChild>
-                    <Link href="/stake" className="flex items-center gap-2">
-                      Go to Staking
-                      <ArrowRight className="h-4 w-4" />
-                    </Link>
-                  </Button>
-                </CardContent>
-              </Card>
-
-              {/* Pool Info Summary */}
-              <Card className="glass-card">
-                <CardHeader>
-                  <CardTitle className="text-base">Pool Statistics</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-foreground/60">Total Staked</span>
-                    <span className="text-sm font-semibold text-white">
-                      {formatEther(staking.totalStaked)} G$
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-foreground/60">Your Pool Share</span>
-                    <span className="text-sm font-semibold text-green">
-                      {staking.totalStaked > 0n
-                        ? ((Number(staking.stakedAmount) / Number(staking.totalStaked)) * 100).toFixed(2)
-                        : "0.00"}%
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
           </TabsContent>
 
           {/* Activity Tab */}
