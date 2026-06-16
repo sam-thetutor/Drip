@@ -293,6 +293,10 @@ Drip is currently in active development. See [MILESTONES.md](./MILESTONES.md) fo
    ```bash
    pnpm dev
    ```
+   Or run only the frontend app:
+   ```bash
+   pnpm --filter web dev
+   ```
 
 3. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
