@@ -8,4 +8,5 @@ export * from "./useSuperfluid";
 export * from "./useSuperfluidContractStats";
 export * from "./useStakingV2";
 export * from "./usePhoneMapping";
+export * from "./useDripV4";
 
