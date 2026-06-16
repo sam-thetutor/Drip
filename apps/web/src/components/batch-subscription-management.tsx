@@ -26,6 +26,18 @@ export function BatchSubscriptionManagement() {
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [action, setAction] = useState<string | null>(null);
 
+  // Must be before any early returns — Rules of Hooks
+  useEffect(() => {
+    if (hasSubmitted && isConfirmed && action) {
+      toast.success(`Successfully ${action}d ${selectedIds.size} subscription(s)`, {
+        id: `batch-${action}`,
+      });
+      setHasSubmitted(false);
+      setAction(null);
+      setSelectedIds(new Set());
+    }
+  }, [isConfirmed, hasSubmitted, action, selectedIds.size]);
+
   if (!isConnected || !address) {
     return (
       <Card className="glass-card">
@@ -95,18 +107,6 @@ export function BatchSubscriptionManagement() {
       setAction(null);
     }
   };
-
-  // Watch for transaction confirmation
-  useEffect(() => {
-    if (hasSubmitted && isConfirmed && action) {
-      toast.success(`Successfully ${action}d ${selectedIds.size} subscription(s)`, {
-        id: `batch-${action}`,
-      });
-      setHasSubmitted(false);
-      setAction(null);
-      setSelectedIds(new Set());
-    }
-  }, [isConfirmed, hasSubmitted, action, selectedIds.size]);
 
   if (isLoading) {
     return (

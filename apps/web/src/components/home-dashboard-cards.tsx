@@ -58,7 +58,7 @@ export function HomeDashboardCards({
             )}
           </div>
           <Button variant="outline" className="w-full" asChild>
-            <Link href="/streams/create">Manage streams</Link>
+            <Link href="/streams">Manage streams</Link>
           </Button>
         </CardContent>
       </Card>

@@ -189,6 +189,19 @@ export function StreamsAnalyticsDashboard() {
       }));
   }, [streamsAnalytics]);
 
+  // Must be declared before any conditional returns — Rules of Hooks
+  const uniqueTokens = useMemo(() => {
+    const tokens = new Set<string>();
+    streamsAnalytics.forEach((stream) => tokens.add(stream.token));
+    return Array.from(tokens).map((token) => {
+      const stream = streamsAnalytics.find((s) => s.token === token);
+      return {
+        address: token,
+        symbol: stream?.tokenSymbol || "Unknown",
+      };
+    });
+  }, [streamsAnalytics]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -294,19 +307,6 @@ export function StreamsAnalyticsDashboard() {
       setIsExporting(false);
     }
   };
-
-  // Get unique tokens for token filter
-  const uniqueTokens = useMemo(() => {
-    const tokens = new Set<string>();
-    streamsAnalytics.forEach((stream) => tokens.add(stream.token));
-    return Array.from(tokens).map((token) => {
-      const stream = streamsAnalytics.find((s) => s.token === token);
-      return {
-        address: token,
-        symbol: stream?.tokenSymbol || "Unknown",
-      };
-    });
-  }, [streamsAnalytics]);
 
   return (
     <div className="space-y-6">
