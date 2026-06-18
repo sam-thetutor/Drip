@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Home, PiggyBank, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSuperfluidContractStats } from "@/lib/contracts";
 import { formatTokenAmountWithDecimals } from "@/lib/utils/format";
@@ -46,21 +46,22 @@ export default function HomePage() {
       <div className="absolute inset-0 hero-glow" aria-hidden="true"></div>
 
       <section className="page-container relative z-10 flex min-h-[calc(100vh-4rem)] items-center py-16">
-        <div className="grid w-full grid-cols-1 gap-10 lg:grid-cols-[1.05fr_0.95fr]">
-          <div className="space-y-8">
+        <div className="grid w-full grid-cols-1 items-center gap-12 lg:grid-cols-[1.05fr_0.95fr]">
+          {/* ── Left: pitch ── */}
+          <div className="space-y-7">
             <div className="space-y-4">
               <p className="text-sm font-semibold uppercase tracking-[0.45em] text-foreground/70">
                 Automatic money plans
               </p>
-              <h1 className="text-4xl font-bold leading-tight text-white sm:text-5xl lg:text-6xl">
-                Every dollar on{" "}
-                <span className="hero-gradient-text">autopilot</span>
+              <h1 className="text-4xl font-bold leading-[1.05] text-white sm:text-5xl lg:text-[4rem]">
+                Every dollar
+                <br />
+                on <span className="hero-shine">autopilot</span>
               </h1>
-              <p className="text-lg leading-relaxed text-foreground/80">
-                Stop guessing where your money goes. Split it into buckets for
-                your bills, your people, and your savings goals — and let Drip
-                send the right amount to each one, automatically. Saving without
-                the willpower.
+              <p className="max-w-xl text-lg leading-relaxed text-foreground/80">
+                Pour your money into one pool, split it into buckets — bills,
+                family, savings — and Drip streams the right amount to each one,
+                second by second. Saving without the willpower.
               </p>
             </div>
 
@@ -85,88 +86,101 @@ export default function HomePage() {
               <span className="hero-badge">Support family</span>
               <span className="hero-badge">No willpower needed</span>
             </div>
-
-            <div className="hero-invite-card">
-              <p className="text-sm font-semibold text-white">Built for real life</p>
-              <p className="text-sm text-foreground/70">
-                Money you allocate flows out slowly over time — so you spend on
-                purpose and your savings actually grow instead of disappearing.
-              </p>
-              <div className="mt-2 flex items-center justify-between gap-4 text-xs text-foreground/80">
-                <span>Stop, top up, or change a bucket anytime</span>
-                <Button variant="ghost" className="hero-invite-btn">
-                  Learn more
-                </Button>
-              </div>
-            </div>
           </div>
 
+          {/* ── Right: live money-flow diagram ── */}
           <div className="relative h-full">
             <div className="hero-card hero-spotlight card-glow h-full">
               <div className="relative flex h-full flex-col">
                 <div className="absolute -top-10 -right-16 h-36 w-36 rounded-full bg-green/20 blur-3xl" aria-hidden="true" />
                 <div className="absolute bottom-8 -left-14 h-28 w-28 rounded-full bg-teal-400/20 blur-3xl" aria-hidden="true" />
 
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold uppercase tracking-[0.42em] text-foreground/55">
-                    Money flowing through Drip
-                  </p>
-                  <span className="flex items-center gap-1.5 rounded-full border border-green/35 bg-green/10 px-3 py-1 text-[11px] font-medium text-green">
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green" />
-                    Celo Mainnet
-                  </span>
-                </div>
-
-                <div className="mt-6 grid gap-4">
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <p className="text-[11px] uppercase tracking-[0.35em] text-foreground/50">
-                      Money allocated
+                {/* Flow stage: pool → pipes → buckets */}
+                <div className="flow-stage">
+                  <div className="flow-source">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-teal-200/70">
+                      Your money pool
                     </p>
-                    <p className="mt-2 text-4xl font-black leading-none text-white sm:text-5xl">
+                    <p className="mt-1.5 text-3xl font-black leading-none text-white sm:text-4xl">
                       {superfluidStats.isLoading ? "…" : streamedValueFormatted}
-                      <span className="ml-2 text-xl font-semibold text-green sm:text-2xl">G$</span>
+                      <span className="ml-1.5 text-lg font-semibold text-green">G$</span>
+                    </p>
+                    <p className="mt-1.5 text-[11px] text-foreground/55">
+                      {superfluidStats.isLoading
+                        ? "syncing…"
+                        : `${streamsCreated} active plans · ${outflowPerDayFormatted} G$/day flowing`}
                     </p>
                   </div>
 
-                  <div className="rounded-2xl border border-green/25 bg-green/[0.04] p-4">
-                    <p className="text-[11px] uppercase tracking-[0.35em] text-foreground/55">
-                      Plans running
-                    </p>
-                    <div className="mt-2 flex items-end justify-between">
-                      <p className="text-4xl font-bold leading-none text-green">
-                        {superfluidStats.isLoading ? "…" : streamsCreated}
-                      </p>
-                      <p className="text-xs uppercase tracking-[0.22em] text-foreground/60">
-                        Total
-                      </p>
+                  <svg
+                    className="flow-pipes"
+                    viewBox="0 0 300 78"
+                    preserveAspectRatio="none"
+                    aria-hidden="true"
+                  >
+                    <path className="flow-pipe" d="M150 2 C150 38 50 40 50 76" />
+                    <path className="flow-pipe" d="M150 2 L150 76" />
+                    <path className="flow-pipe" d="M150 2 C150 38 250 40 250 76" />
+                    <path className="flow-pipe-active" d="M150 2 C150 38 50 40 50 76" />
+                    <path className="flow-pipe-active delay-1" d="M150 2 L150 76" />
+                    <path className="flow-pipe-active delay-2" d="M150 2 C150 38 250 40 250 76" />
+                  </svg>
+
+                  <div className="flow-buckets">
+                    <div className="flow-bucket">
+                      <span className="flow-bucket-liquid b1" />
+                      <span className="flow-bucket-icon">
+                        <Home className="h-3.5 w-3.5" />
+                      </span>
+                      <span className="flow-bucket-label">
+                        <span className="block text-sm font-semibold text-white">Bills</span>
+                        <span className="block text-[10px] text-foreground/55">on time</span>
+                      </span>
+                    </div>
+                    <div className="flow-bucket">
+                      <span className="flow-bucket-liquid b2" />
+                      <span className="flow-bucket-icon">
+                        <PiggyBank className="h-3.5 w-3.5" />
+                      </span>
+                      <span className="flow-bucket-label">
+                        <span className="block text-sm font-semibold text-white">Savings</span>
+                        <span className="block text-[10px] text-foreground/55">growing</span>
+                      </span>
+                    </div>
+                    <div className="flow-bucket">
+                      <span className="flow-bucket-liquid b3" />
+                      <span className="flow-bucket-icon">
+                        <Users className="h-3.5 w-3.5" />
+                      </span>
+                      <span className="flow-bucket-label">
+                        <span className="block text-sm font-semibold text-white">Family</span>
+                        <span className="block text-[10px] text-foreground/55">supported</span>
+                      </span>
                     </div>
                   </div>
                 </div>
 
-                <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
-                    <div className="hero-mini-card">
-                      <p className="uppercase tracking-[0.2em] text-foreground/55">Flowing / Day</p>
-                      <p className="mt-2 text-base font-semibold text-white">
-                        {superfluidStats.isLoading ? "…" : `${outflowPerDayFormatted} G$`}
-                      </p>
-                    </div>
-                    <div className="hero-mini-card">
-                      <p className="uppercase tracking-[0.2em] text-foreground/55">Avg / Plan</p>
-                      <p className="mt-2 text-base font-semibold text-white">
-                        {superfluidStats.isLoading ? "…" : `${avgPerStreamFormatted} G$`}
-                      </p>
-                    </div>
-                    <div className="hero-mini-card">
-                      <p className="uppercase tracking-[0.2em] text-foreground/55">Last Sync</p>
-                      <p className="mt-2 text-base font-semibold text-green">
-                        {superfluidStats.isLoading ? "…" : lastSyncLabel}
-                      </p>
-                    </div>
-                    <div className="hero-mini-card">
-                      <p className="uppercase tracking-[0.2em] text-foreground/55">Data Source</p>
-                      <p className="mt-2 text-base font-semibold text-green">Subgraph</p>
-                    </div>
+                {/* Live stats strip */}
+                <div className="mt-5 grid grid-cols-3 gap-3 text-xs">
+                  <div className="hero-mini-card">
+                    <p className="uppercase tracking-[0.18em] text-foreground/55">Plans</p>
+                    <p className="mt-1.5 text-base font-semibold text-green">
+                      {superfluidStats.isLoading ? "…" : streamsCreated}
+                    </p>
                   </div>
+                  <div className="hero-mini-card">
+                    <p className="uppercase tracking-[0.18em] text-foreground/55">Avg / plan</p>
+                    <p className="mt-1.5 text-base font-semibold text-white">
+                      {superfluidStats.isLoading ? "…" : avgPerStreamFormatted}
+                    </p>
+                  </div>
+                  <div className="hero-mini-card">
+                    <p className="uppercase tracking-[0.18em] text-foreground/55">Last sync</p>
+                    <p className="mt-1.5 text-base font-semibold text-green">
+                      {superfluidStats.isLoading ? "…" : lastSyncLabel}
+                    </p>
+                  </div>
+                </div>
 
                 <div className="mt-auto pt-4">
                   <div className="h-px w-full bg-gradient-to-r from-transparent via-green/70 to-transparent" />
