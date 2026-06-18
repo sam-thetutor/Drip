@@ -47,10 +47,10 @@ if [ ! -f "$KEEPER_DIR/.env" ]; then
   echo ""
   cat > "$KEEPER_DIR/.env" <<EOF
 RPC_URL=https://forno.celo.org
-DRIP_V4_ADDR=0x75d5e1bDb93dB238DFD56e183784a6F7386c05E8
+DRIP_V4_ADDR=0x2CA1BF1a40E2B77608345EEb5dEA41CDC071d43c
 PRIVATE_KEY=${PKEY}
 POLL_INTERVAL_MS=30000
-START_BLOCK=69825000
+START_BLOCK=69600000
 EOF
   chmod 600 "$KEEPER_DIR/.env"
   echo "✓ .env created (permissions set to 600)"

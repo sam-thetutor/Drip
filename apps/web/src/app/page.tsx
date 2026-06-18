@@ -53,8 +53,8 @@ export default function HomePage() {
                 Automatic money plans
               </p>
               <h1 className="text-4xl font-bold leading-tight text-white sm:text-5xl lg:text-6xl">
-                Give every shilling{" "}
-                <span className="hero-gradient-text">a job</span>
+                Every dollar on{" "}
+                <span className="hero-gradient-text">autopilot</span>
               </h1>
               <p className="text-lg leading-relaxed text-foreground/80">
                 Stop guessing where your money goes. Split it into buckets for

@@ -500,6 +500,11 @@ export function CreateStreamForm() {
   const watchedPeriods = watch("totalPeriods");
   const watchedRecips  = watch("recipients");
 
+  // react-hook-form mutates the recipients array in place, so `watchedRecips`
+  // keeps a stable reference even when an amount changes. We derive a primitive
+  // key from the amounts so the memo below actually recomputes on every edit.
+  const recipAmountsKey = (watchedRecips ?? []).map((r) => r?.amountPerPeriod ?? "").join("|");
+
   // ── Live calculations ────────────────────────────────────────────────────────
   const { flowRates, totalAmountWei, totalFlowRateWei, depositWei, zeroRateIndices } = useMemo(() => {
     const token = getTokenByAddress(watchedToken as `0x${string}`, chainId);
@@ -532,7 +537,8 @@ export function CreateStreamForm() {
       depositWei:       totalAmount + totalRate * BUFFER_SECONDS,
       zeroRateIndices:  zeros,
     };
-  }, [watchedRecips, watchedToken, watchedCadence, watchedPeriods, chainId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recipAmountsKey, watchedRecips, watchedToken, watchedCadence, watchedPeriods, chainId]);
 
   const estimatedEndDate = useMemo(() => {
     if (totalFlowRateWei === 0n) return null;

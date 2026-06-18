@@ -1,10 +1,9 @@
 /**
  * deployDripV5.ts
  *
- * Deploys StreamVault (implementation) and DripV5, then configures the USDC→G$
- * swap route used by createStreamWithSwap.
- *
- * DripV5 = DripV4 + in-contract exactOutput swap funding (USDC → G$).
+ * Deploys StreamVault (implementation) and DripV5 to the target network.
+ * DripV5 receives the StreamVault address at construction so it can clone it,
+ * then the USDC→G$ swap route is configured so createStreamWithSwap works.
  *
  * Usage:
  *   npx hardhat run scripts/deployDripV5.ts --network celo
@@ -13,26 +12,16 @@
 
 import { ethers } from "hardhat";
 
-// ── Celo mainnet token addresses ─────────────────────────────────────────────
+// Celo mainnet swap route: fund G$ streams by paying USDC.
+// exactOutput path is encoded output→input: G$ →(1%)→ cUSD →(0.01%)→ USDC.
 const GOOD_DOLLAR = "0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A";
 const CUSD        = "0x765DE816845861e75A25fCA122bb6898B8B1282a";
 const USDC        = "0xcebA9300f2b948710d2653dD7B07f33A8B32118C";
 
-// Uniswap V3 fee tiers (verified liquid pools on Celo):
-//   G$ / cUSD  → 1%    (10000)
-//   cUSD / USDC → 0.01% (100)
-const FEE_GD_CUSD   = 10000;
-const FEE_CUSD_USDC = 100;
-
-/**
- * exactOutput path is reverse-encoded: tokenOut (G$) first → tokenIn (USDC) last.
- *   G$ ─10000─ cUSD ─100─ USDC
- */
-function buildExactOutputPath(): string {
-  return ethers.solidityPacked(
-    ["address", "uint24", "address", "uint24", "address"],
-    [GOOD_DOLLAR, FEE_GD_CUSD, CUSD, FEE_CUSD_USDC, USDC]
-  );
+function buildUsdcSwapPath(): string {
+  const s = (a: string) => a.slice(2).toLowerCase();
+  // fee 10000 = 0x002710 (1%), fee 100 = 0x000064 (0.01%)
+  return `0x${s(GOOD_DOLLAR)}002710${s(CUSD)}000064${s(USDC)}`;
 }
 
 async function main() {
@@ -48,15 +37,23 @@ async function main() {
   console.log("───────────────────────────────────────────────");
 
   // ── Step 1: Deploy StreamVault (implementation) ──────────────────────────
-  console.log("\n[1/3] Deploying StreamVault (implementation)…");
-  const VaultFactory = await ethers.getContractFactory("StreamVault");
-  const vaultImpl    = await VaultFactory.deploy();
-  await vaultImpl.waitForDeployment();
-  const vaultImplAddr = await vaultImpl.getAddress();
-  console.log("      StreamVault impl :", vaultImplAddr);
+  // Reuse an already-deployed vault impl (set VAULT_IMPL_ADDR) to avoid paying
+  // for a redeploy — handy when a previous run deployed the vault but the
+  // DripV5 step failed (e.g. ran out of gas).
+  let vaultImplAddr = process.env.VAULT_IMPL_ADDR ?? "";
+  if (vaultImplAddr) {
+    console.log("\n[1/3] Reusing existing StreamVault impl :", vaultImplAddr);
+  } else {
+    console.log("\n[1/3] Deploying StreamVault (implementation)…");
+    const VaultFactory = await ethers.getContractFactory("StreamVault");
+    const vaultImpl    = await VaultFactory.deploy();
+    await vaultImpl.waitForDeployment();
+    vaultImplAddr = await vaultImpl.getAddress();
+    console.log("      StreamVault impl :", vaultImplAddr);
+  }
 
-  // ── Step 2: Deploy DripV5 ────────────────────────────────────────────────
-  // Second arg is platformFeeRecipient. Defaults to deployer; pass address(0) to disable fees.
+  // ── Step 2: Deploy DripV5 ─────────────────────────────────────────────────
+  // Second arg is platformFeeRecipient.  Defaults to deployer; pass address(0) to disable fees.
   console.log("\n[2/3] Deploying DripV5…");
   const DripV5Factory = await ethers.getContractFactory("DripV5");
   const dripV5        = await DripV5Factory.deploy(vaultImplAddr, deployer.address);
@@ -65,22 +62,21 @@ async function main() {
   console.log("      DripV5           :", dripV5Addr);
   console.log("      Fee recipient    :", deployer.address, "(0.5% default)");
 
-  // ── Step 3: Configure USDC → G$ swap route ───────────────────────────────
+  // ── Step 3: Configure USDC→G$ swap route ──────────────────────────────────
   console.log("\n[3/3] Setting USDC swap route…");
-  const path = buildExactOutputPath();
-  const tx   = await dripV5.setUsdcRoute(USDC, path);
+  const path = buildUsdcSwapPath();
+  const tx   = await (dripV5 as any).setUsdcRoute(USDC, path);
   await tx.wait();
   console.log("      USDC token       :", USDC);
   console.log("      Swap path        :", path);
 
-  // ── Summary ──────────────────────────────────────────────────────────────
+  // ── Summary ───────────────────────────────────────────────────────────────
   console.log("\n═══════════════════════════════════════════════");
   console.log("  Deployment complete");
   console.log("═══════════════════════════════════════════════");
   console.log("  StreamVault impl :", vaultImplAddr);
   console.log("  DripV5           :", dripV5Addr);
-  console.log("  USDC route       :", USDC, "(set)");
-  console.log("\n  Update the frontend config with the DripV5 address above.");
+  console.log("\n  Save these for the frontend config and keeper.");
   console.log("═══════════════════════════════════════════════");
 }
 

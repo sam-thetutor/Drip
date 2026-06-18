@@ -44,25 +44,6 @@ contract StreamVault {
     bool    private _initialized;
 
     // ═══════════════════════════════════════════
-    // Events
-    // ═══════════════════════════════════════════
-
-    /// @dev Emitted when setFlowrate(0) reverts for a recipient (e.g. flow already liquidated).
-    ///      Lets off-chain monitoring distinguish "nothing to stop" from a genuine failure.
-    event FlowStopFailed(address indexed token, address indexed recipient);
-
-    // ═══════════════════════════════════════════
-    // Constructor
-    // ═══════════════════════════════════════════
-
-    /// @dev Locks the implementation contract so it can never be initialized directly.
-    ///      Clones (created via EIP-1167) skip the constructor and keep their own
-    ///      zeroed `_initialized`, so they can still call initialize() exactly once.
-    constructor() {
-        _initialized = true;
-    }
-
-    // ═══════════════════════════════════════════
     // Initializer
     // ═══════════════════════════════════════════
 
@@ -113,11 +94,7 @@ contract StreamVault {
     function stopStreams(address token, address[] calldata recipients) external onlyFactory {
         for (uint256 i = 0; i < recipients.length; i++) {
             // Use try/catch — if a flow was already liquidated, setFlowrate(0) would revert.
-            // Surface the failure via an event instead of swallowing it silently.
-            try ICFAv1Forwarder(CFA_FORWARDER).setFlowrate(token, recipients[i], 0) {}
-            catch {
-                emit FlowStopFailed(token, recipients[i]);
-            }
+            try ICFAv1Forwarder(CFA_FORWARDER).setFlowrate(token, recipients[i], 0) {} catch {}
         }
     }
 

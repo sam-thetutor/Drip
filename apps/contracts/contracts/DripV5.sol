@@ -512,6 +512,33 @@ contract DripV5 is ReentrancyGuard {
         emit StreamToppedUp(streamId, s.endTime);
     }
 
+    /**
+     * @notice Add funds to an active stream and extend its endTime atomically.
+     *         Pulls `amount` of the stream token from the caller straight into
+     *         the vault, then recalculates endTime from the new balance — all in
+     *         one transaction, so endTime can never drift from the vault balance
+     *         (unlike a bare transfer-to-vault followed by a separate refresh).
+     *
+     *         Caller must approve DripV5 to spend `amount` of the stream token.
+     * @param streamId The stream to top up.
+     * @param amount   Amount of the stream token to add (token units).
+     */
+    function topUp(uint256 streamId, uint256 amount) external nonReentrant whenNotPaused {
+        Stream storage s = _streams[streamId];
+        require(s.streamId != 0,                 "DripV5: not found");
+        require(s.status == StreamStatus.Active, "DripV5: not active");
+        require(amount > 0,                      "DripV5: zero amount");
+
+        require(
+            IERC20Min(s.token).transferFrom(msg.sender, s.vault, amount),
+            "DripV5: top-up transfer failed (check approval)"
+        );
+
+        _refreshEndTimeInternal(streamId, s);
+
+        emit StreamToppedUp(streamId, s.endTime);
+    }
+
     // ═══════════════════════════════════════════
     // Per-recipient controls
     // ═══════════════════════════════════════════

@@ -1,6 +1,7 @@
 "use client";
 
-import { useAccount, useBalance, useChainId, useSwitchChain, useDisconnect } from "wagmi";
+import { useAccount, useBalance, useChainId, useSwitchChain } from "wagmi";
+import { usePrivy } from "@privy-io/react-auth";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -33,7 +34,7 @@ export function WalletButton({ className }: WalletButtonProps) {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
-  const { disconnect } = useDisconnect();
+  const { logout, authenticated } = usePrivy();
   const { data: celoBalance, isLoading: balanceLoading } = useBalance({
     address,
     query: {
@@ -41,7 +42,7 @@ export function WalletButton({ className }: WalletButtonProps) {
     },
   });
 
-  if (!isConnected || !address) {
+  if (!authenticated || !isConnected || !address) {
     return null;
   }
 
@@ -98,11 +99,11 @@ export function WalletButton({ className }: WalletButtonProps) {
         
         {/* Disconnect/Logout */}
         <DropdownMenuItem
-          onClick={() => disconnect()}
+          onClick={() => logout()}
           className="text-destructive focus:text-destructive cursor-pointer"
         >
           <LogOut className="h-4 w-4 mr-2" />
-          Disconnect Wallet
+          Log Out
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

@@ -157,6 +157,37 @@ function computeAmountStreamed(stream: DripV4Stream): bigint {
   return streamed > stream.totalAmount ? stream.totalAmount : streamed;
 }
 
+/**
+ * Progress is measured against the funded runway, not the original planned
+ * amount. When we know the live vault balance we derive remaining runway from
+ * it (balance ÷ flow rate) — this stays correct even when the on-chain endTime
+ * is stale after top-ups. Falls back to the time-based endTime calc otherwise.
+ */
+function computePercentComplete(stream: DripV4Stream, vaultBalance?: bigint): number {
+  if (stream.status === StreamStatus.Completed) return 100;
+  if (stream.startTime === 0n) return 0;
+
+  // Paused plans freeze progress at the moment they were paused.
+  const ref = stream.pausedAt > 0n
+    ? stream.pausedAt
+    : BigInt(Math.floor(Date.now() / 1000));
+  const elapsed = ref > stream.startTime ? ref - stream.startTime : 0n;
+
+  // Preferred: live vault balance is the source of truth for remaining runway.
+  if (vaultBalance !== undefined && stream.totalFlowRate > 0n) {
+    const remaining = vaultBalance / stream.totalFlowRate; // seconds of runway left
+    const total = elapsed + remaining;
+    if (total === 0n) return 100;
+    return Number((elapsed * 10_000n) / total) / 100;
+  }
+
+  // Fallback: time-based against the on-chain endTime.
+  if (stream.endTime <= stream.startTime) return 0;
+  const total = stream.endTime - stream.startTime;
+  const capped = elapsed > total ? total : elapsed;
+  return Number((capped * 10_000n) / total) / 100;
+}
+
 // ─── Read hooks ───────────────────────────────────────────────────────────────
 
 /** Stream IDs sent/received by a user address */
@@ -314,9 +345,7 @@ export function useDripV4Streams(userAddress: `0x${string}` | undefined) {
         userRole:       role,
         vaultBalance,
         amountStreamed,
-        percentComplete: s.totalAmount > 0n
-          ? Number((amountStreamed * 10_000n) / s.totalAmount) / 100
-          : 0,
+        percentComplete: computePercentComplete(s, vaultBalance),
       }];
     });
   }, [userAddress, allIds, streamMap, balanceMap, sentIds, receivedIds]);
@@ -407,9 +436,7 @@ export function useDripV4Stream(streamId: bigint | undefined) {
       ...s,
       vaultBalance,
       amountStreamed,
-      percentComplete: s.totalAmount > 0n
-        ? Number((amountStreamed * 10_000n) / s.totalAmount) / 100
-        : 0,
+      percentComplete: computePercentComplete(s, vaultBalance),
     };
   }, [raw, vaultBal]);
 
@@ -693,6 +720,30 @@ export function useRefreshEndTime() {
 
   const { isLoading: isConfirming } = useWaitForTransactionReceipt({ hash });
   return { refreshEndTime, isPending: isPending || isConfirming };
+}
+
+/**
+ * Atomic top-up: pulls `amount` of the stream token from the caller into the
+ * vault AND recalculates endTime in a single tx. The caller must first approve
+ * the DripV5 contract to spend `amount` of the stream token.
+ */
+export function useTopUpStream() {
+  const chainId = useChainId();
+  const addr    = useMemo(() => getContractAddress(chainId, "DripV4"), [chainId]);
+  const { writeContractAsync, isPending, data: hash } = useWriteContract();
+
+  const topUp = useCallback(async (streamId: bigint, amount: bigint) => {
+    if (!addr) throw new Error("DripV5 not deployed");
+    return writeContractAsync({
+      address: addr as `0x${string}`,
+      abi: DRIP_V4_ABI,
+      functionName: "topUp",
+      args: [streamId, amount],
+    });
+  }, [addr, writeContractAsync]);
+
+  const { isLoading: isConfirming } = useWaitForTransactionReceipt({ hash });
+  return { topUp, isPending: isPending || isConfirming };
 }
 
 export function usePauseRecipient() {

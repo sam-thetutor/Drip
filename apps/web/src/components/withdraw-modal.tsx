@@ -58,7 +58,7 @@ export function WithdrawModal({ streamId, recipient, token, onClose }: WithdrawM
   const maxAmount = (typeof balance === 'bigint' ? balance : 0n);
   const formattedMax = formatTokenAmount(maxAmount, tokenInfo.decimals);
 
-  // Watch for transaction hash (MetaMask should open when hash is set)
+  // Watch for transaction hash (wallet should open when hash is set)
   useEffect(() => {
     if (hash && hasSubmitted) {
       toast.loading("Waiting for confirmation...", { id: "withdraw" });
@@ -87,7 +87,7 @@ export function WithdrawModal({ streamId, recipient, token, onClose }: WithdrawM
   useEffect(() => {
     if (error && hasSubmitted) {
       console.error("Transaction error:", error);
-      const errorMessage = (error as Error)?.message || (error as any)?.shortMessage || "Failed to withdraw. Please check that MetaMask is open and try again.";
+      const errorMessage = (error as Error)?.message || (error as any)?.shortMessage || "Failed to withdraw. Please check that your wallet is open and try again.";
       toast.error(errorMessage, { id: "withdraw", duration: 5000 });
       setHasSubmitted(false);
     }
@@ -105,7 +105,7 @@ export function WithdrawModal({ streamId, recipient, token, onClose }: WithdrawM
     }
 
     try {
-      toast.loading("Opening MetaMask...", { id: "withdraw" });
+      toast.loading("Opening wallet...", { id: "withdraw" });
       setHasSubmitted(true);
       
       // Prepare engagement rewards parameters if enabled
@@ -160,8 +160,8 @@ export function WithdrawModal({ streamId, recipient, token, onClose }: WithdrawM
       }
       
       // Always withdraw all available balance
-      // writeContract should trigger MetaMask popup
-      // If MetaMask doesn't open, writeContract will throw an error
+      // writeContract should trigger the wallet confirmation
+      // If the wallet doesn't open, writeContract will throw an error
       await withdrawFromStream(
         streamId,
         recipient,
@@ -177,7 +177,7 @@ export function WithdrawModal({ streamId, recipient, token, onClose }: WithdrawM
         error?.reason || 
         error?.shortMessage || 
         (error?.cause && typeof error.cause === 'object' && error.cause?.message) ||
-        "Failed to withdraw. Please check that MetaMask is open and your wallet is connected.";
+        "Failed to withdraw. Please check that your wallet is open and connected.";
       toast.error(errorMessage, { id: "withdraw", duration: 5000 });
       setHasSubmitted(false);
     }

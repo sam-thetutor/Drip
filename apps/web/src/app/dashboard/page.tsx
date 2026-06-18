@@ -18,7 +18,6 @@ import {
   ExternalLink,
   Layers,
   ArrowLeftRight,
-  QrCode,
   AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -26,7 +25,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { TopUpModal } from "@/components/top-up-modal";
 import { OffRampModal } from "@/components/off-ramp-modal";
 import { SwapGdModal } from "@/components/swap-gd-modal";
-import { ReceiveQrModal } from "@/components/receive-qr-modal";
 import { UbiClaimCard } from "@/components/gooddollar/ubi-claim-card";
 import { useDripV4Streams, StreamStatus, type DripV4Stream } from "@/lib/contracts/hooks/useDripV4";
 import { getExpiryInfo } from "@/components/streams-dashboard";
@@ -113,7 +111,6 @@ export default function DashboardPage() {
   const [showTopUp, setShowTopUp]     = useState(false);
   const [showOffRamp, setShowOffRamp] = useState(false);
   const [showSwap, setShowSwap]       = useState(false);
-  const [showReceive, setShowReceive] = useState(false);
 
   const { streams: allStreams, analytics, isLoading: streamsLoading } = useDripV4Streams(address);
 
@@ -180,9 +177,6 @@ export default function DashboardPage() {
           onSwapSuccess={() => { setShowSwap(false); setShowOffRamp(true); }}
         />
       )}
-      {showReceive && address && (
-        <ReceiveQrModal address={address} onClose={() => setShowReceive(false)} />
-      )}
 
       <div className="container mx-auto max-w-6xl px-4 py-5 sm:py-8 space-y-5 sm:space-y-6">
 
@@ -232,12 +226,6 @@ export default function DashboardPage() {
               <Button variant="outline" className="hero-cta-outline flex items-center justify-center gap-2" onClick={() => setShowSwap(true)}>
                 <ArrowLeftRight className="h-4 w-4 text-purple-400" />
                 Swap G$
-              </Button>
-            )}
-            {isConnected && address && (
-              <Button variant="outline" className="hero-cta-outline flex items-center justify-center gap-2" onClick={() => setShowReceive(true)}>
-                <QrCode className="h-4 w-4 text-cyan-400" />
-                Receive
               </Button>
             )}
           </div>

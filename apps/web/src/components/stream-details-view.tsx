@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { useAccount, useChainId, useBalance, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { useAccount, useChainId, useBalance, useWriteContract, usePublicClient, useReadContract } from "wagmi";
 import { erc20Abi, parseUnits, formatUnits as fmtUnits } from "viem";
 import {
   useDripV4Stream,
@@ -11,6 +11,7 @@ import {
   useResumeStream,
   useCancelStream,
   useRefreshEndTime,
+  useTopUpStream,
   usePauseRecipient,
   useResumeRecipient,
   useRemoveRecipient,
@@ -104,21 +105,26 @@ function TopUpModal({
   onClose: () => void;
   onSuccess: () => void;
 }) {
-  const { address } = useAccount();
-  const [amount, setAmount]   = useState("");
-  const [txHash, setTxHash]   = useState<`0x${string}` | undefined>();
-  const [step, setStep]       = useState<"input" | "transferring" | "refreshing" | "done" | "error">("input");
-  const [errMsg, setErrMsg]   = useState("");
+  const { address }  = useAccount();
+  const chainId      = useChainId();
+  const publicClient = usePublicClient();
+  const dripAddr     = getContractAddress(chainId, "DripV4");
+  const [amount, setAmount] = useState("");
+  const [step, setStep]     = useState<"input" | "approving" | "adding" | "done" | "error">("input");
+  const [errMsg, setErrMsg] = useState("");
 
   const { data: userBalance } = useBalance({
     address, token: tokenAddress,
     query: { enabled: !!address, refetchInterval: 10_000 },
   });
-  const { refreshEndTime, isPending: refreshPending } = useRefreshEndTime();
+  const { topUp } = useTopUpStream();
   const { writeContractAsync } = useWriteContract();
-  const { isSuccess: transferConfirmed } = useWaitForTransactionReceipt({
-    hash: txHash,
-    query: { enabled: !!txHash },
+  const { data: allowance } = useReadContract({
+    address: tokenAddress,
+    abi: erc20Abi,
+    functionName: "allowance",
+    args: address && dripAddr ? [address, dripAddr] : undefined,
+    query: { enabled: !!address && !!dripAddr },
   });
 
   const amtNum     = parseFloat(amount || "0");
@@ -130,43 +136,36 @@ function TopUpModal({
   const newDuration     = totalFlowRate > 0n ? Number(newVaultBalance / totalFlowRate) : 0;
   const newEndDate      = newDuration > 0 ? new Date(Date.now() + newDuration * 1000) : null;
 
+  // Atomic top-up: approve the stream token (only if needed), then call topUp —
+  // which funds the vault AND recalculates endTime in a single tx, so endTime
+  // can never drift from the balance.
   const doTopUp = async () => {
-    if (!amtWei || amtNum > userBalNum) return;
-    setStep("transferring");
+    if (!amtWei || amtNum > userBalNum || !dripAddr || !publicClient) return;
     try {
-      const hash = await writeContractAsync({
-        address: tokenAddress,
-        abi: erc20Abi,
-        functionName: "transfer",
-        args: [vaultAddress, amtWei],
-      });
-      setTxHash(hash);
-      // After transfer confirms, call refreshEndTime
-      // We watch transferConfirmed in a useEffect below
-    } catch (e: any) {
-      setStep("error");
-      setErrMsg(e?.shortMessage ?? e?.message ?? "Transfer failed");
-    }
-  };
+      if ((allowance ?? 0n) < amtWei) {
+        setStep("approving");
+        const approveHash = await writeContractAsync({
+          address: tokenAddress,
+          abi: erc20Abi,
+          functionName: "approve",
+          args: [dripAddr, amtWei],
+        });
+        await publicClient.waitForTransactionReceipt({ hash: approveHash });
+      }
 
-  // Trigger refreshEndTime once transfer is confirmed
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const runRefresh = useCallback(async () => {
-    setStep("refreshing");
-    try {
-      await refreshEndTime(streamId);
+      setStep("adding");
+      const hash = await topUp(streamId, amtWei);
+      await publicClient.waitForTransactionReceipt({ hash });
+
       setStep("done");
       onSuccess();
     } catch (e: any) {
       setStep("error");
-      setErrMsg(e?.shortMessage ?? e?.message ?? "Could not refresh end time");
+      setErrMsg(e?.shortMessage ?? e?.message ?? "Top-up failed");
     }
-  }, [streamId, refreshEndTime, onSuccess]);
+  };
 
-  // Watch for transfer confirmation
-  if (transferConfirmed && step === "transferring") runRefresh();
-
-  const reset = () => { setAmount(""); setTxHash(undefined); setStep("input"); setErrMsg(""); };
+  const reset = () => { setAmount(""); setStep("input"); setErrMsg(""); };
 
   return (
     <Dialog open={isOpen} onOpenChange={(o) => { if (!o) { reset(); onClose(); } }}>
@@ -249,11 +248,11 @@ function TopUpModal({
             )}
 
             {/* Progress indicator */}
-            {["transferring","refreshing"].includes(step) && (
+            {["approving","adding"].includes(step) && (
               <div className="flex items-center gap-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
                 <Loader2 className="h-4 w-4 animate-spin text-primary" />
                 <span className="text-primary">
-                  {step === "transferring" ? `Sending ${tokenSymbol} to vault…` : "Updating end time…"}
+                  {step === "approving" ? `Approving ${tokenSymbol}…` : "Adding funds & updating end time…"}
                 </span>
               </div>
             )}
@@ -450,6 +449,7 @@ interface StreamDetailsViewProps {
 export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
   const { address }  = useAccount();
   const chainId      = useChainId();
+  const publicClient = usePublicClient();
 
   const { stream, isLoading, refetch } = useDripV4Stream(streamId);
   const { recipients: activeRecipients, flowRates: activeFlowRates, refetch: refetchRecipients } =
@@ -464,6 +464,15 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
   const [showTopUp,  setShowTopUp]  = useState(false);
 
   const handleRefetch = useCallback(() => { refetch(); refetchRecipients(); }, [refetch, refetchRecipients]);
+
+  // Wait for an action's tx to be mined before refetching, otherwise we read
+  // stale on-chain state (e.g. old endTime / status) right after submitting.
+  const waitAndRefetch = useCallback(async (hash?: `0x${string}`) => {
+    if (publicClient && hash) {
+      try { await publicClient.waitForTransactionReceipt({ hash }); } catch { /* fall through to refetch */ }
+    }
+    handleRefetch();
+  }, [publicClient, handleRefetch]);
 
   // ── Loading / error states ──────────────────────────────────────────────────
 
@@ -507,7 +516,17 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
   const isLive       = isActive || isPaused;
 
   const now      = BigInt(Math.floor(Date.now() / 1000));
-  const remaining = isLive ? (stream.endTime > now ? Number(stream.endTime - now) : 0) : 0;
+  // Remaining runway from the live vault balance (robust to a stale on-chain
+  // endTime after top-ups); fall back to endTime when balance is unknown.
+  const remaining = isLive
+    ? (stream.vaultBalance !== undefined && stream.totalFlowRate > 0n
+        ? Number(stream.vaultBalance / stream.totalFlowRate)
+        : (stream.endTime > now ? Number(stream.endTime - now) : 0))
+    : 0;
+  // Effective end time for display = now + remaining runway.
+  const effectiveEndTime = isLive && remaining > 0
+    ? BigInt(Math.floor(Date.now() / 1000) + remaining)
+    : stream.endTime;
 
   const fmtToken = (wei: bigint) =>
     `${parseFloat(formatUnits(wei, decimals)).toFixed(4)} ${symbol}`;
@@ -524,9 +543,9 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
   const handlePause = async () => {
     try {
       toast.loading("Pausing plan…", { id: "stream-action" });
-      await pauseStream(streamId);
+      const hash = await pauseStream(streamId);
       toast.success("Plan paused", { id: "stream-action" });
-      handleRefetch();
+      await waitAndRefetch(hash);
     } catch (e: any) {
       toast.error(e?.shortMessage || e?.message || "Failed to pause", { id: "stream-action" });
     }
@@ -535,9 +554,9 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
   const handleResume = async () => {
     try {
       toast.loading("Resuming plan…", { id: "stream-action" });
-      await resumeStream(streamId);
+      const hash = await resumeStream(streamId);
       toast.success("Plan resumed", { id: "stream-action" });
-      handleRefetch();
+      await waitAndRefetch(hash);
     } catch (e: any) {
       toast.error(e?.shortMessage || e?.message || "Failed to resume", { id: "stream-action" });
     }
@@ -546,10 +565,10 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
   const handleCancel = async () => {
     try {
       toast.loading("Cancelling plan…", { id: "stream-action" });
-      await cancelStream(streamId);
+      const hash = await cancelStream(streamId);
       toast.success("Plan cancelled — balance refunded", { id: "stream-action" });
       setShowCancel(false);
-      handleRefetch();
+      await waitAndRefetch(hash);
     } catch (e: any) {
       toast.error(e?.shortMessage || e?.message || "Failed to cancel", { id: "stream-action" });
     }
@@ -558,9 +577,9 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
   const handleRefreshEndTime = async () => {
     try {
       toast.loading("Refreshing end time…", { id: "refresh" });
-      await refreshEndTime(streamId);
+      const hash = await refreshEndTime(streamId);
+      await waitAndRefetch(hash);
       toast.success("End time updated", { id: "refresh" });
-      handleRefetch();
     } catch (e: any) {
       toast.error(e?.shortMessage || e?.message || "Failed", { id: "refresh" });
     }
@@ -613,7 +632,7 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
             </div>
             <div>
               <p className="text-xs text-muted-foreground mb-0.5">{isLive ? "Ends" : "Ended"}</p>
-              <p>{fmtTime(stream.endTime)}</p>
+              <p>{fmtTime(effectiveEndTime)}</p>
             </div>
           </div>
 
@@ -748,7 +767,7 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
             </div>
             <div className="flex justify-between text-xs text-muted-foreground mt-2">
               <span>{fmtTime(stream.startTime)}</span>
-              <span>{fmtTime(stream.endTime)}</span>
+              <span>{fmtTime(effectiveEndTime)}</span>
             </div>
           </CardContent>
         </Card>

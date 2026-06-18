@@ -8,7 +8,7 @@ import { Toaster } from "sonner";
 const spaceGrotesk = Space_Grotesk({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Drip - Give every shilling a job",
+  title: "Drip - Every dollar on autopilot",
   description: "Plan your money, split it into buckets for bills, people and savings goals, and let Drip stream the right amount to each one automatically.",
 };
 
