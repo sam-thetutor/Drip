@@ -1,5 +1,5 @@
 {
-  "installCommand": "pnpm install",
+  "installCommand": "npx --yes pnpm@8.15.9 install --no-frozen-lockfile",
   "buildCommand": "pnpm build",
   "framework": "nextjs"
 }
