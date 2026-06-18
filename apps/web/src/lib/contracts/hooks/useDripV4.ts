@@ -8,7 +8,7 @@
  * Stream struct (on-chain):
  *   streamId, sender, recipients[], token, flowRates[], totalFlowRate,
  *   totalAmount, depositAmount, vault, startTime, endTime, finishTime,
- *   pausedAt, rateLockUntil, status, title, description
+ *   pausedAt, status, title, description
  *
  * StreamStatus enum:  Active=0  Paused=1  Completed=2  Cancelled=3
  */
@@ -63,7 +63,6 @@ export interface DripV4Stream {
   endTime:       bigint;
   finishTime:    bigint;         // 0 while active/paused
   pausedAt:      bigint;         // 0 if not currently paused
-  rateLockUntil: bigint;         // 0 if no lock
   status:        number;
   title:         string;
   description:   string;
@@ -72,7 +71,6 @@ export interface DripV4Stream {
   vaultBalance?:      bigint;
   amountStreamed?:    bigint;
   percentComplete?:   number;
-  isRateLocked?:      boolean;
 }
 
 export interface DripV4Analytics {
@@ -89,6 +87,27 @@ export interface DripV4Analytics {
 
 const BUFFER_SECONDS = 14_400n;
 
+// ─── Swap-funding (USDC → G$) constants ─────────────────────────────────────────
+// Uniswap V3 on Celo (verified Jun 2026). Path is reverse-encoded for exactOutput:
+//   G$ →(10000 / 1%)→ cUSD →(100 / 0.01%)→ USDC
+const QUOTER_ADDRESS = "0x82825d0554fA07f7FC52Ab63c961F330fdEFa8E8" as const;
+const CUSD_ADDRESS   = "0x765DE816845861e75A25fCA122bb6898B8B1282a" as const;
+const GOOD_DOLLAR    = "0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A" as const;
+const USDC_ADDRESS   = "0xcebA9300f2b948710d2653dD7B07f33A8B32118C" as const;
+const SWAP_SLIPPAGE_BPS = 100n; // 1% headroom over the quoted USDC input
+
+const QUOTER_EXACT_OUTPUT_ABI = [
+  { name: "quoteExactOutput", type: "function", stateMutability: "nonpayable",
+    inputs: [{ name: "path", type: "bytes" }, { name: "amountOut", type: "uint256" }],
+    outputs: [{ name: "amountIn", type: "uint256" }] },
+] as const;
+
+/** Reverse-encoded exactOutput path: G$ →(1%)→ cUSD →(0.01%)→ USDC */
+function buildExactOutputPath(): `0x${string}` {
+  const s = (a: string) => a.slice(2).toLowerCase();
+  return `0x${s(GOOD_DOLLAR)}002710${s(CUSD_ADDRESS)}000064${s(USDC_ADDRESS)}` as `0x${string}`;
+}
+
 const QUERY_OPTS = {
   refetchInterval:      30_000,
   staleTime:            20_000,
@@ -101,8 +120,6 @@ function parseTupleToStream(raw: unknown): DripV4Stream | null {
   if (!raw || typeof raw !== "object") return null;
   const t = raw as Record<string, unknown>;
   try {
-    const now  = BigInt(Math.floor(Date.now() / 1000));
-    const lock = BigInt(t.rateLockUntil as bigint ?? 0n);
     return {
       streamId:      BigInt(t.streamId      as bigint),
       sender:        t.sender               as `0x${string}`,
@@ -117,11 +134,9 @@ function parseTupleToStream(raw: unknown): DripV4Stream | null {
       endTime:       BigInt(t.endTime       as bigint),
       finishTime:    BigInt(t.finishTime    as bigint),
       pausedAt:      BigInt(t.pausedAt      as bigint ?? 0n),
-      rateLockUntil: lock,
       status:        Number(t.status),
       title:         String(t.title         ?? ""),
       description:   String(t.description   ?? ""),
-      isRateLocked:  lock > now,
     };
   } catch {
     return null;
@@ -491,6 +506,31 @@ export function useDripV4RecommendedDeposit(
   return (data as bigint | undefined) ?? fallback;
 }
 
+/**
+ * Quote how much USDC is needed to acquire `neededGd` G$ via Uniswap V3 (exactOutput).
+ * `neededGd` should be the full amount the stream consumes = grossTotalAmount + buffer.
+ * Returns the quoted USDC input and a slippage-padded `maxUsdcIn` to approve/spend.
+ */
+export function useUsdcSwapQuote(neededGd: bigint) {
+  const path    = useMemo(() => buildExactOutputPath(), []);
+  const enabled = neededGd > 0n;
+
+  const { data, isLoading, isError, refetch } = useReadContract({
+    address: QUOTER_ADDRESS,
+    abi: QUOTER_EXACT_OUTPUT_ABI,
+    functionName: "quoteExactOutput",
+    args: [path, neededGd],
+    query: { enabled, retry: 1, staleTime: 15_000, refetchInterval: 20_000 },
+  });
+
+  const usdcIn = (data as bigint | undefined) ?? 0n;
+  const maxUsdcIn = usdcIn > 0n
+    ? usdcIn + (usdcIn * SWAP_SLIPPAGE_BPS) / 10_000n
+    : 0n;
+
+  return { usdcIn, maxUsdcIn, isLoading, isError, refetch, usdcAddress: USDC_ADDRESS };
+}
+
 // ─── Write hooks ──────────────────────────────────────────────────────────────
 
 /**
@@ -542,9 +582,39 @@ export function useCreateDripV4Stream() {
     });
   }, [addr, create]);
 
+  /**
+   * Create a G$ stream funded by paying USDC. The contract swaps USDC → G$
+   * (exactOutput) for exactly what the stream needs and refunds unused USDC.
+   * Approve USDC for `maxAmountIn` (from useUsdcSwapQuote) before calling.
+   */
+  const createStreamWithSwap = useCallback(async (params: {
+    maxAmountIn: bigint;          // USDC to approve/spend (slippage-padded quote)
+    recipients:  `0x${string}`[];
+    flowRates:   bigint[];        // G$ wei/s per recipient
+    totalAmount: bigint;          // gross G$ to stream
+    title:       string;
+    description: string;
+  }): Promise<`0x${string}`> => {
+    if (!addr) throw new Error("DripV5 not deployed on this network");
+    return create({
+      address: addr as `0x${string}`,
+      abi:     DRIP_V4_ABI,
+      functionName: "createStreamWithSwap",
+      args: [
+        params.maxAmountIn,
+        params.recipients,
+        params.flowRates,
+        params.totalAmount,
+        params.title,
+        params.description,
+      ],
+    });
+  }, [addr, create]);
+
   return {
     approveToken,
     createStream,
+    createStreamWithSwap,
     isPending: approvePending || createPending,
   };
 }
@@ -604,25 +674,6 @@ export function useCancelStream() {
 
   const { isLoading: isConfirming } = useWaitForTransactionReceipt({ hash });
   return { cancelStream, isPending: isPending || isConfirming };
-}
-
-export function useLockStreamRate() {
-  const chainId = useChainId();
-  const addr    = useMemo(() => getContractAddress(chainId, "DripV4"), [chainId]);
-  const { writeContractAsync, isPending, data: hash } = useWriteContract();
-
-  const lockStreamRate = useCallback(async (streamId: bigint, lockDurationSeconds: bigint) => {
-    if (!addr) throw new Error("DripV4 not deployed");
-    return writeContractAsync({
-      address: addr as `0x${string}`,
-      abi: DRIP_V4_ABI,
-      functionName: "lockStreamRate",
-      args: [streamId, lockDurationSeconds],
-    });
-  }, [addr, writeContractAsync]);
-
-  const { isLoading: isConfirming } = useWaitForTransactionReceipt({ hash });
-  return { lockStreamRate, isPending: isPending || isConfirming };
 }
 
 export function useRefreshEndTime() {

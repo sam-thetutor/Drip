@@ -365,6 +365,75 @@ async function main() {
 
   setInterval(fallbackPoll, POLL_INTERVAL_MS);
 
+  // ── Health-check HTTP server ───────────────────────────────────────────────
+  // GET /health → 200 { ok, uptime, tracked, lastBlock, ts }
+  // Used by external monitors (UptimeRobot, BetterStack, etc.) and the
+  // dead-man Telegram alert below.
+
+  const HEALTH_PORT     = Number(process.env.HEALTH_PORT ?? "3001");
+  const TG_BOT_TOKEN    = process.env.TG_BOT_TOKEN ?? "";
+  const TG_CHAT_ID      = process.env.TG_CHAT_ID   ?? "";
+  // Alert if no block has been processed in this many minutes (default: 10)
+  const DEADMAN_MINUTES = Number(process.env.DEADMAN_MINUTES ?? "10");
+
+  let lastActivityAt = Date.now();
+  let lastBlockSeen  = 0;
+
+  // Wrap provider block listener to track liveness
+  provider.on("block", (blockNumber: number) => {
+    lastActivityAt = Date.now();
+    lastBlockSeen  = blockNumber;
+  });
+
+  // HTTP health endpoint
+  const http = await import("http");
+  const healthServer = http.createServer((_req, res) => {
+    const status = {
+      ok:        true,
+      uptime:    Math.floor(process.uptime()),
+      tracked:   tracked.size,
+      lastBlock: lastBlockSeen,
+      lastSeen:  new Date(lastActivityAt).toISOString(),
+      ts:        new Date().toISOString(),
+    };
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(status));
+  });
+  healthServer.listen(HEALTH_PORT, () => {
+    log(`Health endpoint listening on :${HEALTH_PORT}/health`);
+  });
+
+  // Dead-man Telegram alert
+  async function sendTelegram(text: string) {
+    if (!TG_BOT_TOKEN || !TG_CHAT_ID) return;
+    try {
+      const url = `https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage`;
+      const body = JSON.stringify({ chat_id: TG_CHAT_ID, text, parse_mode: "Markdown" });
+      const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body });
+      if (!res.ok) log(`[tg] alert send failed: ${res.status}`);
+    } catch (e) {
+      log(`[tg] alert error: ${e}`);
+    }
+  }
+
+  let alertedDead = false;
+  setInterval(async () => {
+    const silentMs = Date.now() - lastActivityAt;
+    if (silentMs > DEADMAN_MINUTES * 60_000) {
+      if (!alertedDead) {
+        alertedDead = true;
+        const msg = `🚨 *DripV4 Keeper silent for ${Math.round(silentMs / 60_000)} min*\nLast block: ${lastBlockSeen}\nTime: ${new Date().toISOString()}`;
+        log(`[deadman] ${msg}`);
+        await sendTelegram(msg);
+      }
+    } else {
+      if (alertedDead) {
+        alertedDead = false;
+        await sendTelegram(`✅ *DripV4 Keeper recovered* — activity resumed at block ${lastBlockSeen}`);
+      }
+    }
+  }, 60_000); // check every minute
+
   // ── Graceful shutdown ─────────────────────────────────────────────────────
 
   function shutdown(sig: string) {

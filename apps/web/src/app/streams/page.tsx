@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Plus, Loader2 } from "lucide-react";
 import { StreamsDashboard } from "@/components/streams-dashboard";
 import { StreamsAnalyticsDashboard } from "@/components/streams-analytics-dashboard";
+import { StreamActivityFeed } from "@/components/stream-activity-feed";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAccount } from "wagmi";
 import { useUserSubscriptionsAll } from "@/lib/contracts";
@@ -22,7 +23,7 @@ function SubscriptionsTab() {
   if (!isConnected || !address) {
     return (
       <div className="glass-card rounded-2xl p-8 text-center">
-        <p className="text-muted-foreground">Connect your wallet to view subscriptions.</p>
+        <p className="text-muted-foreground">Connect your wallet to view your bills.</p>
       </div>
     );
   }
@@ -48,9 +49,9 @@ function SubscriptionsTab() {
   if (!hasSubscriptions) {
     return (
       <div className="glass-card rounded-2xl p-12 text-center space-y-4">
-        <p className="text-foreground/50 text-sm">No subscriptions yet.</p>
+        <p className="text-foreground/50 text-sm">No bills set up yet.</p>
         <Button asChild variant="outline" size="sm">
-          <Link href="/subscriptions/create">Create your first subscription</Link>
+          <Link href="/subscriptions/create">Set up your first bill</Link>
         </Button>
       </div>
     );
@@ -92,24 +93,25 @@ export default function StreamsPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-white">Streams</h1>
+            <h1 className="text-2xl font-bold text-white">Your plans</h1>
             <p className="text-sm text-foreground/50 mt-0.5">
-              Manage your payment streams, subscriptions &amp; analytics
+              Your money buckets, bills &amp; insights
             </p>
           </div>
           <Button asChild className="hero-cta-button">
             <Link href="/streams/create" className="flex items-center gap-2">
               <Plus className="h-4 w-4" />
-              New Stream
+              Set up a plan
             </Link>
           </Button>
         </div>
 
         <Tabs defaultValue="streams" className="w-full">
           <TabsList className="mb-5 bg-white/5 border border-white/10 rounded-xl p-1 w-auto inline-flex">
-            <TabsTrigger value="streams"       className="rounded-lg data-[state=active]:bg-green/20 data-[state=active]:text-green px-4">Streams</TabsTrigger>
-            <TabsTrigger value="subscriptions" className="rounded-lg data-[state=active]:bg-green/20 data-[state=active]:text-green px-4">Subscriptions</TabsTrigger>
-            <TabsTrigger value="analytics"     className="rounded-lg data-[state=active]:bg-green/20 data-[state=active]:text-green px-4">Analytics</TabsTrigger>
+            <TabsTrigger value="streams"       className="rounded-lg data-[state=active]:bg-green/20 data-[state=active]:text-green px-4">Plans</TabsTrigger>
+            <TabsTrigger value="subscriptions" className="rounded-lg data-[state=active]:bg-green/20 data-[state=active]:text-green px-4">Bills</TabsTrigger>
+            <TabsTrigger value="activity"      className="rounded-lg data-[state=active]:bg-green/20 data-[state=active]:text-green px-4">Activity</TabsTrigger>
+            <TabsTrigger value="analytics"     className="rounded-lg data-[state=active]:bg-green/20 data-[state=active]:text-green px-4">Insights</TabsTrigger>
           </TabsList>
 
           <TabsContent value="streams">
@@ -121,6 +123,12 @@ export default function StreamsPage() {
           <TabsContent value="subscriptions">
             <Suspense fallback={LoadingFallback}>
               <SubscriptionsTab />
+            </Suspense>
+          </TabsContent>
+
+          <TabsContent value="activity">
+            <Suspense fallback={LoadingFallback}>
+              <StreamActivityFeed />
             </Suspense>
           </TabsContent>
 

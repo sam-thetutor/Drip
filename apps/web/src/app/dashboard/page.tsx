@@ -18,14 +18,18 @@ import {
   ExternalLink,
   Layers,
   ArrowLeftRight,
+  QrCode,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { TopUpModal } from "@/components/top-up-modal";
 import { OffRampModal } from "@/components/off-ramp-modal";
 import { SwapGdModal } from "@/components/swap-gd-modal";
+import { ReceiveQrModal } from "@/components/receive-qr-modal";
 import { UbiClaimCard } from "@/components/gooddollar/ubi-claim-card";
 import { useDripV4Streams, StreamStatus, type DripV4Stream } from "@/lib/contracts/hooks/useDripV4";
+import { getExpiryInfo } from "@/components/streams-dashboard";
 import { getTokenAddressBySymbol, getTokenByAddress } from "@/lib/tokens/config";
 import { formatTokenAmountWithDecimals } from "@/lib/utils/format";
 import { isSupportedChain } from "@/lib/gooddollar/utils";
@@ -57,6 +61,9 @@ function StreamRow({ stream, chainId }: { stream: DripV4Stream; chainId: number 
   const tokenInfo = getTokenByAddress(stream.token as `0x${string}`, chainId);
   const symbol = tokenInfo?.symbol ?? "Token";
   const isSending = stream.userRole === "sender" || stream.userRole === "both";
+  const isActive  = stream.status === StreamStatus.Active;
+  const isPaused  = stream.status === StreamStatus.Paused;
+  const expiry = (isActive || isPaused) ? getExpiryInfo(stream.endTime, stream.status) : { level: null, secsLeft: 0 };
 
   return (
     <Link href={`/streams/${stream.streamId.toString()}`} className="block">
@@ -69,21 +76,29 @@ function StreamRow({ stream, chainId }: { stream: DripV4Stream; chainId: number 
           )}
           <div className="min-w-0">
             <p className="text-sm font-medium text-white truncate leading-none">
-              {stream.title || `Stream #${stream.streamId.toString()}`}
+              {stream.title || `Plan #${stream.streamId.toString()}`}
             </p>
             <p className="text-xs text-foreground/50 mt-0.5">
-              {stream.recipients.length} recipient{stream.recipients.length !== 1 ? "s" : ""} · {symbol}
+              {stream.recipients.length} bucket{stream.recipients.length !== 1 ? "s" : ""} · {symbol}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          {stream.status === StreamStatus.Active && (
-            <span className="flex items-center gap-1 text-xs text-green-400">
-              <span className="h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse" />
+          {isActive && (
+            <span className={`flex items-center gap-1 text-xs ${
+              expiry.level === "critical" ? "text-red-400" :
+              expiry.level === "warning"  ? "text-orange-400" :
+              "text-green-400"
+            }`}>
+              {expiry.level ? (
+                <AlertTriangle className="h-3 w-3 flex-shrink-0" />
+              ) : (
+                <span className="h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse" />
+              )}
               {timeRemaining(stream.endTime)}
             </span>
           )}
-          {stream.status === StreamStatus.Paused && (
+          {isPaused && (
             <span className="text-xs text-orange-400 font-medium">Paused</span>
           )}
         </div>
@@ -95,9 +110,10 @@ function StreamRow({ stream, chainId }: { stream: DripV4Stream; chainId: number 
 export default function DashboardPage() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
-  const [showTopUp, setShowTopUp]   = useState(false);
+  const [showTopUp, setShowTopUp]     = useState(false);
   const [showOffRamp, setShowOffRamp] = useState(false);
   const [showSwap, setShowSwap]       = useState(false);
+  const [showReceive, setShowReceive] = useState(false);
 
   const { streams: allStreams, analytics, isLoading: streamsLoading } = useDripV4Streams(address);
 
@@ -123,16 +139,28 @@ export default function DashboardPage() {
   const usdcFormatted = usdcBalance ? formatTokenAmountWithDecimals(usdcBalance.value, usdcBalance.decimals, 2) : "0.00";
   const celoFormatted = celoBalance ? formatTokenAmountWithDecimals(celoBalance.value, celoBalance.decimals, 4) : "0.0000";
 
-  const { activeSending, activeReceiving } = useMemo(() => {
+  // Total currently allocated out, expressed per month (currentOutflow is wei/s of G$)
+  const monthlyAllocated = analytics.currentOutflow > 0n
+    ? formatTokenAmountWithDecimals(analytics.currentOutflow * 2_592_000n, 18, 0)
+    : null;
+
+  const { activeSending, activeReceiving, expiringSoon } = useMemo(() => {
     const sending: DripV4Stream[]   = [];
     const receiving: DripV4Stream[] = [];
+    const expiring: DripV4Stream[]  = [];
+    const seenExpiring = new Set<string>();
     allStreams.forEach((s) => {
       const active = s.status === StreamStatus.Active || s.status === StreamStatus.Paused;
       if (!active) return;
       if (s.userRole === "sender" || s.userRole === "both") sending.push(s);
       if (s.userRole === "recipient" || s.userRole === "both") receiving.push(s);
+      const { level } = getExpiryInfo(s.endTime, s.status);
+      if (level && !seenExpiring.has(s.streamId.toString())) {
+        seenExpiring.add(s.streamId.toString());
+        expiring.push(s);
+      }
     });
-    return { activeSending: sending, activeReceiving: receiving };
+    return { activeSending: sending, activeReceiving: receiving, expiringSoon: expiring };
   }, [allStreams]);
 
   const isGoodDollarChain = isSupportedChain(chainId);
@@ -152,14 +180,17 @@ export default function DashboardPage() {
           onSwapSuccess={() => { setShowSwap(false); setShowOffRamp(true); }}
         />
       )}
+      {showReceive && address && (
+        <ReceiveQrModal address={address} onClose={() => setShowReceive(false)} />
+      )}
 
-      <div className="container mx-auto max-w-6xl px-4 py-8 space-y-6">
+      <div className="container mx-auto max-w-6xl px-4 py-5 sm:py-8 space-y-5 sm:space-y-6">
 
         {/* ── Row 1: Greeting + CTAs ─────────────────────────────────────── */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.45em] text-foreground/50 mb-1">
-              Dashboard
+              Your money
             </p>
             {isConnected && address ? (
               <>
@@ -170,88 +201,127 @@ export default function DashboardPage() {
                   </span>
                 </h1>
                 <p className="text-sm text-foreground/60 mt-0.5">
-                  {streamsLoading ? "Loading…" : `${analytics.activeStreams} active stream${analytics.activeStreams !== 1 ? "s" : ""}`}
-                  {" · "}
-                  {gdLoading ? "…" : `${gdFormatted} G$`}
+                  {streamsLoading ? "Loading…" : `${analytics.activeStreams} plan${analytics.activeStreams !== 1 ? "s" : ""} running`}
+                  {monthlyAllocated && ` · allocating ${monthlyAllocated} G$/mo`}
                 </p>
               </>
             ) : (
               <h1 className="text-2xl font-bold text-white">Welcome to Drip</h1>
             )}
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <Button className="hero-cta-button" asChild>
-              <Link href="/streams/create" className="flex items-center gap-2">
+          <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 flex-wrap">
+            <Button className="hero-cta-button col-span-2 sm:col-span-1" asChild>
+              <Link href="/streams/create" className="flex items-center justify-center gap-2">
                 <Plus className="h-4 w-4" />
-                New Stream
+                Set up a plan
               </Link>
             </Button>
             {isConnected && address && (
-              <Button variant="outline" className="hero-cta-outline flex items-center gap-2" onClick={() => setShowTopUp(true)}>
+              <Button variant="outline" className="hero-cta-outline flex items-center justify-center gap-2" onClick={() => setShowTopUp(true)}>
                 <Smartphone className="h-4 w-4 text-green-500" />
-                Top Up
+                Add money
               </Button>
             )}
             {isConnected && address && (
-              <Button variant="outline" className="hero-cta-outline flex items-center gap-2" onClick={() => setShowOffRamp(true)}>
+              <Button variant="outline" className="hero-cta-outline flex items-center justify-center gap-2" onClick={() => setShowOffRamp(true)}>
                 <ArrowDownLeft className="h-4 w-4 text-orange-400" />
                 Cash Out
               </Button>
             )}
             {isConnected && address && (
-              <Button variant="outline" className="hero-cta-outline flex items-center gap-2" onClick={() => setShowSwap(true)}>
+              <Button variant="outline" className="hero-cta-outline flex items-center justify-center gap-2" onClick={() => setShowSwap(true)}>
                 <ArrowLeftRight className="h-4 w-4 text-purple-400" />
                 Swap G$
+              </Button>
+            )}
+            {isConnected && address && (
+              <Button variant="outline" className="hero-cta-outline flex items-center justify-center gap-2" onClick={() => setShowReceive(true)}>
+                <QrCode className="h-4 w-4 text-cyan-400" />
+                Receive
               </Button>
             )}
           </div>
         </div>
 
         {/* ── Row 2: Balance cards ────────────────────────────────────────── */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
           <Card className="glass-card">
-            <CardContent className="pt-4 pb-3 px-4">
-              <div className="flex items-center gap-1.5 text-xs text-foreground/55 mb-2">
-                <Coins className="h-3.5 w-3.5 text-green" />
-                G$ Balance
+            <CardContent className="pt-3 pb-3 px-3 sm:pt-4 sm:px-4">
+              <div className="flex items-center gap-1 text-xs text-foreground/55 mb-1.5">
+                <Coins className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-green flex-shrink-0" />
+                <span className="truncate">G$</span>
               </div>
-              <p className="text-xl font-bold text-white tabular-nums">
+              <p className="text-base sm:text-xl font-bold text-white tabular-nums truncate">
                 {gdLoading ? <span className="text-foreground/40">…</span> : gdFormatted}
               </p>
-              <p className="text-xs text-foreground/40 mt-0.5">GoodDollar</p>
             </CardContent>
           </Card>
 
           <div className="cursor-pointer" onClick={() => isConnected && address && setShowOffRamp(true)}>
-            <Card className="glass-card card-hover">
-              <CardContent className="pt-4 pb-3 px-4">
-                <div className="flex items-center gap-1.5 text-xs text-foreground/55 mb-2">
-                  <Coins className="h-3.5 w-3.5 text-blue-400" />
-                  USDC Balance
+            <Card className="glass-card card-hover h-full">
+              <CardContent className="pt-3 pb-3 px-3 sm:pt-4 sm:px-4">
+                <div className="flex items-center gap-1 text-xs text-foreground/55 mb-1.5">
+                  <Coins className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-blue-400 flex-shrink-0" />
+                  <span className="truncate">USDC</span>
                 </div>
-                <p className="text-xl font-bold text-white tabular-nums">
+                <p className="text-base sm:text-xl font-bold text-white tabular-nums truncate">
                   {usdcLoading ? <span className="text-foreground/40">…</span> : usdcFormatted}
-                </p>
-                <p className="text-xs text-foreground/40 mt-0.5">
-                  {usdcBalance && Number(usdcBalance.value) === 0 ? "Top up to cash out →" : "Tap to cash out →"}
                 </p>
               </CardContent>
             </Card>
           </div>
 
           <Card className="glass-card">
-              <CardContent className="pt-4 pb-3 px-4">
-                <div className="flex items-center gap-1.5 text-xs text-foreground/55 mb-2">
-                  <Wallet className="h-3.5 w-3.5 text-yellow-400" />
-                  CELO Balance
-                </div>
-                <p className="text-xl font-bold text-white tabular-nums">
-                  {celoLoading ? <span className="text-foreground/40">…</span> : celoFormatted}
-                </p>
-                <p className="text-xs text-foreground/40 mt-0.5">Gas token</p>
-              </CardContent>
-            </Card>
+            <CardContent className="pt-3 pb-3 px-3 sm:pt-4 sm:px-4">
+              <div className="flex items-center gap-1 text-xs text-foreground/55 mb-1.5">
+                <Wallet className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-yellow-400 flex-shrink-0" />
+                <span className="truncate">CELO</span>
+              </div>
+              <p className="text-base sm:text-xl font-bold text-white tabular-nums truncate">
+                {celoLoading ? <span className="text-foreground/40">…</span> : celoFormatted}
+              </p>
+            </CardContent>
+          </Card>
         </div>
+
+        {/* ── Expiring streams alert ──────────────────────────────────────── */}
+        {isConnected && !streamsLoading && expiringSoon.length > 0 && (
+          <div className="rounded-xl border bg-orange-500/8 border-orange-500/20 px-4 py-3 flex items-start gap-3">
+            <AlertTriangle className="h-4 w-4 text-orange-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-orange-300">
+                {expiringSoon.length === 1 ? "1 plan is finishing soon" : `${expiringSoon.length} plans are finishing soon`}
+              </p>
+              <div className="mt-1.5 flex flex-wrap gap-2">
+                {expiringSoon.map((s) => {
+                  const { level, secsLeft } = getExpiryInfo(s.endTime, s.status);
+                  const d = Math.floor(secsLeft / 86400);
+                  const h = Math.floor((secsLeft % 86400) / 3600);
+                  const m = Math.floor((secsLeft % 3600) / 60);
+                  const timeStr = d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m}m` : `${m}m`;
+                  return (
+                    <Link
+                      key={s.streamId.toString()}
+                      href={`/streams/${s.streamId.toString()}`}
+                      className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border transition-colors hover:bg-white/10 ${
+                        level === "critical"
+                          ? "border-red-500/30 text-red-400 bg-red-500/8"
+                          : "border-orange-500/30 text-orange-400 bg-orange-500/8"
+                      }`}
+                    >
+                      <span className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${level === "critical" ? "bg-red-400" : "bg-orange-400"}`} />
+                      {s.title || `#${s.streamId.toString()}`}
+                      <span className="opacity-70">· {timeStr}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+            <Link href="/streams" className="text-xs text-orange-300 hover:text-orange-200 underline underline-offset-2 flex-shrink-0 self-start">
+              View all
+            </Link>
+          </div>
+        )}
 
         {/* ── Row 3: Active streams snapshot ─────────────────────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -260,7 +330,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <ArrowUpRight className="h-4 w-4 text-blue-400" />
-                <span className="text-sm font-semibold text-white">Sending</span>
+                <span className="text-sm font-semibold text-white">Flowing out</span>
                 {!streamsLoading && (
                   <span className="text-xs text-foreground/50">
                     ({activeSending.length})
@@ -280,11 +350,11 @@ export default function DashboardPage() {
               </div>
             ) : activeSending.length === 0 ? (
               <div className="text-center py-6 space-y-3">
-                <p className="text-sm text-foreground/50">No active outgoing streams</p>
+                <p className="text-sm text-foreground/50">No money flowing out yet</p>
                 <Button size="sm" variant="outline" asChild>
                   <Link href="/streams/create">
                     <Plus className="h-3.5 w-3.5 mr-1.5" />
-                    Create stream
+                    Set up a plan
                   </Link>
                 </Button>
               </div>
@@ -307,7 +377,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <ArrowDownLeft className="h-4 w-4 text-purple-400" />
-                <span className="text-sm font-semibold text-white">Receiving</span>
+                <span className="text-sm font-semibold text-white">Coming in</span>
                 {!streamsLoading && (
                   <span className="text-xs text-foreground/50">
                     ({activeReceiving.length})
@@ -327,7 +397,7 @@ export default function DashboardPage() {
               </div>
             ) : activeReceiving.length === 0 ? (
               <div className="text-center py-6">
-                <p className="text-sm text-foreground/50">No active incoming streams</p>
+                <p className="text-sm text-foreground/50">No money coming in yet</p>
               </div>
             ) : (
               <div className="space-y-1.5">
@@ -382,8 +452,8 @@ export default function DashboardPage() {
         <div className="flex items-center gap-2 flex-wrap pt-1">
           <span className="text-xs text-foreground/40 mr-1">Jump to:</span>
           {[
-            { href: "/streams",        icon: Layers,     label: "Streams"     },
-            { href: "/streams/create", icon: Zap,        label: "New Stream"  },
+            { href: "/streams",        icon: Layers,     label: "Plans"       },
+            { href: "/streams/create", icon: Zap,        label: "New plan"    },
             { href: "/profile",        icon: User,       label: "Profile"     },
             { href: "/leaderboard",    icon: Trophy,     label: "Leaderboard" },
           ].map(({ href, icon: Icon, label }) => (

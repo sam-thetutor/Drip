@@ -82,9 +82,11 @@ export const CONTRACT_ADDRESSES = {
     DripStaking: "0x8deF81b277590Be389bB4B3b7137c8554F93992a" as `0x${string}`,
     DripCoreSuperfluid: "0x5530975fDe062FE6706298fF3945E3d1a17A310a" as `0x${string}`, // same proxy
     DripStakingV2: "0x5530975fDe062FE6706298fF3945E3d1a17A310a" as `0x${string}`, // same proxy
-    // DripV4 vault-model architecture (deployed June 2026)
-    DripV4: "0x2CA1BF1a40E2B77608345EEb5dEA41CDC071d43c" as `0x${string}`,
-    StreamVaultImpl: "0x214bbAcCE4C9357560f46bBA260509501995D3b4" as `0x${string}`,
+    // DripV5 vault-model architecture (DripV4 + in-contract USDC→G$ swap funding).
+    // Redeployed June 2026 with the security-audit fixes + rate-lock feature removed.
+    // Note: the "DripV4" key is kept for backward-compat across the codebase; it now points to DripV5.
+    DripV4: "0xDD4DDe6A7936222D22D5083ABca39Af4B4643A81" as `0x${string}`,
+    StreamVaultImpl: "0xc836B84eF0362bBecf5eEe1F2032aC2AC50C98FB" as `0x${string}`,
   },
   [CELO_SEPOLIA_ID]: {
     DripCore: "0xfAaB5005f7844eC5499cF258F52dE29EDc74aa31" as `0x${string}`,

@@ -15,12 +15,12 @@ export default function CreateStreamPage() {
           <Button asChild variant="ghost" className="mb-4 -ml-2">
             <Link href="/streams">
               <ArrowLeft className="h-4 w-4 mr-2" />
-              My Streams
+              My plans
             </Link>
           </Button>
-          <h1 className="text-3xl font-bold mb-1">Create Stream</h1>
+          <h1 className="text-3xl font-bold mb-1">Set up a money plan</h1>
           <p className="text-muted-foreground text-sm">
-            Set up a capped, auto-stopping payment stream on Celo
+            Choose where your money should go and how much each bucket gets. Drip streams it out for you and stops automatically when the plan is done.
           </p>
         </div>
 

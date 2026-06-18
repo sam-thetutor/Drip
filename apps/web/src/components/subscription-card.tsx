@@ -23,7 +23,7 @@ export function SubscriptionCard({
   const displayTitle =
     title && typeof title === "string" && title.trim().length > 0
       ? title
-      : `Subscription #${subscriptionId.toString()}`;
+      : `Bill #${subscriptionId.toString()}`;
 
   return (
     <Card className="glass-card">

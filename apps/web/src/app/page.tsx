@@ -50,49 +50,50 @@ export default function HomePage() {
           <div className="space-y-8">
             <div className="space-y-4">
               <p className="text-sm font-semibold uppercase tracking-[0.45em] text-foreground/70">
-                Per-second streaming on GoodDollar
+                Automatic money plans
               </p>
               <h1 className="text-4xl font-bold leading-tight text-white sm:text-5xl lg:text-6xl">
-                Automate treasury payouts for{" "}
-                <span className="hero-gradient-text">DAOs & teams</span>
+                Give every shilling{" "}
+                <span className="hero-gradient-text">a job</span>
               </h1>
               <p className="text-lg leading-relaxed text-foreground/80">
-                Run per-second contributor streams and recurring billing with
-                smart-contract automation, lower ops overhead, and full on-chain
-                proof.
+                Stop guessing where your money goes. Split it into buckets for
+                your bills, your people, and your savings goals — and let Drip
+                send the right amount to each one, automatically. Saving without
+                the willpower.
               </p>
             </div>
 
             <div className="hero-cta-row">
               <Button className="hero-cta-button" asChild>
                 <Link href="/streams/create" className="flex items-center gap-2">
-                  Start payouts
+                  Set up my plan
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
               <Button variant="outline" className="hero-cta-outline" asChild>
                 <Link href="/dashboard" className="flex items-center gap-2">
-                  Open treasury dashboard
+                  See my money
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
             </div>
 
             <div className="flex flex-wrap items-center gap-3 text-xs text-foreground/60">
-              <span className="hero-badge">DAOs & collectives</span>
-              <span className="hero-badge">Per-second accrual</span>
-              <span className="hero-badge">Creator teams</span>
-              <span className="hero-badge">Service platforms</span>
+              <span className="hero-badge">Save on autopilot</span>
+              <span className="hero-badge">Bills paid on time</span>
+              <span className="hero-badge">Support family</span>
+              <span className="hero-badge">No willpower needed</span>
             </div>
 
             <div className="hero-invite-card">
-              <p className="text-sm font-semibold text-white">Built for ops leads</p>
+              <p className="text-sm font-semibold text-white">Built for real life</p>
               <p className="text-sm text-foreground/70">
-                Replace spreadsheet ops with autonomous per-second streams and
-                audit-ready payout records.
+                Money you allocate flows out slowly over time — so you spend on
+                purpose and your savings actually grow instead of disappearing.
               </p>
               <div className="mt-2 flex items-center justify-between gap-4 text-xs text-foreground/80">
-                <span>On-chain proof for every transfer</span>
+                <span>Stop, top up, or change a bucket anytime</span>
                 <Button variant="ghost" className="hero-invite-btn">
                   Learn more
                 </Button>
@@ -108,7 +109,7 @@ export default function HomePage() {
 
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-semibold uppercase tracking-[0.42em] text-foreground/55">
-                    Live Stream Metrics
+                    Money flowing through Drip
                   </p>
                   <span className="flex items-center gap-1.5 rounded-full border border-green/35 bg-green/10 px-3 py-1 text-[11px] font-medium text-green">
                     <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green" />
@@ -119,7 +120,7 @@ export default function HomePage() {
                 <div className="mt-6 grid gap-4">
                   <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                     <p className="text-[11px] uppercase tracking-[0.35em] text-foreground/50">
-                      Value in Streams
+                      Money allocated
                     </p>
                     <p className="mt-2 text-4xl font-black leading-none text-white sm:text-5xl">
                       {superfluidStats.isLoading ? "…" : streamedValueFormatted}
@@ -129,7 +130,7 @@ export default function HomePage() {
 
                   <div className="rounded-2xl border border-green/25 bg-green/[0.04] p-4">
                     <p className="text-[11px] uppercase tracking-[0.35em] text-foreground/55">
-                      Streams Created
+                      Plans running
                     </p>
                     <div className="mt-2 flex items-end justify-between">
                       <p className="text-4xl font-bold leading-none text-green">
@@ -144,13 +145,13 @@ export default function HomePage() {
 
                 <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
                     <div className="hero-mini-card">
-                      <p className="uppercase tracking-[0.2em] text-foreground/55">Outflow / Day</p>
+                      <p className="uppercase tracking-[0.2em] text-foreground/55">Flowing / Day</p>
                       <p className="mt-2 text-base font-semibold text-white">
                         {superfluidStats.isLoading ? "…" : `${outflowPerDayFormatted} G$`}
                       </p>
                     </div>
                     <div className="hero-mini-card">
-                      <p className="uppercase tracking-[0.2em] text-foreground/55">Avg / Stream</p>
+                      <p className="uppercase tracking-[0.2em] text-foreground/55">Avg / Plan</p>
                       <p className="mt-2 text-base font-semibold text-white">
                         {superfluidStats.isLoading ? "…" : `${avgPerStreamFormatted} G$`}
                       </p>
@@ -184,62 +185,62 @@ export default function HomePage() {
         <div className="mx-auto w-full max-w-6xl space-y-8">
           <div className="space-y-3 text-center">
             <p className="text-xs font-semibold uppercase tracking-[0.4em] text-foreground/60">
-              Who it’s for
+              How it works
             </p>
             <h2 className="text-3xl font-bold text-white sm:text-4xl">
-              Built for high-volume payout teams
+              Three steps to money on autopilot
             </h2>
             <p className="mx-auto max-w-3xl text-sm leading-relaxed text-foreground/75 sm:text-base">
-              Designed for teams that need reliable, transparent, and
-              programmable payment operations.
+              Set it once and Drip keeps your plan running — no spreadsheets, no
+              reminders, no willpower required.
             </p>
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">
             <article className="hero-card card-glow space-y-3">
               <p className="text-xs uppercase tracking-[0.35em] text-foreground/50">
-                DAOs & collectives
+                Step 1
               </p>
               <h3 className="text-xl font-semibold text-white">
-                Automate contributor payouts
+                Add money
               </h3>
               <p className="text-sm leading-relaxed text-foreground/75">
-                Run grants, per-second contributor streams, and treasury disbursements
-                without manual reconciliation.
+                Top up with mobile money or crypto. Your balance is the pool you
+                plan from.
               </p>
             </article>
 
             <article className="hero-card card-glow space-y-3">
               <p className="text-xs uppercase tracking-[0.35em] text-foreground/50">
-                Creator teams
+                Step 2
               </p>
               <h3 className="text-xl font-semibold text-white">
-                Pay collaborators continuously
+                Split it into buckets
               </h3>
               <p className="text-sm leading-relaxed text-foreground/75">
-                Stream payments to editors, designers, and operators with
-                instant withdrawals and clear payment history.
+                Rent, savings, family, that subscription — decide how much each
+                gets and how often.
               </p>
             </article>
 
             <article className="hero-card card-glow space-y-3">
               <p className="text-xs uppercase tracking-[0.35em] text-foreground/50">
-                Service platforms
+                Step 3
               </p>
               <h3 className="text-xl font-semibold text-white">
-                Launch programmable billing
+                Let it flow
               </h3>
               <p className="text-sm leading-relaxed text-foreground/75">
-                Support recurring subscriptions and usage-based flows with
-                on-chain proof for reconciliation.
+                Drip streams the right amount to each bucket automatically. Pause,
+                top up, or adjust anytime.
               </p>
             </article>
           </div>
 
           <div className="flex justify-center">
             <Button variant="outline" className="hero-cta-outline" asChild>
-              <Link href="/dashboard" className="flex items-center gap-2">
-                View treasury metrics
+              <Link href="/streams/create" className="flex items-center gap-2">
+                Set up my plan
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </Button>

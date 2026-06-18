@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useAccount, useChainId, useReadContract, usePublicClient } from "wagmi";
 import { erc20Abi, parseUnits, formatUnits, maxUint256 } from "viem";
-import { useCreateDripV4Stream } from "@/lib/contracts/hooks/useDripV4";
+import { useCreateDripV4Stream, useUsdcSwapQuote } from "@/lib/contracts/hooks/useDripV4";
 import { getContractAddress } from "@/lib/contracts/config";
 import { TokenSelector, getTokenByAddress } from "@/components/token-selector";
 import { Button } from "@/components/ui/button";
@@ -14,12 +14,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Plus, X, Loader2, CheckCircle, AlertTriangle,
-  ChevronDown, Calendar, Coins, Users,
+  ChevronDown, Calendar, Coins, Users, Wallet, Repeat,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { usePhoneMapping } from "@/lib/contracts";
 import { hashPhoneE164 } from "@/lib/phone/hash";
+import { useSearchParams } from "next/navigation";
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -63,16 +64,23 @@ const CADENCE_LABEL: Record<CadenceKey, string> = {
 
 const BUFFER_SECONDS = 14_400n;
 
+// USDC on Celo (plain ERC20 — not streamable directly, so it funds G$ streams via swap)
+const USDC_ADDRESS  = "0xcebA9300f2b948710d2653dD7B07f33A8B32118C" as `0x${string}`;
+const USDC_DECIMALS = 6;
+const GD_ADDRESS    = "0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A" as `0x${string}`;
+
+type FundWith = "GD" | "USDC";
+
 // ─── Tx phase ─────────────────────────────────────────────────────────────────
 
 type TxPhase = "idle" | "approving" | "waitApprove" | "creating" | "waitCreate";
 
 function phaseLabel(phase: TxPhase, sym: string, needsApprove: boolean): string {
   switch (phase) {
-    case "approving":    return `Confirm approval in wallet… (1/2)`;
-    case "waitApprove":  return `Confirming ${sym} approval… (1/2)`;
-    case "creating":     return needsApprove ? "Confirm stream in wallet… (2/2)" : "Confirm stream in wallet…";
-    case "waitCreate":   return needsApprove ? "Confirming stream… (2/2)" : "Confirming stream…";
+    case "approving":    return `Approve ${sym} in wallet · step 1 of 2`;
+    case "waitApprove":  return `Waiting for ${sym} approval · step 1 of 2`;
+    case "creating":     return needsApprove ? "Confirm plan in wallet · step 2 of 2" : "Confirm plan in wallet…";
+    case "waitCreate":   return needsApprove ? "Starting plan on-chain · step 2 of 2" : "Starting plan on-chain…";
     default:             return "";
   }
 }
@@ -91,6 +99,25 @@ function fmtDateFull(d: Date) {
 }
 function fmtDateShort(d: Date) {
   return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
+
+// ─── Duration hint helper ──────────────────────────────────────────────────────
+
+function humanDuration(cadence: CadenceKey, n: number): string {
+  if (!n || n <= 0) return "";
+  const totalSecs = CADENCE_SECONDS[cadence] * n;
+  const years  = totalSecs / (365.25 * 86400);
+  const months = totalSecs / 2_592_000;
+  const weeks  = totalSecs / 604_800;
+  const days   = totalSecs / 86_400;
+  const hours  = totalSecs / 3_600;
+  const mins   = totalSecs / 60;
+  if (years   >= 0.95) return `≈ ${Math.round(years  * 10) / 10} year${years  >= 1.95 ? "s" : ""}`;
+  if (months  >= 0.9)  return `≈ ${Math.round(months)} month${Math.round(months) !== 1 ? "s" : ""}`;
+  if (weeks   >= 0.9)  return `≈ ${Math.round(weeks)} week${Math.round(weeks) !== 1 ? "s" : ""}`;
+  if (days    >= 0.9)  return `≈ ${Math.round(days)} day${Math.round(days) !== 1 ? "s" : ""}`;
+  if (hours   >= 0.9)  return `≈ ${Math.round(hours)} hour${Math.round(hours) !== 1 ? "s" : ""}`;
+  return `≈ ${Math.round(mins)} min${Math.round(mins) !== 1 ? "s" : ""}`;
 }
 
 // ─── Section header ───────────────────────────────────────────────────────────
@@ -113,7 +140,7 @@ function TxProgressPill({ phase, sym }: { phase: TxPhase; sym: string }) {
   if (phase === "idle") return null;
   const steps = [
     { key: "approve", label: `Approve ${sym}`, done: phase === "creating" || phase === "waitCreate" },
-    { key: "create",  label: "Create stream",  done: phase === "waitCreate" },
+    { key: "create",  label: "Start plan",     done: phase === "waitCreate" },
   ];
   const approveNeeded = phase === "approving" || phase === "waitApprove";
 
@@ -126,7 +153,7 @@ function TxProgressPill({ phase, sym }: { phase: TxPhase; sym: string }) {
             <span className="font-medium text-primary">Approve {sym}</span>
           </div>
           <span className="text-muted-foreground/40 text-xs">→</span>
-          <span className="text-sm text-muted-foreground">Create stream</span>
+          <span className="text-sm text-muted-foreground">Start plan</span>
         </>
       )}
       {!approveNeeded && (
@@ -138,7 +165,7 @@ function TxProgressPill({ phase, sym }: { phase: TxPhase; sym: string }) {
           <span className="text-muted-foreground/40 text-xs">→</span>
           <div className="flex items-center gap-2 text-sm">
             <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-            <span className="font-medium text-primary">Create stream</span>
+            <span className="font-medium text-primary">Start plan</span>
           </div>
         </>
       )}
@@ -147,6 +174,13 @@ function TxProgressPill({ phase, sym }: { phase: TxPhase; sym: string }) {
 }
 
 // ─── Summary card ─────────────────────────────────────────────────────────────
+
+interface SwapInfo {
+  usdcIn: bigint;
+  maxUsdcIn: bigint;
+  loading: boolean;
+  error: boolean;
+}
 
 interface SummaryProps {
   tokenMeta: { symbol: string; decimals: number } | undefined;
@@ -160,12 +194,16 @@ interface SummaryProps {
   phase: TxPhase;
   onAction: () => void;
   canSubmit: boolean;
+  fundingSymbol: string;
+  fundingDecimals: number;
+  fundingBalance: bigint | undefined;
+  swap: SwapInfo | null;
 }
 
 function SummaryCard({
   tokenMeta, tokenBalance, totalAmountWei, depositWei,
   estimatedEndDate, needsApproval, hasInsufficientBalance,
-  zeroRateIndices, phase, onAction, canSubmit,
+  zeroRateIndices, phase, onAction, canSubmit, fundingSymbol, fundingDecimals, fundingBalance, swap,
 }: SummaryProps) {
   const sym = tokenMeta?.symbol ?? "—";
   const dec = tokenMeta?.decimals ?? 18;
@@ -173,7 +211,9 @@ function SummaryCard({
   const bufferPct = totalAmountWei > 0n ? Math.round(Number((bufferWei * 100n) / totalAmountWei)) : 0;
   const isBusy    = phase !== "idle";
   const hasError  = hasInsufficientBalance || zeroRateIndices.length > 0;
-  const isReady   = canSubmit && !hasError && depositWei > 0n;
+  const swapBlocked = swap ? (swap.loading || swap.error || swap.maxUsdcIn === 0n) : false;
+  const isReady   = canSubmit && !hasError && depositWei > 0n && !swapBlocked;
+  const usdcFmt = (wei: bigint) => `${parseFloat(formatUnits(wei, USDC_DECIMALS)).toFixed(2)} USDC`;
 
   return (
     <div className="space-y-3">
@@ -189,29 +229,47 @@ function SummaryCard({
           <>
             <div className="space-y-2.5">
               <div className="flex justify-between items-baseline text-sm">
-                <span className="text-muted-foreground">Stream amount</span>
+                <span className="text-muted-foreground">Total amount</span>
                 <span className="font-medium tabular-nums">{fmtWei(totalAmountWei, dec, sym)}</span>
               </div>
               <div className="flex justify-between items-baseline text-sm">
                 <span className="text-muted-foreground">
-                  Buffer
-                  {bufferPct > 0 && <span className="ml-1 text-xs opacity-60">({bufferPct}% · refunded)</span>}
+                  Safety buffer
+                  {bufferPct > 0 && <span className="ml-1 text-xs opacity-60">(returned on end)</span>}
                 </span>
                 <span className="text-amber-400 tabular-nums">+{fmtWei(bufferWei, dec, sym)}</span>
               </div>
               <div className="flex justify-between items-baseline border-t border-border/60 pt-2.5">
-                <span className="font-semibold text-sm">Total deposit</span>
+                <span className="font-semibold text-sm">Total to set aside</span>
                 <span className={`font-bold text-base tabular-nums ${hasError ? "text-red-400" : "text-primary"}`}>
                   {fmtWei(depositWei, dec, sym)}
                 </span>
               </div>
+
+              {/* USDC funding line — when paying with USDC via swap */}
+              {swap && (
+                <div className="flex justify-between items-baseline rounded-lg bg-blue-500/8 border border-blue-500/15 px-3 py-2 mt-1">
+                  <span className="flex items-center gap-1.5 text-sm text-blue-300">
+                    <Repeat className="h-3.5 w-3.5" /> You pay (auto-swap)
+                  </span>
+                  {swap.loading ? (
+                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Loader2 className="h-3 w-3 animate-spin" /> quoting…
+                    </span>
+                  ) : swap.error || swap.usdcIn === 0n ? (
+                    <span className="text-xs text-red-400">quote unavailable</span>
+                  ) : (
+                    <span className="font-bold text-sm tabular-nums text-blue-300">≈ {usdcFmt(swap.usdcIn)}</span>
+                  )}
+                </div>
+              )}
             </div>
 
             {estimatedEndDate && (
               <div className="flex items-start gap-2.5 rounded-lg bg-primary/8 border border-primary/15 px-3 py-2.5">
                 <Calendar className="h-4 w-4 text-primary shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-xs text-muted-foreground leading-none mb-0.5">Stream ends</p>
+                  <p className="text-xs text-muted-foreground leading-none mb-0.5">Plan ends</p>
                   <p className="text-sm font-semibold text-primary">{fmtDateShort(estimatedEndDate)}</p>
                   <p className="text-[11px] text-muted-foreground">
                     {estimatedEndDate.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
@@ -220,11 +278,14 @@ function SummaryCard({
               </div>
             )}
 
-            {tokenBalance !== undefined && (
+            {(swap ? fundingBalance : tokenBalance) !== undefined && (
               <div className={`flex justify-between items-baseline text-sm border-t border-border/40 pt-3 ${hasInsufficientBalance ? "text-red-400" : "text-muted-foreground"}`}>
-                <span>Your balance</span>
+                <span>Your {fundingSymbol} balance</span>
                 <span className="tabular-nums font-medium">
-                  {fmtWei(tokenBalance, dec, sym)}{hasInsufficientBalance && " ⚠"}
+                  {swap
+                    ? fmtWei(fundingBalance ?? 0n, fundingDecimals, fundingSymbol, 2)
+                    : fmtWei(tokenBalance ?? 0n, dec, sym)}
+                  {hasInsufficientBalance && " ⚠"}
                 </span>
               </div>
             )}
@@ -234,8 +295,8 @@ function SummaryCard({
               <div className="flex items-start gap-2 rounded-lg border border-orange-500/25 bg-orange-500/5 px-3 py-2">
                 <AlertTriangle className="h-3.5 w-3.5 text-orange-400 shrink-0 mt-0.5" />
                 <p className="text-xs text-orange-400 leading-relaxed">
-                  The Superfluid buffer is <span className="font-semibold">{bufferPct}% of your stream amount</span>.
-                  For short or fast streams this can be large, but it is <span className="font-semibold">fully refunded</span> when the stream ends.
+                  The safety buffer is <span className="font-semibold">{bufferPct}% of the payout amount</span>.
+                  This is common for short plans — it is <span className="font-semibold">fully returned</span> when the plan ends.
                 </p>
               </div>
             )}
@@ -245,7 +306,7 @@ function SummaryCard({
               <div className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2">
                 <AlertTriangle className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
                 <p className="text-xs text-amber-400 leading-relaxed">
-                  Two wallet confirmations: first to approve {sym}, then to create the stream.
+                  Two steps required: first approve {fundingSymbol}, then start the plan.
                 </p>
               </div>
             )}
@@ -257,7 +318,8 @@ function SummaryCard({
       {hasInsufficientBalance && depositWei > 0n && (
         <div className="flex gap-2 rounded-lg border border-red-500/25 bg-red-500/8 p-3 text-xs text-red-400">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-          Insufficient balance — you need {fmtWei(depositWei, dec, sym)}.
+          Insufficient {fundingSymbol} balance
+          {swap && swap.maxUsdcIn > 0n ? ` — you need ≈ ${usdcFmt(swap.maxUsdcIn)}.` : ` — you need ${fmtWei(depositWei, dec, sym)}.`}
         </div>
       )}
       {zeroRateIndices.length > 0 && (
@@ -268,11 +330,11 @@ function SummaryCard({
         </div>
       )}
 
-      {bufferPct > 0 && bufferPct <= 20 && !isBusy && (
-        <p className="text-[11px] text-muted-foreground leading-relaxed px-1">
-          The Superfluid buffer is a protocol deposit returned in full when the stream ends or is cancelled.
-        </p>
-      )}
+        {bufferPct > 0 && bufferPct <= 20 && !isBusy && (
+          <p className="text-[11px] text-muted-foreground leading-relaxed px-1">
+            The safety buffer is a protocol requirement — it's returned in full when the plan ends or is cancelled.
+          </p>
+        )}
 
       {/* CTA — desktop only */}
       <div className="hidden lg:block space-y-2">
@@ -282,9 +344,9 @@ function SummaryCard({
           disabled={isBusy || !isReady}
         >
           {isBusy ? (
-            <><Loader2 className="h-4 w-4 mr-2 animate-spin" />{phaseLabel(phase, sym, needsApproval)}</>
+            <><Loader2 className="h-4 w-4 mr-2 animate-spin" />{phaseLabel(phase, fundingSymbol, needsApproval)}</>
           ) : isReady ? (
-            <><CheckCircle className="h-4 w-4 mr-2" />Deposit &amp; Stream</>
+            <><CheckCircle className="h-4 w-4 mr-2" />{swap ? "Swap, set aside & start plan" : "Set aside & start plan"}</>
           ) : (
             <>Fill in the form above</>
           )}
@@ -293,9 +355,11 @@ function SummaryCard({
         {/* Deposit amount sub-label */}
         {isReady && !isBusy && (
           <p className="text-center text-xs text-muted-foreground">
-            {needsApproval
-              ? `Approve ${sym} then deposit ${fmtWei(depositWei, dec, sym)}`
-              : `${fmtWei(depositWei, dec, sym)} will be deposited`}
+          {swap && swap.usdcIn > 0n
+              ? `≈ ${usdcFmt(swap.usdcIn)} swapped to ${fmtWei(depositWei, dec, sym)} of G$`
+              : needsApproval
+              ? `Approve ${fundingSymbol}, then set aside ${fmtWei(depositWei, dec, sym)} to start`
+              : `${fmtWei(depositWei, dec, sym)} set aside for this plan`}
           </p>
         )}
       </div>
@@ -308,7 +372,7 @@ function SummaryCard({
 function MobileBottomBar({
   tokenMeta, tokenBalance, totalAmountWei, depositWei,
   needsApproval, hasInsufficientBalance, zeroRateIndices,
-  phase, onAction, canSubmit,
+  phase, onAction, canSubmit, fundingSymbol, swap,
 }: Omit<SummaryProps, "estimatedEndDate">) {
   const [expanded, setExpanded] = useState(false);
   const sym = tokenMeta?.symbol ?? "—";
@@ -316,18 +380,20 @@ function MobileBottomBar({
   const bufferWei = depositWei > totalAmountWei ? depositWei - totalAmountWei : 0n;
   const isBusy    = phase !== "idle";
   const hasError  = hasInsufficientBalance || zeroRateIndices.length > 0;
-  const isReady   = canSubmit && !hasError && depositWei > 0n;
+  const swapBlocked = swap ? (swap.loading || swap.error || swap.maxUsdcIn === 0n) : false;
+  const isReady   = canSubmit && !hasError && depositWei > 0n && !swapBlocked;
+  const usdcFmt = (wei: bigint) => `${parseFloat(formatUnits(wei, USDC_DECIMALS)).toFixed(2)} USDC`;
 
   return (
     <div className="fixed bottom-16 md:bottom-0 left-0 right-0 z-50 lg:hidden">
       {expanded && (
         <div className="border-t border-border bg-card/95 backdrop-blur-xl px-4 py-4 space-y-2.5">
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Stream amount</span>
+            <span className="text-muted-foreground">Total amount</span>
             <span className="tabular-nums font-medium">{fmtWei(totalAmountWei, dec, sym)}</span>
           </div>
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Buffer (refunded)</span>
+            <span className="text-muted-foreground">Safety buffer (returned)</span>
             <span className="text-amber-400 tabular-nums">{fmtWei(bufferWei, dec, sym)}</span>
           </div>
           {tokenBalance !== undefined && (
@@ -336,9 +402,15 @@ function MobileBottomBar({
               <span className="tabular-nums">{fmtWei(tokenBalance, dec, sym)}</span>
             </div>
           )}
+          {swap && swap.usdcIn > 0n && (
+            <div className="flex justify-between text-sm text-blue-300">
+              <span>You pay (auto-swap)</span>
+              <span className="tabular-nums">≈ {usdcFmt(swap.usdcIn)}</span>
+            </div>
+          )}
           {needsApproval && (
             <p className="text-[11px] text-amber-400 pt-1">
-              Two wallet confirmations required: approve {sym}, then create stream.
+              Two steps: approve {fundingSymbol}, then start the plan.
             </p>
           )}
         </div>
@@ -350,9 +422,11 @@ function MobileBottomBar({
           onClick={() => setExpanded((e) => !e)}
           className="flex flex-col items-start flex-1 min-w-0"
         >
-          <span className="text-[11px] text-muted-foreground">Total deposit</span>
+          <span className="text-[11px] text-muted-foreground">{swap ? "You pay" : "Total to set aside"}</span>
           <span className={`text-base font-bold tabular-nums leading-tight ${hasError ? "text-red-400" : "text-primary"}`}>
-            {depositWei > 0n ? fmtWei(depositWei, dec, sym) : "—"}
+            {swap
+              ? (swap.usdcIn > 0n ? usdcFmt(swap.usdcIn) : "—")
+              : (depositWei > 0n ? fmtWei(depositWei, dec, sym) : "—")}
           </span>
         </button>
         <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform shrink-0 ${expanded ? "rotate-180" : ""}`} />
@@ -365,7 +439,7 @@ function MobileBottomBar({
         >
           {isBusy
             ? <Loader2 className="h-4 w-4 animate-spin" />
-            : "Deposit & Stream"}
+            : "Set up plan"}
         </Button>
       </div>
     </div>
@@ -380,16 +454,24 @@ export function CreateStreamForm() {
   const router       = useRouter();
   const publicClient = usePublicClient();
   const dripV4Addr   = getContractAddress(chainId, "DripV4");
+  const searchParams = useSearchParams();
 
-  const { approveToken, createStream } = useCreateDripV4Stream();
+  // Pre-fill recipient from ?recipient= query param (set by QR code share link)
+  const prefillRecipient = searchParams.get("recipient") ?? "";
+
+  const { approveToken, createStream, createStreamWithSwap } = useCreateDripV4Stream();
 
   // Single phase state drives all UI
   const [phase,         setPhase]         = useState<TxPhase>("idle");
   // Track whether approval was triggered in this session (for phase label)
   const [didApprove,    setDidApprove]    = useState(false);
+  // Funding source: stream is always G$; pay with G$ directly or USDC (auto-swap)
+  const [fundWith,      setFundWith]      = useState<FundWith>("GD");
 
   // Phone resolution
-  const [recipientInputs,   setRecipientInputs]   = useState<Record<number, string>>({});
+  const [recipientInputs,   setRecipientInputs]   = useState<Record<number, string>>(
+    prefillRecipient ? { 0: prefillRecipient } : {}
+  );
   const [resolvedFromPhone, setResolvedFromPhone] = useState<Record<number, string | null>>({});
   const [phoneNotFound,     setPhoneNotFound]     = useState<Record<number, boolean>>({});
   const [resolvingPhone,    setResolvingPhone]     = useState<Record<number, boolean>>({});
@@ -403,7 +485,7 @@ export function CreateStreamForm() {
   } = useForm<FormData>({
     resolver: zodResolver(streamSchema),
     defaultValues: {
-      recipients:   [{ address: "", amountPerPeriod: "" }],
+      recipients:   [{ address: prefillRecipient.match(/^0x[a-fA-F0-9]{40}$/) ? prefillRecipient : "", amountPerPeriod: "" }],
       token:        "0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A",
       cadence:      "monthly",
       totalPeriods: "12",
@@ -478,8 +560,43 @@ export function CreateStreamForm() {
   });
 
   const tokenMeta              = getTokenByAddress(watchedToken as `0x${string}`, chainId);
-  const needsApproval          = isERC20 && depositWei > 0n && allowance !== undefined && (allowance as bigint) < depositWei;
-  const hasInsufficientBalance = isERC20 && tokenBalance !== undefined && (tokenBalance as bigint) < depositWei && depositWei > 0n;
+
+  // ── USDC swap funding ──────────────────────────────────────────────────────
+  // When paying with USDC, the contract swaps USDC → G$ for the full deposit (depositWei).
+  const usingSwap = fundWith === "USDC";
+  const neededGd  = usingSwap ? depositWei : 0n;
+  const { usdcIn, maxUsdcIn, isLoading: quoteLoading, isError: quoteError } = useUsdcSwapQuote(neededGd);
+
+  const { data: usdcAllowance, refetch: refetchUsdcAllowance } = useReadContract({
+    address: USDC_ADDRESS,
+    abi: erc20Abi,
+    functionName: "allowance",
+    args: address && dripV4Addr ? [address, dripV4Addr as `0x${string}`] : undefined,
+    query: { enabled: usingSwap && !!address && !!dripV4Addr, refetchInterval: 10_000 },
+  });
+
+  const { data: usdcBalance } = useReadContract({
+    address: USDC_ADDRESS,
+    abi: erc20Abi,
+    functionName: "balanceOf",
+    args: address ? [address] : undefined,
+    query: { enabled: usingSwap && !!address, refetchInterval: 15_000 },
+  });
+
+  const swapInfo: SwapInfo | null = usingSwap
+    ? { usdcIn, maxUsdcIn, loading: quoteLoading, error: quoteError }
+    : null;
+
+  const fundingSymbol   = usingSwap ? "USDC" : (tokenMeta?.symbol ?? "G$");
+  const fundingDecimals = usingSwap ? USDC_DECIMALS : (tokenMeta?.decimals ?? 18);
+
+  const needsApproval = usingSwap
+    ? (maxUsdcIn > 0n && usdcAllowance !== undefined && (usdcAllowance as bigint) < maxUsdcIn)
+    : (isERC20 && depositWei > 0n && allowance !== undefined && (allowance as bigint) < depositWei);
+
+  const hasInsufficientBalance = usingSwap
+    ? (usdcBalance !== undefined && maxUsdcIn > 0n && (usdcBalance as bigint) < maxUsdcIn)
+    : (isERC20 && tokenBalance !== undefined && (tokenBalance as bigint) < depositWei && depositWei > 0n);
 
   // ── Phone lookup ──────────────────────────────────────────────────────────────
   const handleRecipientInput = async (index: number, value: string) => {
@@ -530,7 +647,13 @@ export function CreateStreamForm() {
       return;
     }
 
-    const sym = tokenMeta?.symbol ?? "token";
+    if (usingSwap && (maxUsdcIn === 0n || quoteError)) {
+      toast.error("Couldn't fetch a swap quote — try again in a moment");
+      return;
+    }
+
+    const sym = fundingSymbol;
+    const fundingTokenAddr = usingSwap ? USDC_ADDRESS : (data.token as `0x${string}`);
     const willApprove = needsApproval; // snapshot before any state change
     setDidApprove(false);
 
@@ -540,7 +663,7 @@ export function CreateStreamForm() {
         setPhase("approving");
         toast.loading(`Step 1/2 — Approve ${sym} in your wallet`, { id: "stream-flow" });
 
-        const approveHash = await approveToken(data.token as `0x${string}`, maxUint256);
+        const approveHash = await approveToken(fundingTokenAddr, maxUint256);
 
         setPhase("waitApprove");
         toast.loading(`Step 1/2 — Waiting for ${sym} approval…`, { id: "stream-flow" });
@@ -549,9 +672,9 @@ export function CreateStreamForm() {
         setDidApprove(true);
 
         // Refresh allowance cache (fire-and-forget — we proceed regardless)
-        refetchAllowance().catch(() => {});
+        (usingSwap ? refetchUsdcAllowance() : refetchAllowance()).catch(() => {});
 
-        toast.loading("Step 1/2 — Approved! Now create the stream…", { id: "stream-flow" });
+        toast.loading("Approved! Now confirm the stream…", { id: "stream-flow" });
         // Brief pause so the "Approved!" message is visible
         await new Promise((r) => setTimeout(r, 800));
       }
@@ -559,23 +682,38 @@ export function CreateStreamForm() {
       // ── Step 2: Create stream ─────────────────────────────────────────────────
       setPhase("creating");
       const stepLabel = willApprove ? "Step 2/2" : "";
-      toast.loading(`${stepLabel} Confirm stream creation in your wallet`, { id: "stream-flow" });
+      toast.loading(
+        usingSwap
+          ? `${stepLabel} Confirm swap & plan in your wallet`
+          : `${stepLabel} Confirm your plan in your wallet`,
+        { id: "stream-flow" },
+      );
 
-      const createHash = await createStream({
-        recipients:  data.recipients.map((r) => r.address as `0x${string}`),
-        token:       data.token as `0x${string}`,
-        flowRates,
-        totalAmount: totalAmountWei,
-        title:       data.title || "",
-        description: data.description || "",
-      });
+      const recipients = data.recipients.map((r) => r.address as `0x${string}`);
+      const createHash = usingSwap
+        ? await createStreamWithSwap({
+            maxAmountIn: maxUsdcIn,
+            recipients,
+            flowRates,
+            totalAmount: totalAmountWei,
+            title:       data.title || "",
+            description: data.description || "",
+          })
+        : await createStream({
+            recipients,
+            token:       data.token as `0x${string}`,
+            flowRates,
+            totalAmount: totalAmountWei,
+            title:       data.title || "",
+            description: data.description || "",
+          });
 
       setPhase("waitCreate");
-      toast.loading(`${stepLabel} Confirming stream on-chain…`, { id: "stream-flow" });
+      toast.loading(`${stepLabel} Setting up your plan on-chain…`, { id: "stream-flow" });
 
       await publicClient!.waitForTransactionReceipt({ hash: createHash });
 
-      toast.success("Stream created! Redirecting…", { id: "stream-flow" });
+      toast.success("Your plan is live! Redirecting…", { id: "stream-flow" });
       router.push("/streams");
 
     } catch (e: any) {
@@ -601,12 +739,16 @@ export function CreateStreamForm() {
     phase,
     onAction:  onActionClick,
     canSubmit: isConnected,
+    fundingSymbol,
+    fundingDecimals,
+    fundingBalance: usingSwap ? (usdcBalance as bigint | undefined) : (tokenBalance as bigint | undefined),
+    swap: swapInfo,
   };
 
   if (!isConnected) {
     return (
       <div className="glass-card rounded-xl border border-border p-12 text-center">
-        <p className="text-muted-foreground">Connect your wallet to create a stream.</p>
+        <p className="text-muted-foreground">Connect your wallet to set up a plan.</p>
       </div>
     );
   }
@@ -624,16 +766,33 @@ export function CreateStreamForm() {
             <TxProgressPill phase={phase} sym={tokenMeta?.symbol ?? "token"} />
           )}
 
+          {/* Pre-fill banner — shown when opened via QR/share link */}
+          {prefillRecipient.match(/^0x[a-fA-F0-9]{40}$/) && (
+            <div className="flex items-start gap-3 rounded-xl bg-primary/8 border border-primary/20 px-4 py-3">
+              <span className="text-lg">📩</span>
+              <div>
+                <p className="text-sm font-medium text-primary">Payment request</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Someone sent you this link to request a plan. Their address has been pre-filled as a bucket —
+                  just set the amount and start.
+                </p>
+                <p className="font-mono text-xs text-foreground/60 mt-1">
+                  {prefillRecipient.slice(0, 8)}…{prefillRecipient.slice(-6)}
+                </p>
+              </div>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit(doDepositAndStream)} className="space-y-8">
 
             {/* ─ 1. Details ─ */}
             <div>
-              <SectionHeader icon={Coins} title="Stream details" />
+              <SectionHeader icon={Coins} title="About this plan" />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="title" className="text-sm font-medium">Stream name</Label>
+                  <Label htmlFor="title" className="text-sm font-medium">Plan name</Label>
                   <Input
-                    id="title" placeholder="e.g. Team Salary — Engineering"
+                    id="title" placeholder="e.g. Monthly savings, Rent, Send to Mum"
                     maxLength={120} className="bg-background/60"
                     {...register("title")}
                   />
@@ -654,7 +813,7 @@ export function CreateStreamForm() {
 
             {/* ─ 2. Token & schedule ─ */}
             <div>
-              <SectionHeader icon={Calendar} title="Token & schedule" />
+              <SectionHeader icon={Calendar} title="Schedule" />
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
                   <Label className="text-sm font-medium">Token</Label>
@@ -675,7 +834,7 @@ export function CreateStreamForm() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label className="text-sm font-medium">Cadence</Label>
+                  <Label className="text-sm font-medium">Pay every</Label>
                   <select
                     className="flex h-10 w-full rounded-md border border-input bg-background/60 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     {...register("cadence")}
@@ -687,28 +846,76 @@ export function CreateStreamForm() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="totalPeriods" className="text-sm font-medium">Number of payments</Label>
+                  <Label htmlFor="totalPeriods" className="text-sm font-medium">How many times</Label>
                   <Input
                     id="totalPeriods" type="number" min="1" placeholder="12"
                     className="bg-background/60"
                     {...register("totalPeriods")}
                   />
                   {errors.totalPeriods && <p className="text-xs text-destructive">{errors.totalPeriods.message}</p>}
+                  {!errors.totalPeriods && watchedPeriods && parseInt(watchedPeriods) > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {parseInt(watchedPeriods)} × {CADENCE_LABEL[watchedCadence].toLowerCase()} = {humanDuration(watchedCadence, parseInt(watchedPeriods))}
+                    </p>
+                  )}
                 </div>
               </div>
 
               {estimatedEndDate && totalFlowRateWei > 0n && (
                 <p className="mt-3 text-xs text-muted-foreground">
-                  Stream runs until{" "}
+                  Plan ends{" "}
                   <span className="text-foreground font-medium">{fmtDateFull(estimatedEndDate)}</span>
-                  {" "}— then stops automatically and remaining funds are refunded.
+                  {" "}— then stops automatically and any unused safety buffer is returned.
                 </p>
               )}
+
+              {/* ─ Pay with ─ recipients always receive G$; pick how you fund it ─ */}
+              <div className="mt-5 space-y-2">
+                <Label className="text-sm font-medium">Pay with</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFundWith("GD")}
+                    className={`flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                      fundWith === "GD"
+                        ? "border-primary/60 bg-primary/10"
+                        : "border-border bg-background/40 hover:border-border/80"
+                    }`}
+                  >
+                    <Wallet className={`h-4 w-4 shrink-0 ${fundWith === "GD" ? "text-primary" : "text-muted-foreground"}`} />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium leading-tight">G$ balance</p>
+                      <p className="text-[11px] text-muted-foreground leading-tight">Fund directly</p>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFundWith("USDC")}
+                    className={`flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                      fundWith === "USDC"
+                        ? "border-primary/60 bg-primary/10"
+                        : "border-border bg-background/40 hover:border-border/80"
+                    }`}
+                  >
+                    <Repeat className={`h-4 w-4 shrink-0 ${fundWith === "USDC" ? "text-primary" : "text-muted-foreground"}`} />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium leading-tight">USDC</p>
+                      <p className="text-[11px] text-muted-foreground leading-tight">Auto-swap to G$</p>
+                    </div>
+                  </button>
+                </div>
+                {usingSwap && (
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    Your recipients still receive <span className="font-medium text-foreground">G$</span>.
+                    We swap your USDC to G$ on Uniswap at stream creation and refund any unused USDC.
+                  </p>
+                )}
+              </div>
             </div>
 
             {/* ─ 3. Recipients ─ */}
             <div>
-              <SectionHeader icon={Users} title="Recipients" />
+              <SectionHeader icon={Users} title="Buckets — where the money goes" />
 
               <div className="space-y-2">
                 {/* Column labels */}
@@ -753,6 +960,12 @@ export function CreateStreamForm() {
                       {phoneNotFound[index] && (
                         <p className="text-[11px] text-amber-400">⚠ No address mapping found</p>
                       )}
+                      {/* Self-send warning */}
+                      {watchAll.recipients[index]?.address &&
+                       address &&
+                       watchAll.recipients[index].address.toLowerCase() === address.toLowerCase() && (
+                        <p className="text-[11px] text-amber-400">⚠ This is your own address — are you sure?</p>
+                      )}
                       {errors.recipients?.[index]?.address && !resolvedFromPhone[index] && !phoneNotFound[index] && (
                         <p className="text-[11px] text-destructive">{errors.recipients[index]?.address?.message}</p>
                       )}
@@ -773,7 +986,7 @@ export function CreateStreamForm() {
                       {flowRates[index] === 0n
                         && watchAll.recipients[index]?.amountPerPeriod
                         && parseFloat(watchAll.recipients[index].amountPerPeriod) > 0 && (
-                        <p className="text-[11px] text-red-400">Amount too small — rounds to 0</p>
+                        <p className="text-[11px] text-red-400">Amount too small for this cadence — try a larger value</p>
                       )}
                       {errors.recipients?.[index]?.amountPerPeriod && (
                         <p className="text-[11px] text-destructive">{errors.recipients[index]?.amountPerPeriod?.message}</p>
@@ -786,7 +999,7 @@ export function CreateStreamForm() {
                       onClick={() => remove(index)}
                       disabled={fields.length === 1}
                       className="flex items-center justify-center w-8 h-8 mt-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-25 disabled:pointer-events-none"
-                      aria-label="Remove recipient"
+                      aria-label="Remove bucket"
                     >
                       <X className="h-4 w-4" />
                     </button>
@@ -798,7 +1011,7 @@ export function CreateStreamForm() {
                   onClick={() => append({ address: "", amountPerPeriod: "" })}
                   className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors px-1 py-1.5"
                 >
-                  <Plus className="h-4 w-4" /> Add another recipient
+                  <Plus className="h-4 w-4" /> Add another bucket
                 </button>
               </div>
             </div>

@@ -15,9 +15,9 @@ export default function StreamDetailsPage() {
       <main className="flex-1">
         <div className="container px-4 mx-auto max-w-[1280px] py-8">
           <div className="text-center py-12 space-y-4">
-            <p className="text-muted-foreground">Invalid stream ID</p>
+            <p className="text-muted-foreground">Invalid plan ID</p>
             <Button asChild variant="outline">
-              <Link href="/streams">Back to Streams</Link>
+              <Link href="/streams">Back to plans</Link>
             </Button>
           </div>
         </div>
@@ -32,7 +32,7 @@ export default function StreamDetailsPage() {
           <Button asChild variant="ghost" className="mb-4">
             <Link href="/streams">
               <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Streams
+              Back to plans
             </Link>
           </Button>
         </div>

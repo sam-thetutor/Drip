@@ -10,8 +10,8 @@ import { useIsAdmin } from "@/lib/admin/auth"
 
 const navLinks = [
   { name: "Home", href: "/dashboard", icon: Home },
-  { name: "Streams", href: "/streams", icon: Layers },
-  { name: "Create", href: "/streams/create", icon: PlusCircle },
+  { name: "Plans", href: "/streams", icon: Layers },
+  { name: "Allocate", href: "/streams/create", icon: PlusCircle },
   { name: "Profile", href: "/profile", icon: User },
 ]
 

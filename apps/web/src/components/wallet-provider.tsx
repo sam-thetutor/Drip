@@ -42,7 +42,7 @@ const connectors = connectorsForWallets(
     },
   ],
   {
-    appName: "Drip - Programmable Payments",
+    appName: "Drip - Your money plan",
     projectId: process.env.NEXT_PUBLIC_WC_PROJECT_ID || "default-project-id",
   }
 );

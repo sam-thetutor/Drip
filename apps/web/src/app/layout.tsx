@@ -8,8 +8,8 @@ import { Toaster } from "sonner";
 const spaceGrotesk = Space_Grotesk({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Drip - Programmable Payments on Celo",
-  description: "Real-time payment streaming and recurring subscriptions on Celo",
+  title: "Drip - Give every shilling a job",
+  description: "Plan your money, split it into buckets for bills, people and savings goals, and let Drip stream the right amount to each one automatically.",
 };
 
 export default function RootLayout({

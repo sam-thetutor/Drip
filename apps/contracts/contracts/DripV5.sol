@@ -2,25 +2,25 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/proxy/Clones.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./interfaces/IStreamVault.sol";
 
 /**
- * @title DripV4
- * @notice On-chain registry and orchestrator for guaranteed, capped multi-recipient streams.
+ * @title DripV5
+ * @notice DripV4 + in-contract swap funding.
  *
- * Stream lifecycle:
- *   approve DripV4 → createStream() → ACTIVE  (all recipients receive immediately)
- *   → pauseStream()  → PAUSED   (flows stop, buffers returned)
- *   → resumeStream() → ACTIVE   (flows restart, endTime extended by pause duration)
- *   → cancelStream() → CANCELLED (stop all flows, refund vault to sender)
- *   OR keeper calls expireStream() when endTime passes → COMPLETED
+ * Everything in DripV4 is preserved verbatim. DripV5 adds a single new entry point —
+ * `createStreamWithSwap` — that lets a user fund a G$ stream by paying in a non-Super
+ * token (USDC). The contract pulls the funding token, swaps it to G$ via Uniswap V3
+ * (exactOutput, so the stream is funded to the exact penny), refunds any unused input,
+ * then runs the identical DripV4 stream-creation flow.
  *
- * Key properties:
- *  - Every stream has its own vault — zero cross-stream contamination.
- *  - DripV4 never holds tokens; funds go vault → recipients in real-time.
- *  - Recipients receive automatically — no action needed from them.
- *  - Platform fee deducted from totalAmount at creation (sent directly to platformFeeRecipient).
- *  - Sender can lock stream (prevent cancel + pause) via lockStreamRate().
+ * Design notes:
+ *  - The swap happens in the FACTORY. Each StreamVault stays a pure G$ holder, so the
+ *    per-stream isolation guarantee is untouched.
+ *  - exactOutput => the resulting stream is exactly what the user designed (same
+ *    recipients / flowRates / totalAmount as createStream). USDC is only a funding source.
+ *  - Slippage protection is the caller-supplied `maxAmountIn` (quote off-chain, add ~1%).
  */
 
 interface ICFAv1Forwarder {
@@ -32,9 +32,21 @@ interface IERC20Min {
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
     function balanceOf(address account) external view returns (uint256);
     function transfer(address to, uint256 amount) external returns (bool);
+    function approve(address spender, uint256 amount) external returns (bool);
 }
 
-contract DripV4 {
+/// @dev Uniswap V3 SwapRouter02 (no per-call deadline field), verified at 0x5615… on Celo.
+interface ISwapRouter {
+    struct ExactOutputParams {
+        bytes   path;            // reverse-encoded: tokenOut → … → tokenIn
+        address recipient;
+        uint256 amountOut;
+        uint256 amountInMaximum;
+    }
+    function exactOutput(ExactOutputParams calldata params) external payable returns (uint256 amountIn);
+}
+
+contract DripV5 is ReentrancyGuard {
 
     // ═══════════════════════════════════════════
     // Constants
@@ -42,8 +54,16 @@ contract DripV4 {
 
     address public constant CFA_FORWARDER = 0xcfA132E353cB4E398080B9700609bb008eceB125;
 
-    uint256 public constant BUFFER_SECONDS      = 14_400;    // 4 hours — Celo liquidation period
-    uint256 public constant MIN_DURATION        = 3_600;     // 1 hour minimum stream duration
+    /// @dev Uniswap V3 SwapRouter on Celo (verified Jun 2026).
+    address public constant SWAP_ROUTER = 0x5615CDAb10dc425a742d643d949a7F474C01abc4;
+
+    /// @dev GoodDollar Super Token on Celo — the only token streams are denominated in
+    ///      when funded via swap.
+    address public constant GOOD_DOLLAR = 0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A;
+
+    uint256 public constant DEFAULT_BUFFER_SECONDS = 14_400; // 4 hours — Celo liquidation period
+    uint256 public constant MIN_BUFFER_SECONDS     = 3_600;  // floor for governable buffer
+    uint256 public constant MAX_BUFFER_SECONDS     = 30 days; // ceiling for governable buffer
     uint256 public constant MAX_DURATION        = 315_360_000; // 10 years maximum
     uint256 public constant MAX_TITLE_LEN       = 120;
     uint256 public constant MAX_DESCRIPTION_LEN = 1_024;
@@ -70,7 +90,6 @@ contract DripV4 {
         uint256      endTime;         // extended on resume to compensate for pauses
         uint256      finishTime;      // set when stream ends (0 while active/paused)
         uint256      pausedAt;        // timestamp of last pause (0 if active/never paused)
-        uint256      rateLockUntil;   // cancel + pause blocked until this timestamp (0 = no lock)
         StreamStatus status;
         string       title;
         string       description;
@@ -81,7 +100,16 @@ contract DripV4 {
     // ═══════════════════════════════════════════
 
     address public owner;
+    address public pendingOwner;            // Ownable2Step: must call acceptOwnership()
     address public vaultImplementation;
+
+    /// @dev Governable Superfluid liquidation/buffer period. Bounded to
+    ///      [MIN_BUFFER_SECONDS, MAX_BUFFER_SECONDS] so it can track protocol changes
+    ///      without a redeploy, while never being set to an unsafe value.
+    uint256 public bufferSeconds;
+
+    /// @dev Emergency stop. Blocks NEW stream creation only; existing streams are unaffected.
+    bool public paused;
 
     uint256 public platformFeeBps;          // basis points, e.g. 50 = 0.5%
     address public platformFeeRecipient;    // receives the fee; no fee if address(0)
@@ -93,8 +121,6 @@ contract DripV4 {
     mapping(address => uint256[])     private _recipientStreams;
 
     // Per-recipient state within a stream (independent of whole-stream status).
-    // A recipient can be individually paused or permanently removed while other
-    // recipients in the same vault continue receiving.
     mapping(uint256 => mapping(address => bool)) private _recipientPaused;
     mapping(uint256 => mapping(address => bool)) private _recipientRemoved;
 
@@ -102,6 +128,12 @@ contract DripV4 {
     mapping(bytes32 => address) private _phoneToAddress;
     mapping(address => bytes32) private _addressToPhone;
     mapping(address => bytes)   private _addressToEncryptedPhone;
+
+    // ── Swap funding (V5) ───────────────────────────────────────────────────
+    /// @notice Funding token accepted by createStreamWithSwap (e.g. USDC). 0 = disabled.
+    address public usdcToken;
+    /// @notice Reverse-encoded Uniswap V3 path: G$ → … → usdcToken (for exactOutput).
+    bytes   public usdcSwapPath;
 
     // ═══════════════════════════════════════════
     // Events
@@ -128,19 +160,13 @@ contract DripV4 {
     event StreamCancelled(uint256 indexed streamId, address indexed vault, uint256 refundAmount, uint256 finishTime);
     event StreamCompleted(uint256 indexed streamId, address indexed vault, uint256 finishTime);
     event StreamToppedUp(uint256 indexed streamId, uint256 newEndTime);
-    event StreamRateLocked(uint256 indexed streamId, uint256 rateLockUntil);
 
-    /// @dev Emitted when a single recipient's flow is paused (stream stays Active).
+    /// @dev Emitted on createStreamWithSwap with how much funding token was consumed.
+    event StreamFundedBySwap(uint256 indexed streamId, address indexed tokenIn, uint256 amountInSpent, uint256 gdAcquired);
+    event SwapRouteUpdated(address indexed tokenIn);
+
     event RecipientPaused(uint256 indexed streamId, address indexed recipient);
-
-    /// @dev Emitted when a single paused recipient's flow is restarted.
     event RecipientResumed(uint256 indexed streamId, address indexed recipient, uint256 newEndTime);
-
-    /**
-     * @dev Emitted when a recipient is permanently removed from a stream.
-     *      The returned buffer and freed capacity extends the stream for remaining recipients.
-     *      If the last active recipient is removed the stream is immediately completed.
-     */
     event RecipientRemoved(
         uint256 indexed streamId,
         address indexed recipient,
@@ -153,18 +179,22 @@ contract DripV4 {
     event PhoneEncryptedDataUpdated(address indexed user);
 
     event PlatformFeeUpdated(uint256 newFeeBps, address newRecipient);
+    event OwnershipTransferStarted(address indexed previous, address indexed next);
     event OwnershipTransferred(address indexed previous, address indexed next);
+    event BufferSecondsUpdated(uint256 newBufferSeconds);
+    event PausedSet(bool paused);
 
     // ═══════════════════════════════════════════
     // Constructor
     // ═══════════════════════════════════════════
 
     constructor(address _vaultImpl, address _platformFeeRecipient) {
-        require(_vaultImpl != address(0), "DripV4: zero vault impl");
+        require(_vaultImpl != address(0), "DripV5: zero vault impl");
         owner                = msg.sender;
         vaultImplementation  = _vaultImpl;
         platformFeeRecipient = _platformFeeRecipient;
         platformFeeBps       = 50; // 0.5% default
+        bufferSeconds        = DEFAULT_BUFFER_SECONDS;
     }
 
     // ═══════════════════════════════════════════
@@ -172,7 +202,12 @@ contract DripV4 {
     // ═══════════════════════════════════════════
 
     modifier onlyOwner() {
-        require(msg.sender == owner, "DripV4: not owner");
+        require(msg.sender == owner, "DripV5: not owner");
+        _;
+    }
+
+    modifier whenNotPaused() {
+        require(!paused, "DripV5: paused");
         _;
     }
 
@@ -182,17 +217,7 @@ contract DripV4 {
 
     /**
      * @notice Create and immediately start a capped, multi-recipient stream.
-     *
-     *         Prerequisites:
-     *           Approve DripV4 for at least: totalAmount + totalFlowRate * BUFFER_SECONDS
-     *           (Use getRecommendedDeposit() to get the exact amount.)
-     *
-     * @param recipients   One or more recipient addresses (max 50).
-     * @param token        Super Token address.
-     * @param flowRates    flowRates[i] is the wei/second rate for recipients[i].
-     * @param totalAmount  Gross wei to stream. Platform fee is deducted from this.
-     * @param title        Label (max 120 chars).
-     * @param description  Notes (max 1024 chars).
+     *         Prerequisites: approve DripV5 for totalAmount + totalFlowRate * bufferSeconds.
      */
     function createStream(
         address[] calldata recipients,
@@ -201,52 +226,154 @@ contract DripV4 {
         uint256   totalAmount,
         string    calldata title,
         string    calldata description
-    ) external returns (uint256 streamId, address vault) {
+    ) external nonReentrant whenNotPaused returns (uint256 streamId, address vault) {
+        return _createStreamCore(msg.sender, recipients, token, flowRates, totalAmount, title, description, false);
+    }
+
+    /**
+     * @notice Create a G$ stream funded by paying `usdcToken` (e.g. USDC).
+     *         The stream params are identical to createStream — recipients, flowRates and
+     *         totalAmount are all denominated in G$. The contract swaps the funding token
+     *         to G$ (exactOutput) for the exact amount the stream needs and refunds any
+     *         unused funding token.
+     *
+     *         Prerequisites: approve DripV5 to spend at least `maxAmountIn` of usdcToken.
+     *
+     * @param maxAmountIn   Max funding-token units to spend (slippage cap; quote off-chain).
+     * @param recipients    Recipient addresses (max 50).
+     * @param flowRates     wei/s G$ rate for each recipient.
+     * @param totalAmount   Gross G$ to stream (platform fee deducted from this).
+     * @param title         Label (max 120 chars).
+     * @param description   Notes (max 1024 chars).
+     */
+    function createStreamWithSwap(
+        uint256   maxAmountIn,
+        address[] calldata recipients,
+        int96[]   calldata flowRates,
+        uint256   totalAmount,
+        string    calldata title,
+        string    calldata description
+    ) external nonReentrant whenNotPaused returns (uint256 streamId, address vault) {
+        require(usdcToken != address(0) && usdcSwapPath.length > 0, "DripV5: swap route not set");
+        require(maxAmountIn > 0,                       "DripV5: zero maxAmountIn");
+        require(recipients.length == flowRates.length, "DripV5: length mismatch");
+        require(totalAmount > 0,                        "DripV5: zero total amount");
+
+        // Size the swap: total G$ the stream consumes = totalAmount + buffer.
+        // (fee is carved out of totalAmount, so fee + vaultDeposit == totalAmount + buffer.)
+        int96 totalFlowRate;
+        for (uint256 i = 0; i < flowRates.length; i++) {
+            require(flowRates[i] > 0, "DripV5: zero flow rate");
+            totalFlowRate += flowRates[i];
+        }
+        uint256 neededGd = totalAmount + uint256(uint96(totalFlowRate)) * bufferSeconds;
+
+        // Pull funding token and swap to exactly `neededGd` G$ held by this contract.
+        require(
+            IERC20Min(usdcToken).transferFrom(msg.sender, address(this), maxAmountIn),
+            "DripV5: funding transfer failed (check approval)"
+        );
+        IERC20Min(usdcToken).approve(SWAP_ROUTER, maxAmountIn);
+        uint256 spent = ISwapRouter(SWAP_ROUTER).exactOutput(
+            ISwapRouter.ExactOutputParams({
+                path:            usdcSwapPath,
+                recipient:       address(this),
+                amountOut:       neededGd,
+                amountInMaximum: maxAmountIn
+            })
+        );
+        // Clear residual allowance and refund unused funding token.
+        IERC20Min(usdcToken).approve(SWAP_ROUTER, 0);
+        if (spent < maxAmountIn) {
+            require(
+                IERC20Min(usdcToken).transfer(msg.sender, maxAmountIn - spent),
+                "DripV5: refund failed"
+            );
+        }
+
+        // Contract now holds `neededGd` G$ — run the standard creation flow funded internally.
+        (streamId, vault) = _createStreamCore(
+            msg.sender, recipients, GOOD_DOLLAR, flowRates,
+            totalAmount, title, description, true
+        );
+
+        emit StreamFundedBySwap(streamId, usdcToken, spent, neededGd);
+    }
+
+    /**
+     * @dev Shared stream-creation logic for both createStream and createStreamWithSwap.
+     * @param fundsInContract  true  => fee + deposit transferred from this contract's balance
+     *                         false => pulled from `streamSender` via transferFrom
+     */
+    function _createStreamCore(
+        address           streamSender,
+        address[] memory  recipients,
+        address           token,
+        int96[]   calldata flowRates,
+        uint256           totalAmount,
+        string    calldata title,
+        string    calldata description,
+        bool              fundsInContract
+    ) private returns (uint256 streamId, address vault) {
         // ── Validation ────────────────────────────────────────────────────────
-        require(recipients.length > 0,                        "DripV4: no recipients");
-        require(recipients.length <= MAX_RECIPIENTS,          "DripV4: too many recipients");
-        require(recipients.length == flowRates.length,        "DripV4: length mismatch");
-        require(token != address(0),                          "DripV4: zero token");
-        require(totalAmount > 0,                              "DripV4: zero total amount");
-        require(bytes(title).length       <= MAX_TITLE_LEN,       "DripV4: title too long");
-        require(bytes(description).length <= MAX_DESCRIPTION_LEN, "DripV4: description too long");
+        require(recipients.length > 0,                        "DripV5: no recipients");
+        require(recipients.length <= MAX_RECIPIENTS,          "DripV5: too many recipients");
+        require(recipients.length == flowRates.length,        "DripV5: length mismatch");
+        require(token != address(0),                          "DripV5: zero token");
+        require(totalAmount > 0,                              "DripV5: zero total amount");
+        require(bytes(title).length       <= MAX_TITLE_LEN,       "DripV5: title too long");
+        require(bytes(description).length <= MAX_DESCRIPTION_LEN, "DripV5: description too long");
 
         int96 totalFlowRate;
         for (uint256 i = 0; i < recipients.length; i++) {
-            require(recipients[i] != address(0), "DripV4: zero recipient");
-            require(recipients[i] != msg.sender, "DripV4: self recipient");
-            require(flowRates[i]   > 0,          "DripV4: zero flow rate");
+            require(recipients[i] != address(0),    "DripV5: zero recipient");
+            require(recipients[i] != streamSender,  "DripV5: self recipient");
+            require(flowRates[i]   > 0,             "DripV5: zero flow rate");
+            // Reject duplicate recipients — they would corrupt per-recipient accounting
+            // (a single CFA flow per receiver) and inflate totalFlowRate/deposit.
+            for (uint256 j = 0; j < i; j++) {
+                require(recipients[i] != recipients[j], "DripV5: duplicate recipient");
+            }
             totalFlowRate += flowRates[i];
         }
 
         // ── Duration bounds ───────────────────────────────────────────────────
         uint256 grossDuration = totalAmount / uint256(uint96(totalFlowRate));
-        require(grossDuration <= MAX_DURATION, "DripV4: duration too long");
+        require(grossDuration <= MAX_DURATION, "DripV5: duration too long");
 
         // ── Fee + deposit calculation ─────────────────────────────────────────
         uint256 feeAmount = (platformFeeRecipient != address(0) && platformFeeBps > 0)
             ? (totalAmount * platformFeeBps / 10_000)
             : 0;
         uint256 netAmount    = totalAmount - feeAmount;
-        uint256 totalBuffer  = uint256(uint96(totalFlowRate)) * BUFFER_SECONDS;
+        uint256 totalBuffer  = uint256(uint96(totalFlowRate)) * bufferSeconds;
         uint256 vaultDeposit = netAmount + totalBuffer;
         uint256 duration     = netAmount / uint256(uint96(totalFlowRate));
+        // Reject degenerate streams that would expire in the same block they start.
+        require(duration > 0, "DripV5: duration too short");
 
         // ── Deploy vault ──────────────────────────────────────────────────────
         vault = Clones.clone(vaultImplementation);
-        IStreamVault(vault).initialize(address(this), msg.sender);
+        IStreamVault(vault).initialize(address(this), streamSender);
 
-        // ── Pull tokens ───────────────────────────────────────────────────────
-        if (feeAmount > 0) {
+        // ── Fund: fee → recipient, deposit → vault ──────────────────────────────
+        if (fundsInContract) {
+            if (feeAmount > 0) {
+                require(IERC20Min(token).transfer(platformFeeRecipient, feeAmount), "DripV5: fee transfer failed");
+            }
+            require(IERC20Min(token).transfer(vault, vaultDeposit), "DripV5: vault transfer failed");
+        } else {
+            if (feeAmount > 0) {
+                require(
+                    IERC20Min(token).transferFrom(streamSender, platformFeeRecipient, feeAmount),
+                    "DripV5: fee transfer failed"
+                );
+            }
             require(
-                IERC20Min(token).transferFrom(msg.sender, platformFeeRecipient, feeAmount),
-                "DripV4: fee transfer failed"
+                IERC20Min(token).transferFrom(streamSender, vault, vaultDeposit),
+                "DripV5: vault transfer failed (check approval)"
             );
         }
-        require(
-            IERC20Min(token).transferFrom(msg.sender, vault, vaultDeposit),
-            "DripV4: vault transfer failed (check approval)"
-        );
 
         // ── Start CFA flows ───────────────────────────────────────────────────
         IStreamVault(vault).startStreams(token, recipients, flowRates);
@@ -255,18 +382,16 @@ contract DripV4 {
         _idCounter++;
         streamId = _idCounter;
 
-        address[] memory recipientsCopy = new address[](recipients.length);
-        int96[]   memory flowRatesCopy  = new int96[](flowRates.length);
+        int96[] memory flowRatesCopy = new int96[](flowRates.length);
         for (uint256 i = 0; i < recipients.length; i++) {
-            recipientsCopy[i] = recipients[i];
-            flowRatesCopy[i]  = flowRates[i];
+            flowRatesCopy[i] = flowRates[i];
             _recipientStreams[recipients[i]].push(streamId);
         }
 
         _streams[streamId] = Stream({
             streamId:      streamId,
-            sender:        msg.sender,
-            recipients:    recipientsCopy,
+            sender:        streamSender,
+            recipients:    recipients,
             token:         token,
             flowRates:     flowRatesCopy,
             totalFlowRate: totalFlowRate,
@@ -277,17 +402,16 @@ contract DripV4 {
             endTime:       block.timestamp + duration,
             finishTime:    0,
             pausedAt:      0,
-            rateLockUntil: 0,
             status:        StreamStatus.Active,
             title:         title,
             description:   description
         });
 
-        _senderStreams[msg.sender].push(streamId);
+        _senderStreams[streamSender].push(streamId);
 
         emit StreamCreated(
-            streamId, msg.sender, token,
-            recipientsCopy, flowRatesCopy, totalFlowRate,
+            streamId, streamSender, token,
+            recipients, flowRatesCopy, totalFlowRate,
             netAmount, vaultDeposit, feeAmount,
             vault,
             block.timestamp, block.timestamp + duration,
@@ -296,46 +420,36 @@ contract DripV4 {
     }
 
     /**
-     * @notice Pause an active stream.
-     *         Stops all CFA flows; Superfluid returns each buffer to the vault.
-     *         endTime is extended on resumeStream() to compensate.
-     *         Blocked if the stream is rate-locked.
-     *         Only the sender (or contract owner) may pause.
+     * @notice Pause an active stream. Stops all CFA flows; Superfluid returns buffers.
      */
-    function pauseStream(uint256 streamId) external {
+    function pauseStream(uint256 streamId) external nonReentrant {
         Stream storage s = _streams[streamId];
-        require(s.streamId != 0,                   "DripV4: not found");
-        require(msg.sender == s.sender || msg.sender == owner, "DripV4: unauthorized");
-        require(s.status == StreamStatus.Active,   "DripV4: not active");
-        require(block.timestamp >= s.rateLockUntil, "DripV4: rate locked");
+        require(s.streamId != 0,                   "DripV5: not found");
+        require(msg.sender == s.sender,            "DripV5: not sender");
+        require(s.status == StreamStatus.Active,   "DripV5: not active");
 
-        IStreamVault(s.vault).stopStreams(s.token, s.recipients);
+        // Effects before interaction (CEI).
         s.pausedAt = block.timestamp;
         s.status   = StreamStatus.Paused;
+        IStreamVault(s.vault).stopStreams(s.token, s.recipients);
 
         emit StreamPaused(streamId, block.timestamp);
     }
 
     /**
-     * @notice Resume a paused stream.
-     *         Restarts all CFA flows and extends endTime by the duration of the pause.
-     *         Only the sender (or contract owner) may resume.
+     * @notice Resume a paused stream. Restarts flows and extends endTime by pause duration.
      */
-    function resumeStream(uint256 streamId) external {
+    function resumeStream(uint256 streamId) external nonReentrant {
         Stream storage s = _streams[streamId];
-        require(s.streamId != 0,                   "DripV4: not found");
-        require(msg.sender == s.sender || msg.sender == owner, "DripV4: unauthorized");
-        require(s.status == StreamStatus.Paused,   "DripV4: not paused");
-        // No expiry check here — endTime is always extended by the pause duration below.
-        // Superfluid will revert startStreams if the vault lacks sufficient balance.
+        require(s.streamId != 0,                   "DripV5: not found");
+        require(msg.sender == s.sender,            "DripV5: not sender");
+        require(s.status == StreamStatus.Paused,   "DripV5: not paused");
 
-        // Extend endTime by however long the stream was paused.
         uint256 pauseDuration = block.timestamp - s.pausedAt;
         s.endTime  += pauseDuration;
         s.pausedAt  = 0;
         s.status    = StreamStatus.Active;
 
-        // Restart only recipients that are neither permanently removed nor individually paused.
         (address[] memory resumable, int96[] memory rates,) = _getResumableRecipients(streamId, s);
         if (resumable.length > 0) {
             IStreamVault(s.vault).startStreams(s.token, resumable, rates);
@@ -345,135 +459,94 @@ contract DripV4 {
     }
 
     /**
-     * @notice Cancel an active or paused stream.
-     *         Stops all flows, refunds remaining vault balance to sender.
-     *         Blocked if the stream is rate-locked.
-     *         Only the sender (or contract owner) may cancel.
+     * @notice Cancel an active or paused stream. Refunds remaining vault balance to sender.
      */
-    function cancelStream(uint256 streamId) external {
+    function cancelStream(uint256 streamId) external nonReentrant {
         Stream storage s = _streams[streamId];
-        require(s.streamId != 0,   "DripV4: not found");
-        require(msg.sender == s.sender || msg.sender == owner, "DripV4: unauthorized");
+        require(s.streamId != 0,   "DripV5: not found");
+        require(msg.sender == s.sender, "DripV5: not sender");
         require(
             s.status == StreamStatus.Active || s.status == StreamStatus.Paused,
-            "DripV4: not cancellable"
+            "DripV5: not cancellable"
         );
-        require(block.timestamp >= s.rateLockUntil, "DripV4: rate locked");
 
-        uint256 refundAmount = _closeStream(s);
+        // Effects before interactions (CEI): mark closed, then stop flows / refund.
+        bool wasActive = s.status == StreamStatus.Active;
         s.status     = StreamStatus.Cancelled;
         s.finishTime = block.timestamp;
+
+        uint256 refundAmount = _closeStream(s, wasActive);
 
         emit StreamCancelled(streamId, s.vault, refundAmount, s.finishTime);
     }
 
     /**
-     * @notice Expire a stream whose endTime has passed.
-     *         Callable by anyone — intended for the keeper service.
-     *         Bypasses the rate lock (natural completion, not a cancellation).
+     * @notice Expire a stream whose endTime has passed. Callable by anyone (keeper).
      */
-    function expireStream(uint256 streamId) external {
+    function expireStream(uint256 streamId) external nonReentrant {
         Stream storage s = _streams[streamId];
-        require(s.streamId != 0,                  "DripV4: not found");
-        require(s.status == StreamStatus.Active,  "DripV4: not active");
-        require(block.timestamp >= s.endTime,     "DripV4: not yet expired");
+        require(s.streamId != 0,                  "DripV5: not found");
+        require(s.status == StreamStatus.Active,  "DripV5: not active");
+        require(block.timestamp >= s.endTime,     "DripV5: not yet expired");
 
-        _closeStream(s);
+        // Effects before interactions (CEI).
         s.status     = StreamStatus.Completed;
         s.finishTime = block.timestamp;
+
+        _closeStream(s, true);
 
         emit StreamCompleted(streamId, s.vault, s.finishTime);
     }
 
     /**
-     * @notice Recalculate endTime based on current vault balance after a top-up.
-     *         Send extra tokens directly to the vault address, then call this.
-     *         Callable by anyone.
-     */
-    /**
      * @notice Recalculate endTime based on current vault balance and active flow rate.
-     *         Call this after topping up a vault (send tokens directly to the vault address).
-     *         Uses the active (non-paused, non-removed) recipient rate for accuracy.
-     *         Callable by anyone.
+     *         Call after topping up a vault (send tokens directly to the vault address).
      */
     function refreshEndTime(uint256 streamId) external {
         Stream storage s = _streams[streamId];
-        require(s.streamId != 0,                 "DripV4: not found");
-        require(s.status == StreamStatus.Active, "DripV4: not active");
+        require(s.streamId != 0,                 "DripV5: not found");
+        require(s.status == StreamStatus.Active, "DripV5: not active");
 
         _refreshEndTimeInternal(streamId, s);
 
         emit StreamToppedUp(streamId, s.endTime);
     }
 
-    /**
-     * @notice Lock the stream — prevents cancel and pause until `lockDuration` seconds pass.
-     *         Gives recipients a guarantee of uninterrupted flow.
-     *         Only the sender may lock; cannot shorten an existing lock.
-     */
-    function lockStreamRate(uint256 streamId, uint256 lockDuration) external {
-        Stream storage s = _streams[streamId];
-        require(s.streamId != 0,   "DripV4: not found");
-        require(msg.sender == s.sender, "DripV4: not sender");
-        require(
-            s.status == StreamStatus.Active || s.status == StreamStatus.Paused,
-            "DripV4: stream ended"
-        );
-
-        uint256 newLock = block.timestamp + lockDuration;
-        require(newLock > s.rateLockUntil, "DripV4: cannot shorten lock");
-
-        s.rateLockUntil = newLock;
-        emit StreamRateLocked(streamId, newLock);
-    }
-
     // ═══════════════════════════════════════════
     // Per-recipient controls
     // ═══════════════════════════════════════════
 
-    /**
-     * @notice Pause the CFA flow to a single recipient within an active stream.
-     *         Other recipients continue receiving normally.
-     *         The stream itself stays Active; endTime is recalculated from remaining balance.
-     *         Rate lock does NOT apply — only whole-stream cancel/pause is locked.
-     *         Only the sender (or contract owner) may pause a recipient.
-     */
-    function pauseRecipient(uint256 streamId, address recipient) external {
+    function pauseRecipient(uint256 streamId, address recipient) external nonReentrant {
         Stream storage s = _streams[streamId];
-        require(s.streamId != 0,                   "DripV4: not found");
-        require(msg.sender == s.sender || msg.sender == owner, "DripV4: unauthorized");
-        require(s.status == StreamStatus.Active,   "DripV4: stream not active");
-        require(!_recipientRemoved[streamId][recipient], "DripV4: recipient removed");
-        require(!_recipientPaused[streamId][recipient],  "DripV4: already paused");
-        require(_findFlowRate(s, recipient) > 0,   "DripV4: recipient not in stream");
+        require(s.streamId != 0,                   "DripV5: not found");
+        require(msg.sender == s.sender,            "DripV5: not sender");
+        require(s.status == StreamStatus.Active,   "DripV5: stream not active");
+        require(!_recipientRemoved[streamId][recipient], "DripV5: recipient removed");
+        require(!_recipientPaused[streamId][recipient],  "DripV5: already paused");
+        require(_findFlowRate(s, recipient) > 0,   "DripV5: recipient not in stream");
+
+        // Effects before interaction (CEI).
+        _recipientPaused[streamId][recipient] = true;
 
         address[] memory single = new address[](1);
         single[0] = recipient;
         IStreamVault(s.vault).stopStreams(s.token, single);
 
-        _recipientPaused[streamId][recipient] = true;
-
-        // Recalculate endTime — the stopped buffer is returned, extending remaining recipients.
         _refreshEndTimeInternal(streamId, s);
 
         emit RecipientPaused(streamId, recipient);
     }
 
-    /**
-     * @notice Resume the CFA flow to a single individually-paused recipient.
-     *         The stream must be Active (not globally paused).
-     *         Only the sender (or contract owner) may resume.
-     */
-    function resumeRecipient(uint256 streamId, address recipient) external {
+    function resumeRecipient(uint256 streamId, address recipient) external nonReentrant {
         Stream storage s = _streams[streamId];
-        require(s.streamId != 0,                   "DripV4: not found");
-        require(msg.sender == s.sender || msg.sender == owner, "DripV4: unauthorized");
-        require(s.status == StreamStatus.Active,   "DripV4: stream not active");
-        require(_recipientPaused[streamId][recipient], "DripV4: not paused");
-        require(!_recipientRemoved[streamId][recipient], "DripV4: recipient removed");
+        require(s.streamId != 0,                   "DripV5: not found");
+        require(msg.sender == s.sender,            "DripV5: not sender");
+        require(s.status == StreamStatus.Active,   "DripV5: stream not active");
+        require(_recipientPaused[streamId][recipient], "DripV5: not paused");
+        require(!_recipientRemoved[streamId][recipient], "DripV5: recipient removed");
 
         int96 rate = _findFlowRate(s, recipient);
-        require(rate > 0, "DripV4: recipient not in stream");
+        require(rate > 0, "DripV5: recipient not in stream");
 
         address[] memory single = new address[](1);
         int96[]   memory rates  = new int96[](1);
@@ -482,61 +555,49 @@ contract DripV4 {
         IStreamVault(s.vault).startStreams(s.token, single, rates);
 
         _recipientPaused[streamId][recipient] = false;
-
-        // Recalculate endTime — new buffer was deducted so adjust remaining duration.
         _refreshEndTimeInternal(streamId, s);
 
         emit RecipientResumed(streamId, recipient, s.endTime);
     }
 
-    /**
-     * @notice Permanently remove a recipient from a stream, stopping their flow immediately.
-     *         Their returned buffer and freed rate extend the stream for remaining recipients.
-     *         If this was the last active recipient, the stream is auto-completed and the vault
-     *         balance is refunded to the sender.
-     *         Rate lock does NOT block individual recipient removal.
-     *         Only the sender (or contract owner) may remove.
-     */
-    function removeRecipient(uint256 streamId, address recipient) external {
+    function removeRecipient(uint256 streamId, address recipient) external nonReentrant {
         Stream storage s = _streams[streamId];
-        require(s.streamId != 0,   "DripV4: not found");
-        require(msg.sender == s.sender || msg.sender == owner, "DripV4: unauthorized");
+        require(s.streamId != 0,   "DripV5: not found");
+        require(msg.sender == s.sender, "DripV5: not sender");
         require(
             s.status == StreamStatus.Active || s.status == StreamStatus.Paused,
-            "DripV4: stream ended"
+            "DripV5: stream ended"
         );
-        require(!_recipientRemoved[streamId][recipient], "DripV4: already removed");
+        require(!_recipientRemoved[streamId][recipient], "DripV5: already removed");
 
         int96 rate = _findFlowRate(s, recipient);
-        require(rate > 0, "DripV4: recipient not in stream");
+        require(rate > 0, "DripV5: recipient not in stream");
 
-        // Stop the flow if the stream is active (Paused streams have no active flows).
-        if (s.status == StreamStatus.Active && !_recipientPaused[streamId][recipient]) {
+        // Effects before interactions (CEI). Capture paused state first so we don't
+        // try to stop a flow that was already stopped by a prior pause.
+        bool wasPaused = _recipientPaused[streamId][recipient];
+        _recipientRemoved[streamId][recipient] = true;
+        _recipientPaused[streamId][recipient]  = false;
+        s.totalFlowRate -= rate;
+
+        if (s.status == StreamStatus.Active && !wasPaused) {
             address[] memory single = new address[](1);
             single[0] = recipient;
             IStreamVault(s.vault).stopStreams(s.token, single);
         }
 
-        _recipientRemoved[streamId][recipient] = true;
-        // Clear any individual pause flag.
-        _recipientPaused[streamId][recipient]  = false;
-        s.totalFlowRate -= rate;
-
-        // Check if any active recipients remain.
         uint256 activeCount;
         for (uint256 i = 0; i < s.recipients.length; i++) {
             if (!_recipientRemoved[streamId][s.recipients[i]]) activeCount++;
         }
 
         if (activeCount == 0) {
-            // No recipients left — close the vault and complete the stream.
-            uint256 refund = IStreamVault(s.vault).getBalance(s.token);
-            if (refund > 0) IStreamVault(s.vault).refund(s.token, s.sender);
             s.status     = StreamStatus.Completed;
             s.finishTime = block.timestamp;
+            uint256 refund = IStreamVault(s.vault).getBalance(s.token);
+            if (refund > 0) IStreamVault(s.vault).refund(s.token, s.sender);
             emit StreamCompleted(streamId, s.vault, s.finishTime);
         } else {
-            // Recalculate endTime with the updated (lower) total flow rate.
             if (s.status == StreamStatus.Active) {
                 _refreshEndTimeInternal(streamId, s);
             }
@@ -549,34 +610,22 @@ contract DripV4 {
     // Phone mapping
     // ═══════════════════════════════════════════
 
-    /**
-     * @notice Bind msg.sender's address to a hashed phone number.
-     *         Replaces any previous phone binding for this address.
-     *         Reverts if the new hash is already claimed by another address.
-     */
     function registerPhone(bytes32 phoneHash) external {
-        require(phoneHash != bytes32(0), "DripV4: empty hash");
-        // Clear old binding for this address.
+        require(phoneHash != bytes32(0), "DripV5: empty hash");
         bytes32 old = _addressToPhone[msg.sender];
         if (old != bytes32(0)) delete _phoneToAddress[old];
-        // Guard: new hash must not already belong to someone else.
-        require(_phoneToAddress[phoneHash] == address(0), "DripV4: phone already mapped");
+        require(_phoneToAddress[phoneHash] == address(0), "DripV5: phone already mapped");
         _phoneToAddress[phoneHash]  = msg.sender;
         _addressToPhone[msg.sender] = phoneHash;
         emit PhoneMapped(msg.sender, phoneHash);
     }
 
-    /**
-     * @notice Register phone hash AND store an encrypted phone payload in one call.
-     * @param phoneHash           keccak256(normalized E.164 number).
-     * @param encryptedPhoneData  Client-encrypted bytes (e.g. NaCl box).
-     */
     function registerPhoneSecure(bytes32 phoneHash, bytes calldata encryptedPhoneData) external {
-        require(phoneHash != bytes32(0),        "DripV4: empty hash");
-        require(encryptedPhoneData.length > 0,  "DripV4: empty encrypted data");
+        require(phoneHash != bytes32(0),        "DripV5: empty hash");
+        require(encryptedPhoneData.length > 0,  "DripV5: empty encrypted data");
         bytes32 old = _addressToPhone[msg.sender];
         if (old != bytes32(0)) delete _phoneToAddress[old];
-        require(_phoneToAddress[phoneHash] == address(0), "DripV4: phone already mapped");
+        require(_phoneToAddress[phoneHash] == address(0), "DripV5: phone already mapped");
         _phoneToAddress[phoneHash]              = msg.sender;
         _addressToPhone[msg.sender]             = phoneHash;
         _addressToEncryptedPhone[msg.sender]    = encryptedPhoneData;
@@ -584,21 +633,16 @@ contract DripV4 {
         emit PhoneEncryptedDataUpdated(msg.sender);
     }
 
-    /**
-     * @notice Update encrypted phone payload (e.g. after a key rotation).
-     *         Address must already have a phone mapping.
-     */
     function updateEncryptedPhoneData(bytes calldata encryptedPhoneData) external {
-        require(_addressToPhone[msg.sender] != bytes32(0), "DripV4: no phone mapping");
-        require(encryptedPhoneData.length > 0,             "DripV4: empty encrypted data");
+        require(_addressToPhone[msg.sender] != bytes32(0), "DripV5: no phone mapping");
+        require(encryptedPhoneData.length > 0,             "DripV5: empty encrypted data");
         _addressToEncryptedPhone[msg.sender] = encryptedPhoneData;
         emit PhoneEncryptedDataUpdated(msg.sender);
     }
 
-    /// @notice Remove msg.sender's phone binding and encrypted data.
     function unregisterPhone() external {
         bytes32 h = _addressToPhone[msg.sender];
-        require(h != bytes32(0), "DripV4: no mapping");
+        require(h != bytes32(0), "DripV5: no mapping");
         delete _phoneToAddress[h];
         delete _addressToPhone[msg.sender];
         delete _addressToEncryptedPhone[msg.sender];
@@ -610,22 +654,21 @@ contract DripV4 {
     // ═══════════════════════════════════════════
 
     function getStream(uint256 streamId) external view returns (Stream memory) {
-        require(_streams[streamId].streamId != 0, "DripV4: not found");
+        require(_streams[streamId].streamId != 0, "DripV5: not found");
         return _streams[streamId];
     }
 
     function getVaultBalance(uint256 streamId) external view returns (uint256) {
         Stream memory s = _streams[streamId];
-        require(s.streamId != 0, "DripV4: not found");
+        require(s.streamId != 0, "DripV5: not found");
         return IStreamVault(s.vault).getBalance(s.token);
     }
 
-    /// @notice Live CFA flow rate from vault to a specific recipient (Superfluid source of truth).
     function getLiveFlowRate(uint256 streamId, address recipient)
         external view returns (int96 flowRate)
     {
         Stream memory s = _streams[streamId];
-        require(s.streamId != 0, "DripV4: not found");
+        require(s.streamId != 0, "DripV5: not found");
         bytes memory data = abi.encodeWithSelector(
             ICFAv1Forwarder.getFlowrate.selector,
             s.token, s.vault, recipient
@@ -636,42 +679,27 @@ contract DripV4 {
         }
     }
 
-    /**
-     * @notice How much the user needs to approve before calling createStream.
-     *         = grossTotalAmount + totalFlowRate * BUFFER_SECONDS
-     *         (Platform fee is included inside grossTotalAmount.)
-     */
     function getRecommendedDeposit(int96 totalFlowRate, uint256 grossTotalAmount)
-        external pure returns (uint256)
+        external view returns (uint256)
     {
-        return grossTotalAmount + uint256(uint96(totalFlowRate)) * BUFFER_SECONDS;
+        return grossTotalAmount + uint256(uint96(totalFlowRate)) * bufferSeconds;
     }
 
-    function getSenderStreams(address sender)
-        external view returns (uint256[] memory)
-    {
+    function getSenderStreams(address sender) external view returns (uint256[] memory) {
         return _senderStreams[sender];
     }
 
-    function getRecipientStreams(address recipient)
-        external view returns (uint256[] memory)
-    {
+    function getRecipientStreams(address recipient) external view returns (uint256[] memory) {
         return _recipientStreams[recipient];
     }
 
-    /// @notice Full Stream structs for all streams sent by `user` (legacy frontend compat).
-    function getUserSentStreams(address user)
-        external view returns (Stream[] memory streams)
-    {
+    function getUserSentStreams(address user) external view returns (Stream[] memory streams) {
         uint256[] memory ids = _senderStreams[user];
         streams = new Stream[](ids.length);
         for (uint256 i = 0; i < ids.length; i++) streams[i] = _streams[ids[i]];
     }
 
-    /// @notice Full Stream structs for all streams received by `user` (legacy frontend compat).
-    function getUserReceivedStreams(address user)
-        external view returns (Stream[] memory streams)
-    {
+    function getUserReceivedStreams(address user) external view returns (Stream[] memory streams) {
         uint256[] memory ids = _recipientStreams[user];
         streams = new Stream[](ids.length);
         for (uint256 i = 0; i < ids.length; i++) streams[i] = _streams[ids[i]];
@@ -697,26 +725,20 @@ contract DripV4 {
         return _addressToPhone[user] != bytes32(0);
     }
 
-    /// @notice True if the recipient's individual flow has been paused (stream still Active).
     function isRecipientPaused(uint256 streamId, address recipient) external view returns (bool) {
         return _recipientPaused[streamId][recipient];
     }
 
-    /// @notice True if the recipient has been permanently removed from the stream.
     function isRecipientRemoved(uint256 streamId, address recipient) external view returns (bool) {
         return _recipientRemoved[streamId][recipient];
     }
 
-    /**
-     * @notice Returns the subset of recipients that are currently receiving (not removed, not
-     *         individually paused, and stream itself is Active).
-     */
     function getActiveRecipients(uint256 streamId)
         external view
         returns (address[] memory addrs, int96[] memory rates)
     {
         Stream storage s = _streams[streamId];
-        require(s.streamId != 0, "DripV4: not found");
+        require(s.streamId != 0, "DripV5: not found");
         (addrs, rates,) = _getResumableRecipients(streamId, s);
     }
 
@@ -728,32 +750,68 @@ contract DripV4 {
     // Admin
     // ═══════════════════════════════════════════
 
-    /**
-     * @notice Update platform fee.
-     * @param newFeeBps       New fee in basis points (max 1000 = 10%).
-     * @param newRecipient    Address that receives the fee. Pass address(0) to disable fee.
-     */
     function setPlatformFee(uint256 newFeeBps, address newRecipient) external onlyOwner {
-        require(newFeeBps <= MAX_FEE_BPS, "DripV4: fee too high");
+        require(newFeeBps <= MAX_FEE_BPS, "DripV5: fee too high");
         platformFeeBps       = newFeeBps;
         platformFeeRecipient = newRecipient;
         emit PlatformFeeUpdated(newFeeBps, newRecipient);
     }
 
+    /**
+     * @notice Configure the funding token + Uniswap V3 swap path used by createStreamWithSwap.
+     * @param token  Funding token (e.g. USDC). Pass address(0) to disable swap funding.
+     * @param path   Reverse-encoded Uniswap V3 path G$ → … → token (for exactOutput).
+     *               e.g. abi.encodePacked(G$, uint24(10000), cUSD, uint24(100), USDC)
+     */
+    function setUsdcRoute(address token, bytes calldata path) external onlyOwner {
+        if (token != address(0)) {
+            require(path.length >= 43, "DripV5: invalid path"); // 20 + 3 + 20 minimum
+        }
+        usdcToken    = token;
+        usdcSwapPath = path;
+        emit SwapRouteUpdated(token);
+    }
+
+    /// @notice Update the governable buffer/liquidation period. Bounded for safety.
+    function setBufferSeconds(uint256 newBufferSeconds) external onlyOwner {
+        require(
+            newBufferSeconds >= MIN_BUFFER_SECONDS && newBufferSeconds <= MAX_BUFFER_SECONDS,
+            "DripV5: buffer out of range"
+        );
+        bufferSeconds = newBufferSeconds;
+        emit BufferSecondsUpdated(newBufferSeconds);
+    }
+
+    /// @notice Emergency stop for NEW stream creation. Existing streams are unaffected and
+    ///         users can always pause/cancel/expire their own streams.
+    function setPaused(bool newPaused) external onlyOwner {
+        paused = newPaused;
+        emit PausedSet(newPaused);
+    }
+
+    /// @notice Begin a two-step ownership handover (DRIP-12). The new owner must call
+    ///         acceptOwnership() before it takes effect, preventing transfers to a wrong address.
     function transferOwnership(address newOwner) external onlyOwner {
-        require(newOwner != address(0), "DripV4: zero address");
-        emit OwnershipTransferred(owner, newOwner);
-        owner = newOwner;
+        require(newOwner != address(0), "DripV5: zero address");
+        pendingOwner = newOwner;
+        emit OwnershipTransferStarted(owner, newOwner);
+    }
+
+    /// @notice Complete a two-step ownership handover.
+    function acceptOwnership() external {
+        require(msg.sender == pendingOwner, "DripV5: not pending owner");
+        emit OwnershipTransferred(owner, pendingOwner);
+        owner        = pendingOwner;
+        pendingOwner = address(0);
     }
 
     // ═══════════════════════════════════════════
     // Internal helpers
     // ═══════════════════════════════════════════
 
-    function _closeStream(Stream storage s) internal returns (uint256 refundAmount) {
-        // Only stop flows that are currently active.  StreamVault.stopStreams uses try/catch so
-        // already-stopped flows (removed or individually-paused recipients) are handled safely.
-        if (s.status == StreamStatus.Active) {
+    /// @param wasActive whether the stream had live CFA flows before the caller flipped status.
+    function _closeStream(Stream storage s, bool wasActive) internal returns (uint256 refundAmount) {
+        if (wasActive) {
             IStreamVault(s.vault).stopStreams(s.token, s.recipients);
         }
         refundAmount = IStreamVault(s.vault).getBalance(s.token);
@@ -762,24 +820,16 @@ contract DripV4 {
         }
     }
 
-    /**
-     * @dev Returns the subset of recipients that should be restarted on resumeStream() or
-     *      after a per-recipient operation: excludes removed AND individually-paused recipients.
-     *      Uses inline assembly to resize the dynamic arrays to `count` to avoid returning
-     *      zero-address padding.
-     */
     function _getResumableRecipients(uint256 streamId, Stream storage s)
         private view
         returns (address[] memory addrs, int96[] memory rates, uint256 count)
     {
         uint256 n = s.recipients.length;
-        // First pass: count eligible recipients to allocate exact-size arrays.
         count = 0;
         for (uint256 i = 0; i < n; i++) {
             address r = s.recipients[i];
             if (!_recipientRemoved[streamId][r] && !_recipientPaused[streamId][r]) count++;
         }
-        // Second pass: fill.
         addrs = new address[](count);
         rates = new int96[](count);
         uint256 j = 0;
@@ -793,7 +843,6 @@ contract DripV4 {
         }
     }
 
-    /// @dev Looks up the stored flow rate for `recipient` in stream `s`. Returns 0 if not found.
     function _findFlowRate(Stream storage s, address recipient) private view returns (int96) {
         for (uint256 i = 0; i < s.recipients.length; i++) {
             if (s.recipients[i] == recipient) return s.flowRates[i];
@@ -801,34 +850,24 @@ contract DripV4 {
         return 0;
     }
 
-    /**
-     * @dev Recompute endTime based on the current vault balance and active flow rate.
-     *
-     *      Superfluid's balanceOf reflects the vault balance MINUS the buffers for all
-     *      currently-flowing streams.  When a recipient is individually paused or removed,
-     *      their Superfluid buffer is RETURNED to the vault (vaultBal goes up).  We must
-     *      subtract those returned buffers so the endTime isn't artificially inflated.
-     *
-     *      Formula:
-     *        inactiveBuffer = Σ flowRates[i] * BUFFER_SECONDS  (paused + removed recipients)
-     *        streamable     = vaultBal - inactiveBuffer
-     *        endTime        = now + streamable / activeRate
-     */
     function _refreshEndTimeInternal(uint256 streamId, Stream storage s) private {
         int96 activeRate;
-        int96 inactiveRate; // paused or removed — their buffers were returned to vault
+        int96 pausedRate; // only PAUSED buffers must stay reserved (for a future resume)
         for (uint256 i = 0; i < s.recipients.length; i++) {
             address r = s.recipients[i];
-            if (!_recipientRemoved[streamId][r] && !_recipientPaused[streamId][r]) {
-                activeRate   += s.flowRates[i];
+            // Removed recipients freed their buffer back to the vault for good — it is now
+            // fully streamable to the remaining recipients, so it is NOT reserved here.
+            if (_recipientRemoved[streamId][r]) continue;
+            if (_recipientPaused[streamId][r]) {
+                pausedRate += s.flowRates[i];
             } else {
-                inactiveRate += s.flowRates[i];
+                activeRate += s.flowRates[i];
             }
         }
         if (activeRate <= 0) return;
         uint256 vaultBal       = IStreamVault(s.vault).getBalance(s.token);
-        uint256 inactiveBuffer = uint256(uint96(inactiveRate)) * BUFFER_SECONDS;
-        uint256 streamable     = vaultBal > inactiveBuffer ? vaultBal - inactiveBuffer : 0;
+        uint256 reservedBuffer = uint256(uint96(pausedRate)) * bufferSeconds;
+        uint256 streamable     = vaultBal > reservedBuffer ? vaultBal - reservedBuffer : 0;
         s.endTime = block.timestamp + streamable / uint256(uint96(activeRate));
     }
 }

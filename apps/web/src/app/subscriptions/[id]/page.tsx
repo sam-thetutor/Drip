@@ -75,10 +75,10 @@ export default function SubscriptionDetailsPage() {
           toast.success("Payment executed", { id: "exec-sub" });
           break;
         case "pause":
-          toast.success("Subscription paused", { id: "pause-sub" });
+          toast.success("Bill paused", { id: "pause-sub" });
           break;
         case "resume":
-          toast.success("Subscription resumed", { id: "resume-sub" });
+          toast.success("Bill resumed", { id: "resume-sub" });
           break;
       }
       setPendingAction(null);
@@ -92,9 +92,9 @@ export default function SubscriptionDetailsPage() {
       <main className="flex-1">
         <div className="container px-4 mx-auto max-w-[1280px] py-8">
           <div className="text-center py-12">
-            <p className="text-muted-foreground">Invalid subscription ID</p>
+            <p className="text-muted-foreground">Invalid bill ID</p>
             <Button asChild variant="outline" className="mt-4">
-              <Link href="/subscriptions">Back to Subscriptions</Link>
+              <Link href="/subscriptions">Back to bills</Link>
             </Button>
           </div>
         </div>
@@ -109,7 +109,7 @@ export default function SubscriptionDetailsPage() {
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             <span className="ml-2 text-muted-foreground">
-              Loading subscription...
+              Loading bill...
             </span>
           </div>
         </div>
@@ -123,10 +123,10 @@ export default function SubscriptionDetailsPage() {
         <div className="container px-4 mx-auto max-w-[1280px] py-8">
           <div className="text-center py-12">
             <p className="text-destructive">
-              {error?.message || "Subscription not found"}
+              {error?.message || "Bill not found"}
             </p>
             <Button asChild variant="outline" className="mt-4">
-              <Link href="/subscriptions">Back to Subscriptions</Link>
+              <Link href="/subscriptions">Back to bills</Link>
             </Button>
           </div>
         </div>
@@ -300,7 +300,7 @@ export default function SubscriptionDetailsPage() {
           <Button asChild variant="ghost">
             <Link href="/subscriptions">
               <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Subscriptions
+              Back to bills
             </Link>
           </Button>
         </div>
@@ -311,7 +311,7 @@ export default function SubscriptionDetailsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="text-2xl mb-1">
-                  {sub.title || `Subscription #${subscriptionId.toString()}`}
+                  {sub.title || `Bill #${subscriptionId.toString()}`}
                 </CardTitle>
                 {sub.description && (
                   <p className="text-sm text-muted-foreground">

@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import {
-  useAccount,
   useChainId,
   useBalance,
   useReadContract,
@@ -24,62 +23,70 @@ import { Input } from "@/components/ui/input";
 import { getTokenAddressBySymbol } from "@/lib/tokens/config";
 
 // ─── Uniswap V3 on Celo Mainnet ──────────────────────────────────────────────
-// Official deployment: https://docs.uniswap.org/contracts/v3/reference/deployments
-const SWAP_ROUTER    = "0x5615CDAb10dc425a742d643d949a7F474C01abc4" as const;
-const CUSD_ADDRESS   = "0x765DE816845861e75A25fCA122bb6898B8B1282a" as const;
+// Verified on-chain Jun 2026:
+//   factory    0xAfE208a311B21f13EF87E33A90049fC17A7acDEc
+//   SwapRouter 0x5615CDAb10dc425a742d643d949a7F474C01abc4
+//   Quoter V1  0x82825d0554fA07f7FC52Ab63c961F330fdEFa8E8
+//   G$/cUSD    fee 10000 (1%)    0x9491d57c5687AB75726423B55AC2d87D1cDa2c3F ✓
+//   cUSD/USDC  fee 100   (0.01%) 0x34757893070B0FC5de37AaF2844255fF90F7F1E0 ✓
+const SWAP_ROUTER   = "0x5615CDAb10dc425a742d643d949a7F474C01abc4" as const;
+const QUOTER        = "0x82825d0554fA07f7FC52Ab63c961F330fdEFa8E8" as const;
+const CUSD_ADDRESS  = "0x765DE816845861e75A25fCA122bb6898B8B1282a" as const;
 
-// Swap path: G$ →(fee 3000 = 0.3%)→ cUSD →(fee 500 = 0.05%)→ USDC
-// Encoding: tokenIn(20B) + fee(3B) + tokenMid(20B) + fee(3B) + tokenOut(20B)
+// Swap path: G$ →(10000)→ cUSD →(100)→ USDC
 function buildSwapPath(gdAddr: string, usdcAddr: string): `0x${string}` {
-  const strip = (a: string) => a.slice(2).toLowerCase();
-  return `0x${strip(gdAddr)}000bb8${strip(CUSD_ADDRESS)}0001f4${strip(usdcAddr)}` as `0x${string}`;
+  const s = (a: string) => a.slice(2).toLowerCase();
+  return `0x${s(gdAddr)}002710${s(CUSD_ADDRESS)}000064${s(usdcAddr)}` as `0x${string}`;
 }
 
-// ─── Minimal ABIs ─────────────────────────────────────────────────────────────
+// ─── ABIs ─────────────────────────────────────────────────────────────────────
 const ERC20_ABI = [
-  {
-    name: "allowance", type: "function", stateMutability: "view",
+  { name: "allowance", type: "function", stateMutability: "view",
     inputs: [{ name: "owner", type: "address" }, { name: "spender", type: "address" }],
-    outputs: [{ name: "", type: "uint256" }],
-  },
-  {
-    name: "approve", type: "function", stateMutability: "nonpayable",
+    outputs: [{ name: "", type: "uint256" }] },
+  { name: "approve", type: "function", stateMutability: "nonpayable",
     inputs: [{ name: "spender", type: "address" }, { name: "amount", type: "uint256" }],
-    outputs: [{ name: "", type: "bool" }],
-  },
+    outputs: [{ name: "", type: "bool" }] },
 ] as const;
 
+const QUOTER_ABI = [
+  { name: "quoteExactInput", type: "function", stateMutability: "nonpayable",
+    inputs: [{ name: "path", type: "bytes" }, { name: "amountIn", type: "uint256" }],
+    outputs: [{ name: "amountOut", type: "uint256" }] },
+] as const;
+
+// SwapRouter02 on Celo — exactInput params have NO per-call deadline field
 const SWAP_ROUTER_ABI = [
-  {
-    name: "exactInput", type: "function", stateMutability: "payable",
-    inputs: [{
-      name: "params", type: "tuple",
-      components: [
-        { name: "path",             type: "bytes"   },
-        { name: "recipient",        type: "address" },
-        { name: "deadline",         type: "uint256" },
-        { name: "amountIn",         type: "uint256" },
-        { name: "amountOutMinimum", type: "uint256" },
-      ],
-    }],
-    outputs: [{ name: "amountOut", type: "uint256" }],
-  },
+  { name: "exactInput", type: "function", stateMutability: "payable",
+    inputs: [{ name: "params", type: "tuple", components: [
+      { name: "path",             type: "bytes"   },
+      { name: "recipient",        type: "address" },
+      { name: "amountIn",         type: "uint256" },
+      { name: "amountOutMinimum", type: "uint256" },
+    ]}],
+    outputs: [{ name: "amountOut", type: "uint256" }] },
 ] as const;
 
-// G$ price in USD (approx, updated manually — ~$0.000116 as of Jun 2026)
-const GD_PRICE_USD = 0.000116;
 const USDC_DECIMALS = 6;
 const GD_DECIMALS   = 18;
-// Slippage tolerance: 2%
-const SLIPPAGE_BPS  = 200n;
+const SLIPPAGE_BPS  = 100n; // 1% slippage on live quote
 
 type Step = "input" | "approve" | "approving" | "swap" | "swapping" | "done" | "error";
 
 interface SwapGdModalProps {
   address: string;
   onClose: () => void;
-  /** Called when the swap completes so the parent can open the off-ramp modal */
   onSwapSuccess?: (usdcAmountFormatted: string) => void;
+}
+
+/** Simple hook that debounces a value by `delay` ms */
+function useDebounce<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return debounced;
 }
 
 export function SwapGdModal({ address, onClose, onSwapSuccess }: SwapGdModalProps) {
@@ -93,14 +100,12 @@ export function SwapGdModal({ address, onClose, onSwapSuccess }: SwapGdModalProp
   const gdAddress   = getTokenAddressBySymbol("G$",   chainId);
   const usdcAddress = getTokenAddressBySymbol("USDC", chainId);
 
-  // G$ balance
   const { data: gdBalance, isLoading: gdLoading } = useBalance({
     address: address as `0x${string}`,
     token:   gdAddress,
     query: { enabled: !!address && !!gdAddress, refetchInterval: 15_000 },
   });
 
-  // Current allowance
   const { data: allowance, refetch: refetchAllowance } = useReadContract({
     address: gdAddress,
     abi: ERC20_ABI,
@@ -111,47 +116,56 @@ export function SwapGdModal({ address, onClose, onSwapSuccess }: SwapGdModalProp
 
   const { writeContractAsync } = useWriteContract();
 
-  // Wait for approve tx
   const { isSuccess: approveConfirmed } = useWaitForTransactionReceipt({
-    hash: approveHash,
-    query: { enabled: !!approveHash },
+    hash: approveHash, query: { enabled: !!approveHash },
+  });
+  const { isSuccess: swapConfirmed } = useWaitForTransactionReceipt({
+    hash: swapHash, query: { enabled: !!swapHash },
   });
 
-  // Wait for swap tx
-  const { isSuccess: swapConfirmed, data: swapReceipt } = useWaitForTransactionReceipt({
-    hash: swapHash,
-    query: { enabled: !!swapHash },
-  });
-
-  // Derived values
-  const gdNum      = parseFloat(gdInput || "0");
+  // ── Live quote from Uniswap V3 Quoter ─────────────────────────────────────
+  const gdNum       = parseFloat(gdInput || "0");
   const gdFormatted = gdBalance ? parseFloat(formatUnits(gdBalance.value, GD_DECIMALS)) : 0;
-  const estUsd      = gdNum * GD_PRICE_USD;
-  const estUsdc     = estUsd; // 1 USDC = 1 USD
-  const estUsdcStr  = estUsdc.toFixed(4);
-  const belowMin    = estUsdc < 1;
+  const amountInWei = gdNum > 0 ? parseUnits(gdInput, GD_DECIMALS) : 0n;
 
-  const amountInWei  = gdNum > 0 ? parseUnits(gdInput, GD_DECIMALS) : 0n;
-  const estUsdcWei   = gdNum > 0 ? BigInt(Math.floor(estUsdc * 10 ** USDC_DECIMALS)) : 0n;
-  // amountOutMinimum with 2% slippage
-  const amountOutMin = estUsdcWei - (estUsdcWei * SLIPPAGE_BPS) / 10_000n;
+  const debouncedAmountIn = useDebounce(amountInWei, 400);
 
   const swapPath = useMemo(
     () => gdAddress && usdcAddress ? buildSwapPath(gdAddress, usdcAddress) : ("0x" as `0x${string}`),
     [gdAddress, usdcAddress],
   );
 
+  const { data: quoteRaw, isLoading: quoteLoading, isError: quoteError } = useReadContract({
+    address: QUOTER,
+    abi: QUOTER_ABI,
+    functionName: "quoteExactInput",
+    args: [swapPath, debouncedAmountIn],
+    query: {
+      enabled: debouncedAmountIn > 0n && !!gdAddress && !!usdcAddress,
+      retry: 1,
+      staleTime: 10_000,
+    },
+  });
+
+  const quoteWei: bigint    = (quoteRaw as bigint | undefined) ?? 0n;
+  const quoteUsdc: number   = quoteWei > 0n ? Number(quoteWei) / 10 ** USDC_DECIMALS : 0;
+  const quoteUsdcStr        = quoteUsdc > 0 ? quoteUsdc.toFixed(6) : "—";
+  // amountOutMinimum = live quote minus 1% slippage
+  const amountOutMin        = quoteWei > 0n ? quoteWei - (quoteWei * SLIPPAGE_BPS) / 10_000n : 0n;
+
+  const belowMin    = quoteUsdc > 0 && quoteUsdc < 1;
   const needsApprove = allowance !== undefined && amountInWei > 0n && allowance < amountInWei;
 
-  // ── Approve step ──────────────────────────────────────────────────────────
+  // Implied per-token price for display
+  const impliedPrice = gdNum > 0 && quoteUsdc > 0 ? (quoteUsdc / gdNum).toFixed(8) : null;
+
+  // ── Approve ────────────────────────────────────────────────────────────────
   const doApprove = useCallback(async () => {
     if (!gdAddress) return;
     setStep("approving");
     try {
       const hash = await writeContractAsync({
-        address: gdAddress,
-        abi: ERC20_ABI,
-        functionName: "approve",
+        address: gdAddress, abi: ERC20_ABI, functionName: "approve",
         args: [SWAP_ROUTER, amountInWei],
       });
       setApproveHash(hash);
@@ -161,23 +175,14 @@ export function SwapGdModal({ address, onClose, onSwapSuccess }: SwapGdModalProp
     }
   }, [gdAddress, amountInWei, writeContractAsync]);
 
-  // ── Swap step ─────────────────────────────────────────────────────────────
+  // ── Swap ───────────────────────────────────────────────────────────────────
   const doSwap = useCallback(async () => {
-    if (!address) return;
+    if (!address || amountOutMin === 0n) return;
     setStep("swapping");
     try {
-      const deadline = BigInt(Math.floor(Date.now() / 1000) + 300); // 5 min
       const hash = await writeContractAsync({
-        address: SWAP_ROUTER,
-        abi: SWAP_ROUTER_ABI,
-        functionName: "exactInput",
-        args: [{
-          path:             swapPath,
-          recipient:        address as `0x${string}`,
-          deadline,
-          amountIn:         amountInWei,
-          amountOutMinimum: amountOutMin,
-        }],
+        address: SWAP_ROUTER, abi: SWAP_ROUTER_ABI, functionName: "exactInput",
+        args: [{ path: swapPath, recipient: address as `0x${string}`, amountIn: amountInWei, amountOutMinimum: amountOutMin }],
       });
       setSwapHash(hash);
     } catch (e: any) {
@@ -186,18 +191,18 @@ export function SwapGdModal({ address, onClose, onSwapSuccess }: SwapGdModalProp
     }
   }, [address, swapPath, amountInWei, amountOutMin, writeContractAsync]);
 
-  // ── React to tx confirmations ─────────────────────────────────────────────
-  if (approveConfirmed && step === "approving") {
-    refetchAllowance();
-    setStep("swap");
-  }
-  if (swapConfirmed && step === "swapping") {
-    setStep("done");
-  }
+  // ── Confirmation watchers ──────────────────────────────────────────────────
+  useEffect(() => {
+    if (approveConfirmed && step === "approving") { refetchAllowance(); setStep("swap"); }
+  }, [approveConfirmed, step, refetchAllowance]);
 
-  const maxGd = () => {
-    if (gdBalance) setGdInput(formatUnits(gdBalance.value, GD_DECIMALS));
-  };
+  useEffect(() => {
+    if (swapConfirmed && step === "swapping") setStep("done");
+  }, [swapConfirmed, step]);
+
+  const maxGd = () => { if (gdBalance) setGdInput(formatUnits(gdBalance.value, GD_DECIMALS)); };
+
+  const canSwap = gdNum > 0 && gdNum <= gdFormatted && quoteWei > 0n && !quoteLoading;
 
   return (
     <div
@@ -205,7 +210,6 @@ export function SwapGdModal({ address, onClose, onSwapSuccess }: SwapGdModalProp
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div className="w-full max-w-md bg-background border border-border rounded-2xl shadow-2xl overflow-hidden">
-        {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3">
           <div className="flex items-center gap-2">
             <ArrowRight className="h-5 w-5 text-green" />
@@ -218,39 +222,32 @@ export function SwapGdModal({ address, onClose, onSwapSuccess }: SwapGdModalProp
 
         <div className="px-5 pb-5 space-y-4">
 
-          {/* Step: done */}
+          {/* Done */}
           {step === "done" && (
             <div className="space-y-4">
               <div className="flex items-start gap-3 rounded-xl bg-green-500/10 border border-green-500/20 px-4 py-4">
                 <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="text-sm font-medium text-green-400">Swap complete!</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    ≈{estUsdcStr} USDC has been added to your wallet.
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">≈{quoteUsdcStr} USDC added to your wallet.</p>
                   {swapHash && (
-                    <a
-                      href={`https://celoscan.io/tx/${swapHash}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-green hover:underline mt-1 inline-block"
-                    >
+                    <a href={`https://celoscan.io/tx/${swapHash}`} target="_blank" rel="noopener noreferrer"
+                      className="text-xs text-green hover:underline mt-1 inline-block">
                       View on Celoscan →
                     </a>
                   )}
                 </div>
               </div>
               {onSwapSuccess && (
-                <Button className="w-full" onClick={() => { onSwapSuccess(estUsdcStr); onClose(); }}>
-                  <ArrowDownLeft className="h-4 w-4 mr-2" />
-                  Cash out {estUsdcStr} USDC now
+                <Button className="w-full" onClick={() => { onSwapSuccess(quoteUsdcStr); onClose(); }}>
+                  <ArrowDownLeft className="h-4 w-4 mr-2" />Cash out {quoteUsdcStr} USDC now
                 </Button>
               )}
               <Button variant="outline" className="w-full" onClick={onClose}>Close</Button>
             </div>
           )}
 
-          {/* Step: error */}
+          {/* Error */}
           {step === "error" && (
             <div className="space-y-3">
               <div className="rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
@@ -262,10 +259,10 @@ export function SwapGdModal({ address, onClose, onSwapSuccess }: SwapGdModalProp
             </div>
           )}
 
-          {/* Steps: input / approve / approving / swap / swapping */}
+          {/* Input / tx steps */}
           {!["done", "error"].includes(step) && (
             <>
-              {/* G$ balance display */}
+              {/* G$ balance */}
               <div className="rounded-xl bg-muted/40 border border-border px-4 py-3">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-xs text-muted-foreground">G$ balance</p>
@@ -274,19 +271,13 @@ export function SwapGdModal({ address, onClose, onSwapSuccess }: SwapGdModalProp
                 <p className="text-xl font-bold text-white tabular-nums">
                   {gdLoading ? "…" : `${gdFormatted.toFixed(2)} G$`}
                 </p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  ≈ ${(gdFormatted * GD_PRICE_USD).toFixed(4)} USD
-                </p>
               </div>
 
               {/* Amount input */}
               <div className="space-y-1.5">
-                <label className="text-xs text-muted-foreground font-medium">Amount of G$ to swap</label>
+                <label className="text-xs text-muted-foreground font-medium">Amount to swap</label>
                 <Input
-                  type="number"
-                  min="0"
-                  step="100"
-                  placeholder="e.g. 10000"
+                  type="number" min="0" step="100" placeholder="e.g. 10000"
                   value={gdInput}
                   onChange={(e) => setGdInput(e.target.value)}
                   disabled={step !== "input"}
@@ -294,82 +285,76 @@ export function SwapGdModal({ address, onClose, onSwapSuccess }: SwapGdModalProp
                 />
               </div>
 
-              {/* Estimate */}
+              {/* Live quote */}
               {gdNum > 0 && (
-                <div className="rounded-xl bg-green/5 border border-green/20 px-4 py-3 space-y-1">
+                <div className="rounded-xl bg-green/5 border border-green/20 px-4 py-3 space-y-1.5">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">You send</span>
                     <span className="font-semibold text-white">{gdNum.toLocaleString()} G$</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">You receive ≈</span>
-                    <span className="font-semibold text-green">{estUsdcStr} USDC</span>
+                    {quoteLoading ? (
+                      <span className="text-muted-foreground flex items-center gap-1">
+                        <Loader2 className="h-3 w-3 animate-spin" /> Fetching quote…
+                      </span>
+                    ) : quoteError ? (
+                      <span className="text-red-400 text-xs">Quote failed — try again</span>
+                    ) : (
+                      <span className="font-semibold text-green">{quoteUsdcStr} USDC</span>
+                    )}
                   </div>
-                  <div className="flex justify-between text-xs text-muted-foreground pt-1 border-t border-white/5">
-                    <span>Rate</span>
-                    <span>1 G$ ≈ ${GD_PRICE_USD} · 2% slippage</span>
-                  </div>
+                  {impliedPrice && !quoteLoading && !quoteError && (
+                    <div className="flex justify-between text-xs text-muted-foreground pt-1 border-t border-white/5">
+                      <span>Live rate</span>
+                      <span>1 G$ ≈ ${impliedPrice} · 1% slippage</span>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* Below minimum warning */}
-              {gdNum > 0 && belowMin && (
+              {/* Fonbnk min warning (chained flow only) */}
+              {gdNum > 0 && belowMin && onSwapSuccess && !quoteLoading && (
                 <div className="flex items-start gap-2 rounded-xl bg-yellow-500/10 border border-yellow-500/20 px-4 py-3 text-xs text-yellow-400">
                   <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
                   <span>
-                    ${estUsd.toFixed(4)} is below Fonbnk&apos;s $1 minimum. You need at least ~8,600 G$ to off-ramp.
+                    You&apos;ll receive ≈{quoteUsdcStr} USDC — below Fonbnk&apos;s $1 minimum.
+                    You can still swap, but you won&apos;t be able to cash out immediately.
                   </span>
                 </div>
               )}
 
-              {/* Progress indicator */}
+              {/* Step indicator */}
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border ${
-                  ["input","approve","approving"].includes(step) ? "border-green text-green" : "border-green bg-green text-black"}`}>
-                  1
-                </span>
+                  ["input","approve","approving"].includes(step) ? "border-green text-green" : "border-green bg-green text-black"}`}>1</span>
                 <span className="flex-1 h-px bg-white/10" />
                 <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border ${
                   step === "swap" || step === "swapping" ? "border-green text-green" :
-                  step === "done" ? "border-green bg-green text-black" : "border-white/20 text-white/20"}`}>
-                  2
-                </span>
+                  step === "done" ? "border-green bg-green text-black" : "border-white/20 text-white/20"}`}>2</span>
                 <span className="text-white/30">Approve · Swap</span>
               </div>
 
-              {/* Action button */}
-              {(step === "input" && needsApprove) && (
-                <Button className="w-full" onClick={doApprove} disabled={!gdNum || belowMin || gdNum > gdFormatted}>
-                  Approve G$ Spend
-                </Button>
+              {/* Action buttons */}
+              {step === "input" && needsApprove && (
+                <Button className="w-full" onClick={doApprove} disabled={!canSwap}>Approve G$ Spend</Button>
               )}
-              {(step === "input" && !needsApprove) && (
-                <Button className="w-full" onClick={doSwap} disabled={!gdNum || belowMin || gdNum > gdFormatted}>
+              {step === "input" && !needsApprove && (
+                <Button className="w-full" onClick={doSwap} disabled={!canSwap}>
                   Swap {gdNum > 0 ? `${gdNum.toLocaleString()} G$` : "G$"} → USDC
                 </Button>
               )}
               {step === "approve" && (
-                <Button className="w-full" onClick={doApprove} disabled={!gdNum}>
-                  Approve G$ Spend
-                </Button>
+                <Button className="w-full" onClick={doApprove} disabled={!gdNum}>Approve G$ Spend</Button>
               )}
               {step === "approving" && (
-                <Button className="w-full" disabled>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Approving…
-                </Button>
+                <Button className="w-full" disabled><Loader2 className="h-4 w-4 animate-spin mr-2" />Approving…</Button>
               )}
               {step === "swap" && (
-                <Button className="w-full" onClick={doSwap}>
-                  <ArrowRight className="h-4 w-4 mr-2" />
-                  Confirm Swap
-                </Button>
+                <Button className="w-full" onClick={doSwap}><ArrowRight className="h-4 w-4 mr-2" />Confirm Swap</Button>
               )}
               {step === "swapping" && (
-                <Button className="w-full" disabled>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Swapping…
-                </Button>
+                <Button className="w-full" disabled><Loader2 className="h-4 w-4 animate-spin mr-2" />Swapping…</Button>
               )}
 
               {gdNum > gdFormatted && gdNum > 0 && (
@@ -383,7 +368,7 @@ export function SwapGdModal({ address, onClose, onSwapSuccess }: SwapGdModalProp
             <a href="https://app.uniswap.org/" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
               Uniswap V3
             </a>
-            {" "}on Celo · G$/cUSD pool
+            {" "}on Celo · G$/cUSD (1%) → cUSD/USDC (0.01%)
           </p>
         </div>
       </div>

@@ -78,7 +78,7 @@ export function StreamCardPreview({
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="font-semibold truncate leading-tight">
-              {title || `Stream #${streamId.toString()}`}
+              {title || `Plan #${streamId.toString()}`}
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
               #{streamId.toString()}
@@ -108,7 +108,7 @@ export function StreamCardPreview({
         {/* Stats row */}
         <div className="flex items-center justify-between text-sm">
           <div>
-            <p className="text-xs text-muted-foreground mb-0.5">Recipients</p>
+            <p className="text-xs text-muted-foreground mb-0.5">Buckets</p>
             <p className="font-semibold">
               {recipients.length} · {symbol}
             </p>
@@ -135,7 +135,7 @@ export function StreamCardPreview({
         {status === 0 && (
           <div className="flex items-center gap-1.5 text-xs text-green-500">
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse flex-shrink-0" />
-            <span>Streaming live</span>
+            <span>Flowing live</span>
           </div>
         )}
 

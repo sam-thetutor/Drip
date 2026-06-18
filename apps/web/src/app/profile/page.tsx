@@ -274,7 +274,7 @@ export default function ProfilePage() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <p className="text-sm text-foreground/70">
-                  Register your phone hash on-chain so others can send streams using your phone number.
+                  Register your phone hash on-chain so others can send you money using your phone number.
                 </p>
                 <Input
                   placeholder="+2348012345678"

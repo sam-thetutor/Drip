@@ -82,7 +82,7 @@ export function TopUpModal({ address, onClose }: { address: string; onClose: () 
         <div className="flex items-center justify-between px-5 pt-5 pb-3">
           <div className="flex items-center gap-2">
             <Smartphone className="h-5 w-5 text-green-500" />
-            <span className="font-semibold text-base">Top Up via Mobile Money</span>
+            <span className="font-semibold text-base">Add money via Mobile Money</span>
           </div>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition">
             <X className="h-5 w-5" />

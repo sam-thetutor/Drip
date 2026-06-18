@@ -78,7 +78,7 @@ async function main() {
   const net        = NETWORK_CONFIG[netName] ?? NETWORK_CONFIG["celo"];
 
   console.log("═══════════════════════════════════════════════════════════════════════");
-  console.log("  DripV4  Full Feature Test (per-recipient controls)");
+  console.log("  DripV5  Full Feature Test (per-recipient controls)");
   console.log("═══════════════════════════════════════════════════════════════════════");
   console.log("  Network  :", netName, `(chainId ${network.chainId})`);
   console.log("  Deployer :", deployer.address);
@@ -94,14 +94,14 @@ async function main() {
   sep("Step 1 — Deploy / attach contracts");
 
   let vaultImplAddr = process.env.VAULT_IMPL_ADDR ?? "";
-  let dripV4Addr    = process.env.DRIP_V4_ADDR    ?? "";
+  let dripV4Addr    = process.env.DRIP_V5_ADDR ?? process.env.DRIP_V4_ADDR ?? "";
   let dripV4: any;
 
   if (vaultImplAddr && dripV4Addr) {
     console.log("  Attaching to existing contracts:");
     console.log("    StreamVault impl :", vaultImplAddr);
-    console.log("    DripV4           :", dripV4Addr);
-    const F = await ethers.getContractFactory("DripV4");
+    console.log("    DripV5           :", dripV4Addr);
+    const F = await ethers.getContractFactory("DripV5");
     dripV4  = F.attach(dripV4Addr);
   } else {
     console.log("  Deploying fresh…");
@@ -111,11 +111,11 @@ async function main() {
     vaultImplAddr = await vi.getAddress();
     console.log("    StreamVault impl :", vaultImplAddr);
 
-    const DF = await ethers.getContractFactory("DripV4");
+    const DF = await ethers.getContractFactory("DripV5");
     dripV4   = await DF.deploy(vaultImplAddr, deployer.address);
     await dripV4.waitForDeployment();
     dripV4Addr = await dripV4.getAddress();
-    console.log("    DripV4           :", dripV4Addr);
+    console.log("    DripV5           :", dripV4Addr);
   }
 
   // ── Step 2: createStream ─────────────────────────────────────────────────
@@ -160,7 +160,7 @@ async function main() {
   let vaultAddr: string | undefined;
   for (const log of createReceipt.logs) {
     try {
-      const F      = await ethers.getContractFactory("DripV4");
+      const F      = await ethers.getContractFactory("DripV5");
       const parsed = F.interface.parseLog({ topics: log.topics as string[], data: log.data });
       if (parsed?.name === "StreamCreated") {
         streamId  = parsed.args.streamId;
@@ -281,33 +281,8 @@ async function main() {
   if (ext7 > 0)                 ok("endTime extended");
   if (r1_r7 > 0n && r2_r7 > 0n) ok("Both flows resumed");
 
-  // ── Step 8: lockStreamRate ────────────────────────────────────────────────
-  sep("Step 8 — lockStreamRate(15 s) → cancel + pauseStream blocked");
-
-  const lockTx = await dripV4.lockStreamRate(streamId, 15n);
-  await lockTx.wait();
-  ok("Rate locked for 15 s");
-
-  // Note: hardhat is built with revertStrings:"strip" so we only get bare "execution reverted".
-  // Any revert (or insufficient-gas error from the RPC if CELO is low) counts as blocked.
-  for (const [fn, args] of [["cancelStream", [streamId]], ["pauseStream", [streamId]]] as const) {
-    try {
-      const tx = await (dripV4 as any)[fn](...args);
-      await tx.wait();
-      fail(`${fn} succeeded during rate lock — UNEXPECTED`);
-    } catch (err: unknown) {
-      const msg = (err as { message?: string }).message ?? String(err);
-      // "rate locked" = stripped revert, "execution reverted" = any on-chain revert, "insufficient funds" = no gas
-      if (msg.includes("rate locked") || msg.includes("execution reverted") || msg.includes("insufficient funds")) {
-        ok(`${fn} blocked (rate lock or gas — lock confirmed working)`);
-      } else {
-        fail(`${fn} failed with unexpected error: ${msg.slice(0, 80)}`);
-      }
-    }
-  }
-
-  // ── Step 9: removeRecipient(R2) ────────────────────────────────────────────
-  sep("Step 9 — removeRecipient(R2) while lock is active  [lock doesn't block per-recipient ops]");
+  // ── Step 8: removeRecipient(R2) ────────────────────────────────────────────
+  sep("Step 8 — removeRecipient(R2) — R1 keeps flowing, endTime extends");
 
   const endTimeBefore9 = (await dripV4.getStream(streamId)).endTime;
 
@@ -335,8 +310,8 @@ async function main() {
   if (Number(st9.status) === 0)      ok("Stream still Active");
   if (ext9 > 0)                      ok("endTime extended after R2 removal");
 
-  // ── Step 10: getActiveRecipients ───────────────────────────────────────────
-  sep("Step 10 — getActiveRecipients → only R1 returned");
+  // ── Step 9: getActiveRecipients ────────────────────────────────────────────
+  sep("Step 9 — getActiveRecipients → only R1 returned");
 
   const [activeAddrs, activeRates] = await dripV4.getActiveRecipients(streamId);
   console.log("  Active recipients count:", activeAddrs.length);
@@ -349,11 +324,8 @@ async function main() {
     fail("getActiveRecipients result unexpected");
   }
 
-  // ── Step 11: cancel after lock ─────────────────────────────────────────────
-  sep("Step 11 — Wait for lock to expire, then cancelStream");
-
-  console.log("  Waiting 18 s for rate lock to expire…");
-  await sleep(18_000);
+  // ── Step 10: cancel ────────────────────────────────────────────────────────
+  sep("Step 10 — cancelStream → vault drained, R1 flow = 0, refund to sender");
 
   const senderBefore = BigInt(await gDollar.balanceOf(deployer.address));
 
@@ -391,7 +363,7 @@ async function main() {
   }
   console.log("═".repeat(68));
   console.log("  StreamVault impl :", vaultImplAddr);
-  console.log("  DripV4           :", dripV4Addr);
+  console.log("  DripV5           :", dripV4Addr);
   console.log("═".repeat(68));
 }
 

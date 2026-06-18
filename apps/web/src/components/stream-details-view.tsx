@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { useAccount, useChainId } from "wagmi";
+import { useAccount, useChainId, useBalance, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { erc20Abi, parseUnits, formatUnits as fmtUnits } from "viem";
 import {
   useDripV4Stream,
   useDripV4ActiveRecipients,
@@ -9,7 +10,6 @@ import {
   usePauseStream,
   useResumeStream,
   useCancelStream,
-  useLockStreamRate,
   useRefreshEndTime,
   usePauseRecipient,
   useResumeRecipient,
@@ -38,10 +38,12 @@ import {
   X,
   Loader2,
   ExternalLink,
-  Lock,
   RefreshCw,
   UserMinus,
   AlertCircle,
+  PlusCircle,
+  Share2,
+  AlertTriangle,
 } from "lucide-react";
 import { formatUnits } from "viem";
 import { toast } from "sonner";
@@ -75,81 +77,201 @@ const STATUS_BADGE: Record<number, string> = {
   [StreamStatus.Cancelled]: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
 };
 
-// ─── Lock Rate Modal ──────────────────────────────────────────────────────────
+// ─── Top-Up Modal ─────────────────────────────────────────────────────────────
+// Top-up = direct ERC20 transfer to the vault address, then refreshEndTime.
+// No DripV4 approval needed; the token just moves from sender → vault.
 
-function LockRateModal({
+function TopUpModal({
   streamId,
+  vaultAddress,
+  tokenAddress,
+  tokenSymbol,
+  tokenDecimals,
+  totalFlowRate,
+  currentVaultBalance,
   isOpen,
   onClose,
+  onSuccess,
 }: {
   streamId: bigint;
+  vaultAddress: `0x${string}`;
+  tokenAddress: `0x${string}`;
+  tokenSymbol: string;
+  tokenDecimals: number;
+  totalFlowRate: bigint;
+  currentVaultBalance: bigint;
   isOpen: boolean;
   onClose: () => void;
+  onSuccess: () => void;
 }) {
-  const { lockStreamRate, isPending } = useLockStreamRate();
-  const [value, setValue] = useState("");
-  const [unit,  setUnit]  = useState<"days" | "hours" | "minutes">("days");
+  const { address } = useAccount();
+  const [amount, setAmount]   = useState("");
+  const [txHash, setTxHash]   = useState<`0x${string}` | undefined>();
+  const [step, setStep]       = useState<"input" | "transferring" | "refreshing" | "done" | "error">("input");
+  const [errMsg, setErrMsg]   = useState("");
 
-  const handleLock = async () => {
-    const num = parseFloat(value);
-    if (!num || num <= 0) { toast.error("Enter a valid duration"); return; }
-    const seconds = unit === "days" ? num * 86400 : unit === "hours" ? num * 3600 : num * 60;
-    if (seconds < 60) { toast.error("Minimum lock duration is 1 minute"); return; }
+  const { data: userBalance } = useBalance({
+    address, token: tokenAddress,
+    query: { enabled: !!address, refetchInterval: 10_000 },
+  });
+  const { refreshEndTime, isPending: refreshPending } = useRefreshEndTime();
+  const { writeContractAsync } = useWriteContract();
+  const { isSuccess: transferConfirmed } = useWaitForTransactionReceipt({
+    hash: txHash,
+    query: { enabled: !!txHash },
+  });
+
+  const amtNum     = parseFloat(amount || "0");
+  const amtWei     = amtNum > 0 ? parseUnits(amount, tokenDecimals) : 0n;
+  const userBalNum = userBalance ? parseFloat(fmtUnits(userBalance.value, tokenDecimals)) : 0;
+
+  // Estimated new end time after top-up
+  const newVaultBalance = currentVaultBalance + amtWei;
+  const newDuration     = totalFlowRate > 0n ? Number(newVaultBalance / totalFlowRate) : 0;
+  const newEndDate      = newDuration > 0 ? new Date(Date.now() + newDuration * 1000) : null;
+
+  const doTopUp = async () => {
+    if (!amtWei || amtNum > userBalNum) return;
+    setStep("transferring");
     try {
-      toast.loading("Locking rates…", { id: "lock-rate" });
-      await lockStreamRate(streamId, BigInt(Math.floor(seconds)));
-      toast.success("Stream rates locked!", { id: "lock-rate" });
-      onClose();
+      const hash = await writeContractAsync({
+        address: tokenAddress,
+        abi: erc20Abi,
+        functionName: "transfer",
+        args: [vaultAddress, amtWei],
+      });
+      setTxHash(hash);
+      // After transfer confirms, call refreshEndTime
+      // We watch transferConfirmed in a useEffect below
     } catch (e: any) {
-      toast.error(e?.shortMessage || e?.message || "Failed to lock rates", { id: "lock-rate" });
+      setStep("error");
+      setErrMsg(e?.shortMessage ?? e?.message ?? "Transfer failed");
     }
   };
 
+  // Trigger refreshEndTime once transfer is confirmed
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const runRefresh = useCallback(async () => {
+    setStep("refreshing");
+    try {
+      await refreshEndTime(streamId);
+      setStep("done");
+      onSuccess();
+    } catch (e: any) {
+      setStep("error");
+      setErrMsg(e?.shortMessage ?? e?.message ?? "Could not refresh end time");
+    }
+  }, [streamId, refreshEndTime, onSuccess]);
+
+  // Watch for transfer confirmation
+  if (transferConfirmed && step === "transferring") runRefresh();
+
+  const reset = () => { setAmount(""); setTxHash(undefined); setStep("input"); setErrMsg(""); };
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={(o) => { if (!o) { reset(); onClose(); } }}>
       <DialogContent className="glass-card">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Lock className="h-5 w-5" /> Lock Stream Rates
+            <PlusCircle className="h-5 w-5 text-green-500" /> Add money to this plan
           </DialogTitle>
           <DialogDescription>
-            Prevent modifications to recipient rates for a set duration.
+            Add more {tokenSymbol} — your plan will run longer automatically.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-2">
-          <div className="space-y-2">
-            <Label>Lock duration</Label>
-            <div className="flex gap-2">
-              <Input
-                type="number" min="0.1" step="0.1" placeholder="1"
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                className="flex-1"
-              />
-              <select
-                value={unit}
-                onChange={(e) => setUnit(e.target.value as typeof unit)}
-                className="px-3 py-2 border border-input bg-background rounded-md text-sm"
-              >
-                <option value="minutes">Minutes</option>
-                <option value="hours">Hours</option>
-                <option value="days">Days</option>
-              </select>
+
+        {step === "done" && (
+          <div className="space-y-4 py-2">
+            <div className="flex items-center gap-3 rounded-lg bg-green-500/10 border border-green-500/20 px-4 py-3">
+              <AlertCircle className="h-4 w-4 text-green-500 shrink-0" />
+              <p className="text-sm text-green-400">Funds added! End time has been updated.</p>
             </div>
+            <DialogFooter><Button onClick={() => { reset(); onClose(); }}>Close</Button></DialogFooter>
           </div>
-          <div className="rounded-lg bg-muted p-3 text-xs text-muted-foreground space-y-1">
-            <p className="font-medium text-foreground">While locked, you cannot:</p>
-            <p>· Pause / resume individual recipients</p>
-            <p>· Remove recipients</p>
-            <p className="mt-2">Pausing, resuming, and cancelling the whole stream are still allowed.</p>
+        )}
+
+        {step === "error" && (
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-red-400 rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3">{errMsg}</p>
+            <DialogFooter>
+              <Button variant="outline" onClick={reset}>Try Again</Button>
+              <Button variant="outline" onClick={onClose}>Close</Button>
+            </DialogFooter>
           </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={isPending}>Cancel</Button>
-          <Button onClick={handleLock} disabled={isPending || !value || parseFloat(value) <= 0}>
-            {isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Locking…</> : <><Lock className="h-4 w-4 mr-2" />Lock Rates</>}
-          </Button>
-        </DialogFooter>
+        )}
+
+        {!["done","error"].includes(step) && (
+          <div className="space-y-4 py-2">
+            {/* Balances */}
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="rounded-lg bg-muted/40 border border-border px-3 py-2.5">
+                <p className="text-xs text-muted-foreground mb-0.5">Your balance</p>
+                <p className="font-semibold tabular-nums">{userBalNum.toFixed(2)} {tokenSymbol}</p>
+              </div>
+              <div className="rounded-lg bg-muted/40 border border-border px-3 py-2.5">
+              <p className="text-xs text-muted-foreground mb-0.5">In this plan</p>
+              <p className="font-semibold tabular-nums">
+                  {parseFloat(fmtUnits(currentVaultBalance, tokenDecimals)).toFixed(2)} {tokenSymbol}
+                </p>
+              </div>
+            </div>
+
+            {/* Amount input */}
+            <div className="space-y-1.5">
+              <Label>Amount to add</Label>
+              <div className="flex gap-2">
+                <Input
+                  type="number" min="0" step="1" placeholder="0"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  disabled={step !== "input"}
+                  className="flex-1"
+                />
+                <Button
+                  type="button" variant="outline" size="sm"
+                  onClick={() => setAmount(userBalNum.toFixed(tokenDecimals))}
+                  disabled={step !== "input"}
+                >
+                  Max
+                </Button>
+              </div>
+              {amtNum > userBalNum && amtNum > 0 && (
+                <p className="text-xs text-red-400">Exceeds your balance</p>
+              )}
+            </div>
+
+            {/* New end time estimate */}
+            {amtWei > 0n && newEndDate && (
+              <div className="rounded-lg bg-primary/8 border border-primary/20 px-3 py-2.5 text-sm space-y-1">
+                <p className="text-xs text-muted-foreground">New estimated end time</p>
+                <p className="font-semibold text-primary">{newEndDate.toLocaleString()}</p>
+              </div>
+            )}
+
+            {/* Progress indicator */}
+            {["transferring","refreshing"].includes(step) && (
+              <div className="flex items-center gap-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                <span className="text-primary">
+                  {step === "transferring" ? `Sending ${tokenSymbol} to vault…` : "Updating end time…"}
+                </span>
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { reset(); onClose(); }} disabled={step !== "input"}>
+                Cancel
+              </Button>
+              <Button
+                onClick={doTopUp}
+                disabled={!amtWei || amtNum > userBalNum || step !== "input"}
+              >
+                <PlusCircle className="h-4 w-4 mr-2" />
+                Add {amtNum > 0 ? `${amtNum.toLocaleString()} ${tokenSymbol}` : "Funds"}
+              </Button>
+            </DialogFooter>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -173,16 +295,16 @@ function CancelDialog({
       <DialogContent className="glass-card">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-destructive">
-            <AlertCircle className="h-5 w-5" /> Cancel Stream
+            <AlertCircle className="h-5 w-5" /> Cancel plan
           </DialogTitle>
           <DialogDescription>
-            All active CFA flows will stop immediately. The remaining vault balance will be refunded to you. This cannot be undone.
+            All buckets stop receiving money immediately and the remaining balance is refunded to you. This cannot be undone.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={isPending}>Keep Stream</Button>
+          <Button variant="outline" onClick={onClose} disabled={isPending}>Keep plan</Button>
           <Button variant="destructive" onClick={onConfirm} disabled={isPending}>
-            {isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Cancelling…</> : "Yes, cancel stream"}
+            {isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Cancelling…</> : "Yes, cancel plan"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -199,7 +321,6 @@ function RecipientRow({
   tokenSymbol,
   tokenDecimals,
   isSender,
-  isLocked,
   isStreamActive,
 }: {
   streamId: bigint;
@@ -208,7 +329,6 @@ function RecipientRow({
   tokenSymbol: string;
   tokenDecimals: number;
   isSender: boolean;
-  isLocked: boolean;
   isStreamActive: boolean;
 }) {
   const { address }              = useAccount();
@@ -222,9 +342,9 @@ function RecipientRow({
 
   const handlePause = async () => {
     try {
-      toast.loading("Pausing recipient…", { id: `pause-r-${recipient}` });
+      toast.loading("Pausing bucket…", { id: `pause-r-${recipient}` });
       await pauseRecipient(streamId, recipient);
-      toast.success("Recipient paused", { id: `pause-r-${recipient}` });
+      toast.success("Bucket paused", { id: `pause-r-${recipient}` });
       refetch();
     } catch (e: any) {
       toast.error(e?.shortMessage || e?.message || "Failed", { id: `pause-r-${recipient}` });
@@ -233,9 +353,9 @@ function RecipientRow({
 
   const handleResume = async () => {
     try {
-      toast.loading("Resuming recipient…", { id: `resume-r-${recipient}` });
+      toast.loading("Resuming bucket…", { id: `resume-r-${recipient}` });
       await resumeRecipient(streamId, recipient);
-      toast.success("Recipient resumed", { id: `resume-r-${recipient}` });
+      toast.success("Bucket resumed", { id: `resume-r-${recipient}` });
       refetch();
     } catch (e: any) {
       toast.error(e?.shortMessage || e?.message || "Failed", { id: `resume-r-${recipient}` });
@@ -244,9 +364,9 @@ function RecipientRow({
 
   const handleRemove = async () => {
     try {
-      toast.loading("Removing recipient…", { id: `remove-r-${recipient}` });
+      toast.loading("Removing bucket…", { id: `remove-r-${recipient}` });
       await removeRecipient(streamId, recipient);
-      toast.success("Recipient removed", { id: `remove-r-${recipient}` });
+      toast.success("Bucket removed", { id: `remove-r-${recipient}` });
       refetch();
     } catch (e: any) {
       toast.error(e?.shortMessage || e?.message || "Failed", { id: `remove-r-${recipient}` });
@@ -292,8 +412,8 @@ function RecipientRow({
             <Button
               variant="outline" size="sm"
               onClick={handleResume}
-              disabled={anyPending || isLocked}
-              title={isLocked ? "Rate lock active" : "Resume recipient"}
+              disabled={anyPending}
+              title="Resume bucket"
             >
               {resumingR ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
             </Button>
@@ -301,8 +421,8 @@ function RecipientRow({
             <Button
               variant="outline" size="sm"
               onClick={handlePause}
-              disabled={anyPending || isLocked}
-              title={isLocked ? "Rate lock active" : "Pause recipient"}
+              disabled={anyPending}
+              title="Pause bucket"
             >
               {pausingR ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pause className="h-4 w-4" />}
             </Button>
@@ -310,8 +430,8 @@ function RecipientRow({
           <Button
             variant="destructive" size="sm"
             onClick={handleRemove}
-            disabled={anyPending || isLocked}
-            title={isLocked ? "Rate lock active" : "Remove recipient"}
+            disabled={anyPending}
+            title="Remove bucket"
           >
             {removingR ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserMinus className="h-4 w-4" />}
           </Button>
@@ -340,8 +460,8 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
   const { cancelStream,  isPending: cancelling } = useCancelStream();
   const { refreshEndTime, isPending: refreshing } = useRefreshEndTime();
 
-  const [showLock,   setShowLock]   = useState(false);
   const [showCancel, setShowCancel] = useState(false);
+  const [showTopUp,  setShowTopUp]  = useState(false);
 
   const handleRefetch = useCallback(() => { refetch(); refetchRecipients(); }, [refetch, refetchRecipients]);
 
@@ -351,7 +471,7 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        <span className="ml-2 text-muted-foreground">Loading stream…</span>
+        <span className="ml-2 text-muted-foreground">Loading plan…</span>
       </div>
     );
   }
@@ -361,13 +481,13 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
       <Card className="glass-card">
         <CardContent className="pt-6">
           <div className="text-center space-y-4">
-            <p className="text-destructive font-medium">Stream not found</p>
+            <p className="text-destructive font-medium">Plan not found</p>
             <p className="text-sm text-muted-foreground">
-              This stream ID doesn't exist on DripV4, or you may be on the wrong network.
+              This plan doesn't exist, or you may be on the wrong network.
             </p>
             <div className="flex gap-2 justify-center">
-              <Button asChild variant="outline"><Link href="/streams">View All Streams</Link></Button>
-              <Button asChild><Link href="/streams/create">Create New Stream</Link></Button>
+              <Button asChild variant="outline"><Link href="/streams">View all plans</Link></Button>
+              <Button asChild><Link href="/streams/create">Set up a plan</Link></Button>
             </div>
           </div>
         </CardContent>
@@ -385,7 +505,6 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
   const isActive     = stream.status === StreamStatus.Active;
   const isPaused     = stream.status === StreamStatus.Paused;
   const isLive       = isActive || isPaused;
-  const isLocked     = stream.isRateLocked ?? false;
 
   const now      = BigInt(Math.floor(Date.now() / 1000));
   const remaining = isLive ? (stream.endTime > now ? Number(stream.endTime - now) : 0) : 0;
@@ -404,9 +523,9 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
 
   const handlePause = async () => {
     try {
-      toast.loading("Pausing stream…", { id: "stream-action" });
+      toast.loading("Pausing plan…", { id: "stream-action" });
       await pauseStream(streamId);
-      toast.success("Stream paused", { id: "stream-action" });
+      toast.success("Plan paused", { id: "stream-action" });
       handleRefetch();
     } catch (e: any) {
       toast.error(e?.shortMessage || e?.message || "Failed to pause", { id: "stream-action" });
@@ -415,9 +534,9 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
 
   const handleResume = async () => {
     try {
-      toast.loading("Resuming stream…", { id: "stream-action" });
+      toast.loading("Resuming plan…", { id: "stream-action" });
       await resumeStream(streamId);
-      toast.success("Stream resumed", { id: "stream-action" });
+      toast.success("Plan resumed", { id: "stream-action" });
       handleRefetch();
     } catch (e: any) {
       toast.error(e?.shortMessage || e?.message || "Failed to resume", { id: "stream-action" });
@@ -426,9 +545,9 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
 
   const handleCancel = async () => {
     try {
-      toast.loading("Cancelling stream…", { id: "stream-action" });
+      toast.loading("Cancelling plan…", { id: "stream-action" });
       await cancelStream(streamId);
-      toast.success("Stream cancelled — vault balance refunded", { id: "stream-action" });
+      toast.success("Plan cancelled — balance refunded", { id: "stream-action" });
       setShowCancel(false);
       handleRefetch();
     } catch (e: any) {
@@ -460,7 +579,7 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div className="flex-1 min-w-0">
               <CardTitle className="text-2xl mb-1 truncate">
-                {stream.title || `Stream #${streamId.toString()}`}
+                {stream.title || `Plan #${streamId.toString()}`}
               </CardTitle>
               {stream.description && (
                 <p className="text-muted-foreground text-sm">{stream.description}</p>
@@ -472,16 +591,6 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
               <span className={`px-3 py-1 text-sm font-medium rounded-full ${STATUS_BADGE[stream.status] ?? ""}`}>
                 {getStatusLabel(stream.status)}
               </span>
-
-              {/* Rate lock badge */}
-              {isLocked && (
-                <span
-                  className="px-3 py-1 text-sm font-medium bg-yellow-500/20 text-yellow-600 rounded-full border border-yellow-500/30 flex items-center gap-1.5"
-                  title={`Locked until ${fmtTime(stream.rateLockUntil)}`}
-                >
-                  <Lock className="h-3.5 w-3.5" /> Rates Locked
-                </span>
-              )}
             </div>
           </div>
         </CardHeader>
@@ -508,32 +617,29 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
             </div>
           </div>
 
-          {/* Rate lock notice */}
-          {isLocked && (
-            <div className="mb-6 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg flex items-center gap-3 text-sm">
-              <Lock className="h-4 w-4 text-yellow-600 shrink-0" />
-              <span className="text-yellow-700 dark:text-yellow-400">
-                {isUserSender
-                  ? "You cannot modify recipients while rates are locked."
-                  : "Your payment rate is protected until " + fmtTime(stream.rateLockUntil) + "."}
-              </span>
-            </div>
-          )}
-
           {/* Stream controls — sender only */}
           {isUserSender && isLive && (
             <div className="flex flex-wrap gap-2 pt-4 border-t">
               {isActive ? (
                 <Button variant="outline" onClick={handlePause} disabled={anyActionPending}>
                   {pausing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Pause className="h-4 w-4 mr-2" />}
-                  Pause Stream
+                  Pause plan
                 </Button>
               ) : (
                 <Button variant="outline" onClick={handleResume} disabled={anyActionPending}>
                   {resuming ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Play className="h-4 w-4 mr-2" />}
-                  Resume Stream
+                  Resume plan
                 </Button>
               )}
+
+              <Button
+                variant="outline"
+                onClick={() => setShowTopUp(true)}
+                disabled={anyActionPending}
+                className="text-green-400 border-green-500/30 hover:bg-green-500/10"
+              >
+                <PlusCircle className="h-4 w-4 mr-2" /> Add money
+              </Button>
 
               <Button
                 variant="outline"
@@ -546,32 +652,58 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
               </Button>
 
               <Button
-                variant="outline"
-                onClick={() => setShowLock(true)}
-                disabled={anyActionPending || isLocked}
-                title={isLocked ? "Already locked" : "Prevent recipient modifications"}
-              >
-                <Lock className="h-4 w-4 mr-2" /> Lock Rates
-              </Button>
-
-              <Button
                 variant="destructive"
                 onClick={() => setShowCancel(true)}
                 disabled={anyActionPending}
               >
-                <X className="h-4 w-4 mr-2" /> Cancel Stream
+                <X className="h-4 w-4 mr-2" /> Cancel plan
               </Button>
             </div>
           )}
         </CardContent>
       </Card>
 
+      {/* Expiry warning banner */}
+      {isLive && (() => {
+        const expirySecsLeft = remaining;
+        if (expirySecsLeft <= 0) return null;
+        const isCritical = expirySecsLeft < 86_400;
+        const isWarning  = expirySecsLeft < 172_800;
+        if (!isCritical && !isWarning) return null;
+        const label = isCritical
+          ? `This plan finishes in ${fmtDuration(expirySecsLeft)} — it will stop automatically when the money runs out.`
+          : `This plan finishes in ${fmtDuration(expirySecsLeft)}.`;
+        return (
+          <div className={`flex items-start gap-3 rounded-xl px-4 py-3.5 border ${
+            isCritical
+              ? "bg-red-500/10 border-red-500/25 text-red-400"
+              : "bg-orange-500/10 border-orange-500/25 text-orange-400"
+          }`}>
+            <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+            <div className="flex-1 text-sm">
+              <span className="font-medium">{isCritical ? "Expiring soon! " : "Heads up: "}</span>
+              {label}
+            </div>
+            {isUserSender && (
+              <button
+                onClick={() => setShowTopUp(true)}
+                className={`flex-shrink-0 text-xs font-semibold underline underline-offset-2 ${
+                  isCritical ? "text-red-300 hover:text-red-200" : "text-orange-300 hover:text-orange-200"
+                }`}
+              >
+                Add money
+              </button>
+            )}
+          </div>
+        );
+      })()}
+
       {/* Analytics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
         <Card className="glass-card">
           <CardContent className="pt-4 md:pt-6 px-3 md:px-6">
             <p className="text-xl md:text-2xl font-bold">{fmtToken(stream.totalAmount)}</p>
-            <p className="text-xs md:text-sm text-muted-foreground mt-1">Stream Amount</p>
+            <p className="text-xs md:text-sm text-muted-foreground mt-1">Plan amount</p>
           </CardContent>
         </Card>
         <Card className="glass-card">
@@ -579,7 +711,7 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
             <p className="text-xl md:text-2xl font-bold text-blue-500">
               {fmtToken(stream.depositAmount)}
             </p>
-            <p className="text-xs md:text-sm text-muted-foreground mt-1">Vault Deposit</p>
+            <p className="text-xs md:text-sm text-muted-foreground mt-1">Set aside</p>
           </CardContent>
         </Card>
         <Card className="glass-card">
@@ -587,7 +719,7 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
             <p className="text-xl md:text-2xl font-bold text-green-500">
               {stream.vaultBalance !== undefined ? fmtToken(stream.vaultBalance) : "—"}
             </p>
-            <p className="text-xs md:text-sm text-muted-foreground mt-1">Vault Balance (live)</p>
+            <p className="text-xs md:text-sm text-muted-foreground mt-1">Left to flow</p>
           </CardContent>
         </Card>
         <Card className="glass-card">
@@ -605,7 +737,7 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
         <Card className="glass-card">
           <CardContent className="pt-4 pb-4 px-6">
             <div className="flex justify-between text-sm mb-2">
-              <span className="text-muted-foreground">Stream progress</span>
+              <span className="text-muted-foreground">Plan progress</span>
               <span className="font-medium tabular-nums">{stream.percentComplete.toFixed(1)}%</span>
             </div>
             <div className="w-full h-2 bg-muted/40 rounded-full overflow-hidden">
@@ -626,7 +758,7 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
       <Card className="glass-card">
         <CardHeader>
           <CardTitle>
-            Recipients ({stream.recipients.length})
+            Buckets ({stream.recipients.length})
             {activeRecipients.length < stream.recipients.length && (
               <span className="text-sm font-normal text-muted-foreground ml-2">
                 · {activeRecipients.length} active
@@ -636,7 +768,7 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
         </CardHeader>
         <CardContent>
           {stream.recipients.length === 0 ? (
-            <p className="text-center text-muted-foreground py-6">No recipients</p>
+            <p className="text-center text-muted-foreground py-6">No buckets</p>
           ) : (
             <div className="space-y-3">
               {stream.recipients.map((recipient, i) => (
@@ -648,7 +780,6 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
                   tokenSymbol={symbol}
                   tokenDecimals={decimals}
                   isSender={isUserSender}
-                  isLocked={isLocked}
                   isStreamActive={isLive}
                 />
               ))}
@@ -662,26 +793,49 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
         <CardContent className="pt-6">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div className="space-y-1">
-              <p className="text-xs text-muted-foreground">Stream ID</p>
+              <p className="text-xs text-muted-foreground">Plan ID</p>
               <p className="font-mono text-sm">{streamId.toString()}</p>
               <p className="text-xs text-muted-foreground mt-2">Vault address</p>
               <p className="font-mono text-xs">{stream.vault}</p>
             </div>
-            <Button variant="outline" asChild>
-              <a href={`${explorerBase}/address/${stream.vault}`} target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="h-4 w-4 mr-2" />
-                View Vault on Explorer
-              </a>
-            </Button>
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                variant="outline" size="sm"
+                onClick={() => {
+                  const url = `${window.location.origin}/streams/${streamId.toString()}`;
+                  if (navigator.share) {
+                    navigator.share({ title: stream.title || `Plan #${streamId}`, url });
+                  } else {
+                    navigator.clipboard.writeText(url);
+                    toast.success("Plan link copied!");
+                  }
+                }}
+              >
+                <Share2 className="h-4 w-4 mr-2" /> Share
+              </Button>
+              <Button variant="outline" asChild>
+                <a href={`${explorerBase}/address/${stream.vault}`} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  View Vault on Explorer
+                </a>
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
 
       {/* Modals */}
-      <LockRateModal
+      <TopUpModal
         streamId={streamId}
-        isOpen={showLock}
-        onClose={() => setShowLock(false)}
+        vaultAddress={stream.vault as `0x${string}`}
+        tokenAddress={stream.token as `0x${string}`}
+        tokenSymbol={symbol}
+        tokenDecimals={decimals}
+        totalFlowRate={stream.totalFlowRate}
+        currentVaultBalance={stream.vaultBalance ?? 0n}
+        isOpen={showTopUp}
+        onClose={() => setShowTopUp(false)}
+        onSuccess={handleRefetch}
       />
       <CancelDialog
         isOpen={showCancel}

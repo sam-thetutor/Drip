@@ -5,8 +5,17 @@ const nextConfig = {
   swcMinify: true,
   // Enable experimental features for better performance
   experimental: {
-    // Optimize package imports
-    optimizePackageImports: ['lucide-react', '@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu'],
+    // Optimize package imports — strips barrel files so dev only compiles the
+    // icons/components actually used instead of the whole package.
+    optimizePackageImports: [
+      'lucide-react',
+      '@radix-ui/react-dialog',
+      '@radix-ui/react-dropdown-menu',
+      '@radix-ui/react-select',
+      '@radix-ui/react-tabs',
+      'recharts',
+      '@rainbow-me/rainbowkit',
+    ],
     // Keep these packages external so Node can resolve runtime deps used by ODIS.
     serverComponentsExternalPackages: [
       '@celo/identity',
