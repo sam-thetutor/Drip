@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { PrivyProvider, usePrivy } from "@privy-io/react-auth";
 import { WagmiProvider, createConfig } from "@privy-io/wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -70,10 +70,20 @@ function WalletReconciler() {
   const { ready, authenticated } = usePrivy();
   const { isConnected } = useAccount();
   const { disconnect } = useDisconnect();
+  const didInit = useRef(false);
 
   useEffect(() => {
-    if (ready && !authenticated && isConnected) {
-      disconnect();
+    // Run ONLY once, on the first render where Privy is ready. Clearing a stale
+    // pre-migration connection is a load-time concern. Reacting to later state
+    // changes would disconnect an external wallet mid-login: during a MetaMask
+    // login wagmi reports `isConnected` before Privy finishes the SIWE signature
+    // (so `authenticated` is still false), and a reactive disconnect here would
+    // tear the wallet down before the signature completes, breaking the login.
+    if (ready && !didInit.current) {
+      didInit.current = true;
+      if (!authenticated && isConnected) {
+        disconnect();
+      }
     }
   }, [ready, authenticated, isConnected, disconnect]);
 
