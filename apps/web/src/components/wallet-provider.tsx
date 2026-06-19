@@ -85,10 +85,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     <PrivyProvider
       appId={PRIVY_APP_ID}
       config={{
-        // Embedded-wallet only: no external wallet connectors. This keeps Privy
-        // from bundling WalletConnect / Coinbase / Solana adapters, which were
-        // adding thousands of modules to the build.
-        loginMethods: ["email", "google"],
+        // Email + Google + external wallet (MetaMask). Kept to injected EVM
+        // wallets only (no WalletConnect / Coinbase / Solana adapters) to avoid
+        // bundling thousands of extra modules.
+        loginMethods: ["email", "google", "wallet"],
         embeddedWallets: {
           createOnLogin: "users-without-wallets",
           showWalletUIs: true,
@@ -98,6 +98,14 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         appearance: {
           theme: "dark",
           accentColor: "#10B981",
+          // EVM-only; show all detected/standard injected wallets.
+          walletChainType: "ethereum-only",
+          walletList: [
+            "detected_wallets",
+            "metamask",
+            "coinbase_wallet",
+            "rabby_wallet",
+          ],
         },
       }}
     >
