@@ -33,6 +33,12 @@ const celoSepolia = defineChain({
 });
 
 const PRIVY_APP_ID = process.env.NEXT_PUBLIC_PRIVY_APP_ID || "";
+// WalletConnect Cloud project id — required for external wallets (MetaMask) on
+// MOBILE, where wallets aren't injected into the browser and must be reached via
+// WalletConnect deep-link. Without it, mobile MetaMask connects but fails at the
+// SIWE signing step. Desktop (extension-injected) works either way.
+const WALLETCONNECT_PROJECT_ID =
+  process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "";
 
 // IMPORTANT: createConfig + WagmiProvider come from @privy-io/wagmi (NOT wagmi),
 // so Privy drives wagmi's connector state and keeps the embedded/external wallet
@@ -95,10 +101,11 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     <PrivyProvider
       appId={PRIVY_APP_ID}
       config={{
-        // Email + Google + external wallet (MetaMask). Kept to injected EVM
-        // wallets only (no WalletConnect / Coinbase / Solana adapters) to avoid
-        // bundling thousands of extra modules.
+        // Email + Google + external wallet (MetaMask). WalletConnect is enabled
+        // so external wallets also work on mobile (deep-link signing); injected
+        // wallets continue to work on desktop.
         loginMethods: ["email", "google", "wallet"],
+        walletConnectCloudProjectId: WALLETCONNECT_PROJECT_ID,
         embeddedWallets: {
           createOnLogin: "users-without-wallets",
           showWalletUIs: true,
@@ -108,13 +115,15 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         appearance: {
           theme: "dark",
           accentColor: "#10B981",
-          // EVM-only; show all detected/standard injected wallets.
+          // EVM-only; show detected/standard injected wallets plus the
+          // WalletConnect option (the mobile fallback when nothing is injected).
           walletChainType: "ethereum-only",
           walletList: [
             "detected_wallets",
             "metamask",
             "coinbase_wallet",
             "rabby_wallet",
+            "wallet_connect",
           ],
         },
       }}
