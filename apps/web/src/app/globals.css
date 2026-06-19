@@ -168,18 +168,6 @@
     animation-delay: 1s;
   }
 
-  /* Custom RainbowKit Connect Button Styling - Match Create Stream Button */
-  :global([data-rk]) button {
-    background-color: #10B981 !important;
-    color: white !important;
-    border-color: #10B981 !important;
-  }
-
-  :global([data-rk]) button:hover {
-    background-color: #059669 !important;
-    border-color: #059669 !important;
-  }
-
   /* Dripping Animation */
   @keyframes drip {
     0% {
@@ -606,44 +594,229 @@
       opacity: 0.4;
     }
   }
+
+  /* ─── New hero: animated headline + money-flow diagram ─────────────────── */
+
+  .hero-shine {
+    background: linear-gradient(
+      110deg,
+      #10b981 0%,
+      #34d399 30%,
+      #ccfbef 48%,
+      #2dd4bf 62%,
+      #10b981 100%
+    );
+    background-size: 220% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: heroShine 6s linear infinite;
+  }
+
+  @keyframes heroShine {
+    to {
+      background-position: -220% center;
+    }
+  }
+
+  .hero-live-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: 999px;
+    padding: 0.3rem 0.85rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #5eead4;
+    border: 1px solid rgba(45, 212, 191, 0.35);
+    background: rgba(8, 24, 20, 0.6);
+  }
+
+  .hero-live-dot {
+    position: relative;
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: #2dd4bf;
+    box-shadow: 0 0 0 0 rgba(45, 212, 191, 0.6);
+    animation: liveDot 2s ease-out infinite;
+  }
+
+  @keyframes liveDot {
+    0% {
+      box-shadow: 0 0 0 0 rgba(45, 212, 191, 0.55);
+    }
+    70% {
+      box-shadow: 0 0 0 8px rgba(45, 212, 191, 0);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(45, 212, 191, 0);
+    }
+  }
+
+  /* The flow stage: pool → pipes → buckets */
+  .flow-stage {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .flow-source {
+    position: relative;
+    margin: 0 auto;
+    width: 100%;
+    max-width: 340px;
+    border-radius: 22px;
+    padding: 1.05rem 1.35rem;
+    text-align: center;
+    background: linear-gradient(
+      135deg,
+      rgba(16, 185, 129, 0.2),
+      rgba(45, 212, 191, 0.08)
+    );
+    border: 1px solid rgba(16, 185, 129, 0.45);
+    box-shadow: 0 0 44px rgba(16, 185, 129, 0.25),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    animation: floatY 6s ease-in-out infinite;
+  }
+
+  @keyframes floatY {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-5px);
+    }
+  }
+
+  .flow-pipes {
+    display: block;
+    width: 100%;
+    height: 78px;
+    margin-top: -2px;
+  }
+
+  .flow-pipe {
+    fill: none;
+    stroke: rgba(16, 185, 129, 0.16);
+    stroke-width: 2.5;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .flow-pipe-active {
+    fill: none;
+    stroke: #2dd4bf;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-dasharray: 5 11;
+    vector-effect: non-scaling-stroke;
+    filter: drop-shadow(0 0 4px rgba(45, 212, 191, 0.7));
+    animation: flowDash 0.9s linear infinite;
+  }
+
+  .flow-pipe-active.delay-1 {
+    animation-delay: -0.3s;
+  }
+  .flow-pipe-active.delay-2 {
+    animation-delay: -0.6s;
+  }
+
+  @keyframes flowDash {
+    to {
+      stroke-dashoffset: -32;
+    }
+  }
+
+  .flow-buckets {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.6rem;
+  }
+
+  .flow-bucket {
+    position: relative;
+    overflow: hidden;
+    border-radius: 16px;
+    min-height: 104px;
+    padding: 0.7rem;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: space-between;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(6, 16, 13, 0.72);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+  }
+
+  .flow-bucket-liquid {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-top: 1.5px solid rgba(94, 234, 212, 0.7);
+    background: linear-gradient(
+      to top,
+      rgba(16, 185, 129, 0.55),
+      rgba(45, 212, 191, 0.18)
+    );
+    animation: liquidFill 5.5s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  .flow-bucket-liquid.b1 {
+    animation-delay: 0s;
+  }
+  .flow-bucket-liquid.b2 {
+    animation-delay: -1.8s;
+  }
+  .flow-bucket-liquid.b3 {
+    animation-delay: -3.4s;
+  }
+
+  @keyframes liquidFill {
+    0%,
+    100% {
+      height: 32%;
+    }
+    50% {
+      height: 68%;
+    }
+  }
+
+  .flow-bucket-icon {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 10px;
+    color: #062019;
+    background: linear-gradient(135deg, #34d399, #2dd4bf);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+  }
+
+  .flow-bucket-label {
+    position: relative;
+    z-index: 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hero-shine,
+    .hero-live-dot,
+    .flow-source,
+    .flow-pipe-active,
+    .flow-bucket-liquid {
+      animation: none !important;
+    }
+    .flow-bucket-liquid {
+      height: 50%;
+    }
+  }
 }
 
-/* Custom RainbowKit Connect Button Styling - Match Create Stream Button (Green) */
-/* Comprehensive targeting for RainbowKit ConnectButton */
-.connect-button-wrapper button,
-.connect-button-wrapper [role="button"],
-.connect-button-wrapper button[aria-label*="Connect"],
-.connect-button-wrapper button[data-testid],
-.connect-button-wrapper [data-rk] button,
-button[aria-label*="Connect"],
-button[aria-label*="Account"],
-button[data-testid="rk-connect-button"] {
-  background-color: #10B981 !important;
-  color: white !important;
-  border: none !important;
-  font-weight: 500 !important;
-  transition: background-color 0.2s ease !important;
-}
-
-.connect-button-wrapper button:hover,
-.connect-button-wrapper [role="button"]:hover,
-.connect-button-wrapper button[aria-label*="Connect"]:hover,
-.connect-button-wrapper button[data-testid]:hover,
-.connect-button-wrapper [data-rk] button:hover,
-button[aria-label*="Connect"]:hover,
-button[data-testid="rk-connect-button"]:hover {
-  background-color: #059669 !important;
-}
-
-/* Global RainbowKit button override - exclude account button when connected */
-[data-rk] button:not([data-testid="rk-account-button"]),
-[data-rk] > div > button {
-  background-color: #10B981 !important;
-  color: white !important;
-  border: none !important;
-}
-
-[data-rk] button:not([data-testid="rk-account-button"]):hover,
-[data-rk] > div > button:hover {
-  background-color: #059669 !important;
-}

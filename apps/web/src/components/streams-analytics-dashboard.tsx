@@ -116,7 +116,7 @@ export function StreamsAnalyticsDashboard() {
     return Object.entries(ranges)
       .filter(([_, count]) => count > 0)
       .map(([range, count]) => ({
-        name: `${range} recipients`,
+        name: `${range} buckets`,
         count,
       }));
   }, [streamsAnalytics]);
@@ -189,6 +189,19 @@ export function StreamsAnalyticsDashboard() {
       }));
   }, [streamsAnalytics]);
 
+  // Must be declared before any conditional returns — Rules of Hooks
+  const uniqueTokens = useMemo(() => {
+    const tokens = new Set<string>();
+    streamsAnalytics.forEach((stream) => tokens.add(stream.token));
+    return Array.from(tokens).map((token) => {
+      const stream = streamsAnalytics.find((s) => s.token === token);
+      return {
+        address: token,
+        symbol: stream?.tokenSymbol || "Unknown",
+      };
+    });
+  }, [streamsAnalytics]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -209,7 +222,7 @@ export function StreamsAnalyticsDashboard() {
   if (!streamsAnalytics || streamsAnalytics.length === 0) {
     return (
       <div className="glass-card rounded-lg p-8 text-center">
-        <p className="text-muted-foreground">No streams data available</p>
+        <p className="text-muted-foreground">No plan data yet</p>
       </div>
     );
   }
@@ -295,27 +308,14 @@ export function StreamsAnalyticsDashboard() {
     }
   };
 
-  // Get unique tokens for token filter
-  const uniqueTokens = useMemo(() => {
-    const tokens = new Set<string>();
-    streamsAnalytics.forEach((stream) => tokens.add(stream.token));
-    return Array.from(tokens).map((token) => {
-      const stream = streamsAnalytics.find((s) => s.token === token);
-      return {
-        address: token,
-        symbol: stream?.tokenSymbol || "Unknown",
-      };
-    });
-  }, [streamsAnalytics]);
-
   return (
     <div className="space-y-6">
       {/* Export Button */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">Streams Analytics</h2>
+          <h2 className="text-2xl font-bold">Insights</h2>
           <p className="text-muted-foreground text-sm">
-            Comprehensive analytics and data for all your streams
+            A full breakdown of all your plans and where your money goes
           </p>
         </div>
         <DropdownMenu>
@@ -386,8 +386,8 @@ export function StreamsAnalyticsDashboard() {
         {/* Stream Status Distribution */}
         <PieChart
           data={statusDistributionData}
-          title="Stream Status Distribution"
-          description="Breakdown of streams by status"
+          title="Plan Status Distribution"
+          description="Breakdown of plans by status"
           height={300}
         />
 
@@ -395,7 +395,7 @@ export function StreamsAnalyticsDashboard() {
         <PieChart
           data={tokenDistributionData}
           title="Token Distribution"
-          description="Percentage of streams by token type"
+          description="Percentage of plans by token type"
           height={300}
         />
 
@@ -413,11 +413,11 @@ export function StreamsAnalyticsDashboard() {
         {/* Recipients Distribution */}
         <BarChart
           data={recipientsDistributionData}
-          dataKeys={[{ key: "count", name: "Number of Streams" }]}
-          title="Recipients Distribution"
-          description="Number of streams by recipient count"
+          dataKeys={[{ key: "count", name: "Number of Plans" }]}
+          title="Buckets Distribution"
+          description="Number of plans by bucket count"
           height={300}
-          yAxisLabel="Streams"
+          yAxisLabel="Plans"
         />
 
         {/* Outflow Over Time */}

@@ -67,7 +67,7 @@ export default function LeaderboardPage() {
             Leaderboard
           </h1>
           <p className="text-sm text-muted-foreground mt-1 max-w-md">
-            See who is most active creating and withdrawing from streams. Activity here
+            See who is most active setting up plans and withdrawing from them. Activity here
             earns points towards the daily rewards pool.
           </p>
         </div>
@@ -102,7 +102,7 @@ export default function LeaderboardPage() {
             </div>
           ) : entries.length === 0 ? (
             <div className="p-6 text-sm text-muted-foreground">
-              No activity yet. Create a stream or withdraw from one to appear here.
+              No activity yet. Set up a plan or withdraw from one to appear here.
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -112,7 +112,7 @@ export default function LeaderboardPage() {
                     <th className="px-4 py-3">Rank</th>
                     <th className="px-4 py-3">Address</th>
                     <th className="px-4 py-3 hidden md:table-cell">
-                      Streams Created
+                      Plans Created
                     </th>
                     <th className="px-4 py-3 hidden md:table-cell">
                       Withdrawals

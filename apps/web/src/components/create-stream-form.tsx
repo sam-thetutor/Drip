@@ -1,745 +1,1057 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useRef, useMemo } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useAccount, useChainId } from "wagmi";
-import { useDrip } from "@/lib/contracts";
-import { useEngagementRewards } from "@/lib/gooddollar/hooks/useEngagementRewards";
+import { useAccount, useChainId, useReadContract, usePublicClient } from "wagmi";
+import { erc20Abi, parseUnits, formatUnits, maxUint256 } from "viem";
+import { useCreateDripV4Stream, useUsdcSwapQuote } from "@/lib/contracts/hooks/useDripV4";
+import { useRefetchBalances } from "@/lib/contracts/hooks/useRefetchBalances";
+import { getContractAddress } from "@/lib/contracts/config";
+import { TokenSelector, getTokenByAddress } from "@/components/token-selector";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { TokenSelector, getTokenByAddress } from "@/components/token-selector";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, X, Loader2 } from "lucide-react";
+import {
+  Plus, X, Loader2, CheckCircle, AlertTriangle,
+  ChevronDown, Calendar, Coins, Users, Wallet, Repeat,
+} from "lucide-react";
 import { toast } from "sonner";
-import { parseEther, formatEther, parseUnits, formatUnits, maxUint256 } from "viem";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+
+// ─── Schema ───────────────────────────────────────────────────────────────────
 
 const streamSchema = z.object({
   recipients: z
     .array(
       z.object({
         address: z.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid address"),
-        amountPerPeriod: z.string().min(1, "Amount required").refine(
-          (val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0,
-          "Must be a positive number"
-        ),
+        amountPerPeriod: z
+          .string()
+          .min(1, "Required")
+          .refine((v) => !isNaN(parseFloat(v)) && parseFloat(v) > 0, "Must be > 0"),
       })
     )
-    .min(1, "At least one recipient required"),
-  token: z.string().regex(/^0x[a-fA-F0-9]{40}$/, "Token required"),
-  cadence: z.enum(["per_minute", "hourly", "daily", "weekly", "monthly", "quarterly"], {
-    required_error: "Choose how often it should drip",
-  }),
-  totalPeriods: z.string().min(1, "Total periods required").refine(
-    (val) => !isNaN(parseInt(val)) && parseInt(val) > 0,
-    "Must be a positive integer"
-  ),
-  title: z.string().max(120, "Title too long").optional(),
-  description: z.string().max(1024, "Description too long").optional(),
+    .min(1, "At least one recipient"),
+  token: z.string().regex(/^0x[a-fA-F0-9]{40}$/, "Pick a token"),
+  cadence: z.enum(["per_minute", "hourly", "daily", "weekly", "monthly", "quarterly"]),
+  totalPeriods: z
+    .string()
+    .min(1, "Required")
+    .refine((v) => !isNaN(parseInt(v)) && parseInt(v) > 0, "Must be > 0"),
+  title: z.string().max(120).optional(),
+  description: z.string().max(1024).optional(),
 });
 
-type StreamFormData = z.infer<typeof streamSchema>;
+type FormData = z.infer<typeof streamSchema>;
+type CadenceKey = FormData["cadence"];
 
-type CadenceOption = StreamFormData["cadence"];
-
-// ---------------------------------------------------------------------------
-// Test phone-to-address lookup map.
-// Replace / extend these entries to test the feature with real wallets.
-// ---------------------------------------------------------------------------
-const PHONE_ADDRESS_MAP: Record<string, `0x${string}`> = {
-  "+2348012345678": "0x1234567890123456789012345678901234567890",
-  "+2347098765432": "0xAbCdEf0123456789AbCdEf0123456789AbCdEf01",
-  "+14155552671":   "0xDeAdBeEf00000000000000000000000000000001",
-  "+447911123456":  "0xCaFeBaBe00000000000000000000000000000002",
+const CADENCE_SECONDS: Record<CadenceKey, number> = {
+  per_minute: 60, hourly: 3_600, daily: 86_400,
+  weekly: 604_800, monthly: 2_592_000, quarterly: 7_776_000,
 };
+const CADENCE_SHORT: Record<CadenceKey, string> = {
+  per_minute: "min", hourly: "hr", daily: "day",
+  weekly: "wk", monthly: "mo", quarterly: "qtr",
+};
+const CADENCE_LABEL: Record<CadenceKey, string> = {
+  per_minute: "Every minute", hourly: "Every hour", daily: "Every day",
+  weekly: "Every week", monthly: "Every month", quarterly: "Every quarter",
+};
+
+const BUFFER_SECONDS = 14_400n;
+
+// USDC on Celo (plain ERC20 — not streamable directly, so it funds G$ streams via swap)
+const USDC_ADDRESS  = "0xcebA9300f2b948710d2653dD7B07f33A8B32118C" as `0x${string}`;
+const USDC_DECIMALS = 6;
+const GD_ADDRESS    = "0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A" as `0x${string}`;
+
+type FundWith = "GD" | "USDC";
+
+// ─── Tx phase ─────────────────────────────────────────────────────────────────
+
+type TxPhase = "idle" | "approving" | "waitApprove" | "creating" | "waitCreate";
+
+function phaseLabel(phase: TxPhase, sym: string, needsApprove: boolean): string {
+  switch (phase) {
+    case "approving":    return `Approve ${sym} in wallet · step 1 of 2`;
+    case "waitApprove":  return `Waiting for ${sym} approval · step 1 of 2`;
+    case "creating":     return needsApprove ? "Confirm plan in wallet · step 2 of 2" : "Confirm plan in wallet…";
+    case "waitCreate":   return needsApprove ? "Starting plan on-chain · step 2 of 2" : "Starting plan on-chain…";
+    default:             return "";
+  }
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function fmtWei(wei: bigint, decimals: number, symbol: string, fractions = 4) {
+  const n = parseFloat(formatUnits(wei, decimals));
+  return `${n < 0.0001 && n > 0 ? n.toExponential(2) : n.toFixed(fractions)} ${symbol}`;
+}
+function fmtDateFull(d: Date) {
+  return d.toLocaleString(undefined, {
+    day: "numeric", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+}
+function fmtDateShort(d: Date) {
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
+
+// ─── Duration hint helper ──────────────────────────────────────────────────────
+
+function humanDuration(cadence: CadenceKey, n: number): string {
+  if (!n || n <= 0) return "";
+  const totalSecs = CADENCE_SECONDS[cadence] * n;
+  const years  = totalSecs / (365.25 * 86400);
+  const months = totalSecs / 2_592_000;
+  const weeks  = totalSecs / 604_800;
+  const days   = totalSecs / 86_400;
+  const hours  = totalSecs / 3_600;
+  const mins   = totalSecs / 60;
+  if (years   >= 0.95) return `≈ ${Math.round(years  * 10) / 10} year${years  >= 1.95 ? "s" : ""}`;
+  if (months  >= 0.9)  return `≈ ${Math.round(months)} month${Math.round(months) !== 1 ? "s" : ""}`;
+  if (weeks   >= 0.9)  return `≈ ${Math.round(weeks)} week${Math.round(weeks) !== 1 ? "s" : ""}`;
+  if (days    >= 0.9)  return `≈ ${Math.round(days)} day${Math.round(days) !== 1 ? "s" : ""}`;
+  if (hours   >= 0.9)  return `≈ ${Math.round(hours)} hour${Math.round(hours) !== 1 ? "s" : ""}`;
+  return `≈ ${Math.round(mins)} min${Math.round(mins) !== 1 ? "s" : ""}`;
+}
+
+// ─── Section header ───────────────────────────────────────────────────────────
+
+function SectionHeader({ icon: Icon, title }: { icon: React.ElementType; title: string }) {
+  return (
+    <div className="flex items-center gap-3 mb-5">
+      <div className="flex items-center justify-center w-7 h-7 rounded-full bg-primary/15 border border-primary/30 shrink-0">
+        <Icon className="h-3.5 w-3.5 text-primary" />
+      </div>
+      <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+      <div className="flex-1 h-px bg-border" />
+    </div>
+  );
+}
+
+// ─── Step pill (shown while a tx is in flight) ────────────────────────────────
+
+function TxProgressPill({ phase, sym }: { phase: TxPhase; sym: string }) {
+  if (phase === "idle") return null;
+  const steps = [
+    { key: "approve", label: `Approve ${sym}`, done: phase === "creating" || phase === "waitCreate" },
+    { key: "create",  label: "Start plan",     done: phase === "waitCreate" },
+  ];
+  const approveNeeded = phase === "approving" || phase === "waitApprove";
+
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
+      {approveNeeded && (
+        <>
+          <div className="flex items-center gap-2 text-sm">
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+            <span className="font-medium text-primary">Approve {sym}</span>
+          </div>
+          <span className="text-muted-foreground/40 text-xs">→</span>
+          <span className="text-sm text-muted-foreground">Start plan</span>
+        </>
+      )}
+      {!approveNeeded && (
+        <>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />
+            <span>{sym} approved</span>
+          </div>
+          <span className="text-muted-foreground/40 text-xs">→</span>
+          <div className="flex items-center gap-2 text-sm">
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+            <span className="font-medium text-primary">Start plan</span>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── Summary card ─────────────────────────────────────────────────────────────
+
+interface SwapInfo {
+  usdcIn: bigint;
+  maxUsdcIn: bigint;
+  loading: boolean;
+  error: boolean;
+}
+
+interface SummaryProps {
+  tokenMeta: { symbol: string; decimals: number } | undefined;
+  tokenBalance: bigint | undefined;
+  totalAmountWei: bigint;
+  depositWei: bigint;
+  estimatedEndDate: Date | null;
+  needsApproval: boolean;
+  hasInsufficientBalance: boolean;
+  zeroRateIndices: number[];
+  phase: TxPhase;
+  onAction: () => void;
+  canSubmit: boolean;
+  fundingSymbol: string;
+  fundingDecimals: number;
+  fundingBalance: bigint | undefined;
+  swap: SwapInfo | null;
+}
+
+function SummaryCard({
+  tokenMeta, tokenBalance, totalAmountWei, depositWei,
+  estimatedEndDate, needsApproval, hasInsufficientBalance,
+  zeroRateIndices, phase, onAction, canSubmit, fundingSymbol, fundingDecimals, fundingBalance, swap,
+}: SummaryProps) {
+  const sym = tokenMeta?.symbol ?? "—";
+  const dec = tokenMeta?.decimals ?? 18;
+  const bufferWei = depositWei > totalAmountWei ? depositWei - totalAmountWei : 0n;
+  const bufferPct = totalAmountWei > 0n ? Math.round(Number((bufferWei * 100n) / totalAmountWei)) : 0;
+  const isBusy    = phase !== "idle";
+  const hasError  = hasInsufficientBalance || zeroRateIndices.length > 0;
+  const swapBlocked = swap ? (swap.loading || swap.error || swap.maxUsdcIn === 0n) : false;
+  const isReady   = canSubmit && !hasError && depositWei > 0n && !swapBlocked;
+  const usdcFmt = (wei: bigint) => `${parseFloat(formatUnits(wei, USDC_DECIMALS)).toFixed(2)} USDC`;
+
+  return (
+    <div className="space-y-3">
+      {/* Summary card */}
+      <div className="glass-card rounded-xl border border-white/8 p-5 space-y-4">
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Summary</p>
+
+        {depositWei === 0n ? (
+          <p className="text-sm text-muted-foreground text-center py-6 leading-relaxed">
+            Fill in the form to see<br />a live breakdown
+          </p>
+        ) : (
+          <>
+            <div className="space-y-2.5">
+              <div className="flex justify-between items-baseline text-sm">
+                <span className="text-muted-foreground">Total amount</span>
+                <span className="font-medium tabular-nums">{fmtWei(totalAmountWei, dec, sym)}</span>
+              </div>
+              <div className="flex justify-between items-baseline text-sm">
+                <span className="text-muted-foreground">
+                  Safety buffer
+                  {bufferPct > 0 && <span className="ml-1 text-xs opacity-60">(returned on end)</span>}
+                </span>
+                <span className="text-amber-400 tabular-nums">+{fmtWei(bufferWei, dec, sym)}</span>
+              </div>
+              <div className="flex justify-between items-baseline border-t border-border/60 pt-2.5">
+                <span className="font-semibold text-sm">Total to set aside</span>
+                <span className={`font-bold text-base tabular-nums ${hasError ? "text-red-400" : "text-primary"}`}>
+                  {fmtWei(depositWei, dec, sym)}
+                </span>
+              </div>
+
+              {/* USDC funding line — when paying with USDC via swap */}
+              {swap && (
+                <div className="flex justify-between items-baseline rounded-lg bg-blue-500/8 border border-blue-500/15 px-3 py-2 mt-1">
+                  <span className="flex items-center gap-1.5 text-sm text-blue-300">
+                    <Repeat className="h-3.5 w-3.5" /> You pay (auto-swap)
+                  </span>
+                  {swap.loading ? (
+                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Loader2 className="h-3 w-3 animate-spin" /> quoting…
+                    </span>
+                  ) : swap.error || swap.usdcIn === 0n ? (
+                    <span className="text-xs text-red-400">quote unavailable</span>
+                  ) : (
+                    <span className="font-bold text-sm tabular-nums text-blue-300">≈ {usdcFmt(swap.usdcIn)}</span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {estimatedEndDate && (
+              <div className="flex items-start gap-2.5 rounded-lg bg-primary/8 border border-primary/15 px-3 py-2.5">
+                <Calendar className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs text-muted-foreground leading-none mb-0.5">Plan ends</p>
+                  <p className="text-sm font-semibold text-primary">{fmtDateShort(estimatedEndDate)}</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {estimatedEndDate.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {(swap ? fundingBalance : tokenBalance) !== undefined && (
+              <div className={`flex justify-between items-baseline text-sm border-t border-border/40 pt-3 ${hasInsufficientBalance ? "text-red-400" : "text-muted-foreground"}`}>
+                <span>Your {fundingSymbol} balance</span>
+                <span className="tabular-nums font-medium">
+                  {swap
+                    ? fmtWei(fundingBalance ?? 0n, fundingDecimals, fundingSymbol, 2)
+                    : fmtWei(tokenBalance ?? 0n, dec, sym)}
+                  {hasInsufficientBalance && " ⚠"}
+                </span>
+              </div>
+            )}
+
+            {/* High buffer warning */}
+            {bufferPct > 20 && totalAmountWei > 0n && !isBusy && (
+              <div className="flex items-start gap-2 rounded-lg border border-orange-500/25 bg-orange-500/5 px-3 py-2">
+                <AlertTriangle className="h-3.5 w-3.5 text-orange-400 shrink-0 mt-0.5" />
+                <p className="text-xs text-orange-400 leading-relaxed">
+                  The safety buffer is <span className="font-semibold">{bufferPct}% of the payout amount</span>.
+                  This is common for short plans — it is <span className="font-semibold">fully returned</span> when the plan ends.
+                </p>
+              </div>
+            )}
+
+            {/* Approval notice */}
+            {needsApproval && !isBusy && (
+              <div className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2">
+                <AlertTriangle className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-400 leading-relaxed">
+                  Two steps required: first approve {fundingSymbol}, then start the plan.
+                </p>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Errors */}
+      {hasInsufficientBalance && depositWei > 0n && (
+        <div className="flex gap-2 rounded-lg border border-red-500/25 bg-red-500/8 p-3 text-xs text-red-400">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+          Insufficient {fundingSymbol} balance
+          {swap && swap.maxUsdcIn > 0n ? ` — you need ≈ ${usdcFmt(swap.maxUsdcIn)}.` : ` — you need ${fmtWei(depositWei, dec, sym)}.`}
+        </div>
+      )}
+      {zeroRateIndices.length > 0 && (
+        <div className="flex gap-2 rounded-lg border border-red-500/25 bg-red-500/8 p-3 text-xs text-red-400">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+          Recipient{zeroRateIndices.length > 1 ? "s" : ""}{" "}
+          {zeroRateIndices.map((i) => i + 1).join(", ")}: amount too small for this cadence.
+        </div>
+      )}
+
+        {bufferPct > 0 && bufferPct <= 20 && !isBusy && (
+          <p className="text-[11px] text-muted-foreground leading-relaxed px-1">
+            The safety buffer is a protocol requirement — it's returned in full when the plan ends or is cancelled.
+          </p>
+        )}
+
+      {/* CTA — desktop only */}
+      <div className="hidden lg:block space-y-2">
+        <Button
+          type="button" className="w-full" size="lg"
+          onClick={onAction}
+          disabled={isBusy || !isReady}
+        >
+          {isBusy ? (
+            <><Loader2 className="h-4 w-4 mr-2 animate-spin" />{phaseLabel(phase, fundingSymbol, needsApproval)}</>
+          ) : isReady ? (
+            <><CheckCircle className="h-4 w-4 mr-2" />{swap ? "Swap, set aside & start plan" : "Set aside & start plan"}</>
+          ) : (
+            <>Fill in the form above</>
+          )}
+        </Button>
+
+        {/* Deposit amount sub-label */}
+        {isReady && !isBusy && (
+          <p className="text-center text-xs text-muted-foreground">
+          {swap && swap.usdcIn > 0n
+              ? `≈ ${usdcFmt(swap.usdcIn)} swapped to ${fmtWei(depositWei, dec, sym)} of G$`
+              : needsApproval
+              ? `Approve ${fundingSymbol}, then set aside ${fmtWei(depositWei, dec, sym)} to start`
+              : `${fmtWei(depositWei, dec, sym)} set aside for this plan`}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Mobile bottom bar ────────────────────────────────────────────────────────
+
+function MobileBottomBar({
+  tokenMeta, tokenBalance, totalAmountWei, depositWei,
+  needsApproval, hasInsufficientBalance, zeroRateIndices,
+  phase, onAction, canSubmit, fundingSymbol, swap,
+}: Omit<SummaryProps, "estimatedEndDate">) {
+  const [expanded, setExpanded] = useState(false);
+  const sym = tokenMeta?.symbol ?? "—";
+  const dec = tokenMeta?.decimals ?? 18;
+  const bufferWei = depositWei > totalAmountWei ? depositWei - totalAmountWei : 0n;
+  const isBusy    = phase !== "idle";
+  const hasError  = hasInsufficientBalance || zeroRateIndices.length > 0;
+  const swapBlocked = swap ? (swap.loading || swap.error || swap.maxUsdcIn === 0n) : false;
+  const isReady   = canSubmit && !hasError && depositWei > 0n && !swapBlocked;
+  const usdcFmt = (wei: bigint) => `${parseFloat(formatUnits(wei, USDC_DECIMALS)).toFixed(2)} USDC`;
+
+  return (
+    <div className="fixed bottom-16 md:bottom-0 left-0 right-0 z-50 lg:hidden">
+      {expanded && (
+        <div className="border-t border-border bg-card/95 backdrop-blur-xl px-4 py-4 space-y-2.5">
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Total amount</span>
+            <span className="tabular-nums font-medium">{fmtWei(totalAmountWei, dec, sym)}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Safety buffer (returned)</span>
+            <span className="text-amber-400 tabular-nums">{fmtWei(bufferWei, dec, sym)}</span>
+          </div>
+          {tokenBalance !== undefined && (
+            <div className={`flex justify-between text-sm ${hasInsufficientBalance ? "text-red-400" : "text-muted-foreground"}`}>
+              <span>Your balance</span>
+              <span className="tabular-nums">{fmtWei(tokenBalance, dec, sym)}</span>
+            </div>
+          )}
+          {swap && swap.usdcIn > 0n && (
+            <div className="flex justify-between text-sm text-blue-300">
+              <span>You pay (auto-swap)</span>
+              <span className="tabular-nums">≈ {usdcFmt(swap.usdcIn)}</span>
+            </div>
+          )}
+          {needsApproval && (
+            <p className="text-[11px] text-amber-400 pt-1">
+              Two steps: approve {fundingSymbol}, then start the plan.
+            </p>
+          )}
+        </div>
+      )}
+
+      <div className="border-t border-border bg-card/95 backdrop-blur-xl px-4 py-3 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => setExpanded((e) => !e)}
+          className="flex flex-col items-start flex-1 min-w-0"
+        >
+          <span className="text-[11px] text-muted-foreground">{swap ? "You pay" : "Total to set aside"}</span>
+          <span className={`text-base font-bold tabular-nums leading-tight ${hasError ? "text-red-400" : "text-primary"}`}>
+            {swap
+              ? (swap.usdcIn > 0n ? usdcFmt(swap.usdcIn) : "—")
+              : (depositWei > 0n ? fmtWei(depositWei, dec, sym) : "—")}
+          </span>
+        </button>
+        <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform shrink-0 ${expanded ? "rotate-180" : ""}`} />
+
+        <Button
+          type="button" size="sm"
+          onClick={onAction}
+          disabled={isBusy || !isReady}
+          className="shrink-0"
+        >
+          {isBusy
+            ? <Loader2 className="h-4 w-4 animate-spin" />
+            : "Set up plan"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main form ────────────────────────────────────────────────────────────────
 
 export function CreateStreamForm() {
   const { address, isConnected } = useAccount();
-  const chainId = useChainId();
-  const router = useRouter();
+  const chainId      = useChainId();
+  const router       = useRouter();
+  const publicClient = usePublicClient();
+  const dripV4Addr   = getContractAddress(chainId, "DripV4");
   const searchParams = useSearchParams();
-  const { createStream, approveToken, checkTokenAllowance, isPending, isConfirming, isConfirmed, hash } = useDrip();
-  const { 
-    engagementRewards, 
-    isReady: isEngagementRewardsReady, 
-    isUserRegistered, 
-    signClaim, 
-    getCurrentBlockNumber 
-  } = useEngagementRewards();
-  const [calculatedDeposit, setCalculatedDeposit] = useState<string>("0");
-  const [needsApproval, setNeedsApproval] = useState<boolean>(false);
-  const [approvalAmount, setApprovalAmount] = useState<string>("0");
-  // recipientInputs: raw text the user typed (address or phone)
-  const [recipientInputs, setRecipientInputs] = useState<Record<number, string>>({});
-  // resolvedFromPhone: the phone string that successfully resolved for each index
-  const [resolvedFromPhone, setResolvedFromPhone] = useState<Record<number, string | null>>({});
-  const [phoneNotFound, setPhoneNotFound] = useState<Record<number, boolean>>({});
-  
-  // Get inviter from URL params (for referral links)
-  const inviterFromUrl = searchParams?.get("inviter") as `0x${string}` | null;
-  
-  // Get inviter from localStorage (if previously set)
-  const [inviter, setInviter] = useState<`0x${string}` | null>(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("drip_inviter");
-      if (stored && /^0x[a-fA-F0-9]{40}$/.test(stored)) {
-        return stored as `0x${string}`;
-      }
-    }
-    return inviterFromUrl;
-  });
+
+  // Pre-fill recipient from ?recipient= query param (set by QR code share link)
+  const prefillRecipient = searchParams.get("recipient") ?? "";
+
+  const { approveToken, createStream, createStreamWithSwap } = useCreateDripV4Stream();
+  const refetchBalances = useRefetchBalances();
+
+  // Single phase state drives all UI
+  const [phase,         setPhase]         = useState<TxPhase>("idle");
+  // Track whether approval was triggered in this session (for phase label)
+  const [didApprove,    setDidApprove]    = useState(false);
+  // Funding source: stream is always G$; pay with G$ directly or USDC (auto-swap)
+  const [fundWith,      setFundWith]      = useState<FundWith>("GD");
+
+  // Phone resolution
+  const [recipientInputs,   setRecipientInputs]   = useState<Record<number, string>>(
+    prefillRecipient ? { 0: prefillRecipient } : {}
+  );
+  const [resolvedFromEmail, setResolvedFromEmail] = useState<Record<number, string | null>>({});
+  const [emailError,        setEmailError]        = useState<Record<number, boolean>>({});
+  const [resolvingEmail,    setResolvingEmail]    = useState<Record<number, boolean>>({});
+  const inputsRef = useRef<Record<number, string>>({});
+  const cacheRef  = useRef<Record<string, `0x${string}` | null>>({});
 
   const {
-    register,
-    control,
-    handleSubmit,
-    watch,
-    setValue,
+    register, control, handleSubmit, watch, setValue,
     formState: { errors },
-  } = useForm<StreamFormData>({
+  } = useForm<FormData>({
     resolver: zodResolver(streamSchema),
     defaultValues: {
-      recipients: [{ address: "", amountPerPeriod: "" }],
-      token: "0x0000000000000000000000000000000000000000", // Default to CELO
-      cadence: "monthly",
-      totalPeriods: "30",
-      title: "",
-      description: "",
+      recipients:   [{ address: prefillRecipient.match(/^0x[a-fA-F0-9]{40}$/) ? prefillRecipient : "", amountPerPeriod: "" }],
+      token:        "0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A",
+      cadence:      "monthly",
+      totalPeriods: "12",
+      title: "", description: "",
     },
   });
 
-  const { fields, append, remove } = useFieldArray({
-    control,
-    name: "recipients",
+  const { fields, append, remove } = useFieldArray({ control, name: "recipients" });
+  const watchAll       = watch();
+  const watchedToken   = watch("token");
+  const watchedCadence = watch("cadence");
+  const watchedPeriods = watch("totalPeriods");
+  const watchedRecips  = watch("recipients");
+
+  // react-hook-form mutates the recipients array in place, so `watchedRecips`
+  // keeps a stable reference even when an amount changes. We derive a primitive
+  // key from the amounts so the memo below actually recomputes on every edit.
+  const recipAmountsKey = (watchedRecips ?? []).map((r) => r?.amountPerPeriod ?? "").join("|");
+
+  // ── Live calculations ────────────────────────────────────────────────────────
+  const { flowRates, totalAmountWei, totalFlowRateWei, depositWei, zeroRateIndices } = useMemo(() => {
+    const token = getTokenByAddress(watchedToken as `0x${string}`, chainId);
+    if (!token) return { flowRates: [], totalAmountWei: 0n, totalFlowRateWei: 0n, depositWei: 0n, zeroRateIndices: [] };
+
+    const cadenceSec = BigInt(CADENCE_SECONDS[watchedCadence] ?? 2_592_000);
+    const periods    = BigInt(Math.max(1, parseInt(watchedPeriods || "1") || 1));
+    const rates: bigint[] = [];
+    const zeros: number[] = [];
+    let totalRate = 0n, totalAmount = 0n;
+
+    watchedRecips.forEach((r, i) => {
+      const amt = parseFloat(r.amountPerPeriod || "0");
+      if (!isNaN(amt) && amt > 0) {
+        const amtWei = parseUnits(amt.toFixed(token.decimals), token.decimals);
+        const rate   = amtWei / cadenceSec;
+        rates.push(rate);
+        if (rate === 0n) zeros.push(i);
+        totalRate   += rate;
+        totalAmount += rate * cadenceSec * periods;
+      } else {
+        rates.push(0n);
+      }
+    });
+
+    return {
+      flowRates: rates,
+      totalAmountWei:   totalAmount,
+      totalFlowRateWei: totalRate,
+      depositWei:       totalAmount + totalRate * BUFFER_SECONDS,
+      zeroRateIndices:  zeros,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recipAmountsKey, watchedRecips, watchedToken, watchedCadence, watchedPeriods, chainId]);
+
+  const estimatedEndDate = useMemo(() => {
+    if (totalFlowRateWei === 0n) return null;
+    const totalSecs = CADENCE_SECONDS[watchedCadence] * Math.max(1, parseInt(watchedPeriods || "1") || 1);
+    return new Date(Date.now() + totalSecs * 1000);
+  }, [watchedCadence, watchedPeriods, totalFlowRateWei]);
+
+  // ── Token data ────────────────────────────────────────────────────────────────
+  const isERC20 = watchedToken !== "0x0000000000000000000000000000000000000000";
+
+  const { data: allowance, refetch: refetchAllowance } = useReadContract({
+    address: watchedToken as `0x${string}`,
+    abi: erc20Abi,
+    functionName: "allowance",
+    args: address && dripV4Addr ? [address, dripV4Addr as `0x${string}`] : undefined,
+    query: { enabled: isERC20 && !!address && !!dripV4Addr, refetchInterval: 10_000 },
   });
 
-  const watchedRecipients = watch("recipients");
-  const watchedToken = watch("token");
-  const watchedTotalPeriods = watch("totalPeriods");
+  const { data: tokenBalance } = useReadContract({
+    address: watchedToken as `0x${string}`,
+    abi: erc20Abi,
+    functionName: "balanceOf",
+    args: address ? [address] : undefined,
+    query: { enabled: isERC20 && !!address, refetchInterval: 15_000 },
+  });
 
-  // Check if approval is needed when token or deposit changes
-  useEffect(() => {
-    const checkApproval = async () => {
-      if (!isConnected || !address || !watchedToken || calculatedDeposit === "0") {
-        setNeedsApproval(false);
-        return;
-      }
+  const tokenMeta              = getTokenByAddress(watchedToken as `0x${string}`, chainId);
 
-      const isNativeToken = watchedToken === "0x0000000000000000000000000000000000000000";
-      if (isNativeToken) {
-        setNeedsApproval(false);
-        return;
-      }
+  // ── USDC swap funding ──────────────────────────────────────────────────────
+  // When paying with USDC, the contract swaps USDC → G$ for the full deposit (depositWei).
+  const usingSwap = fundWith === "USDC";
+  const neededGd  = usingSwap ? depositWei : 0n;
+  const { usdcIn, maxUsdcIn, isLoading: quoteLoading, isError: quoteError } = useUsdcSwapQuote(neededGd);
 
-      try {
-        const token = getTokenByAddress(watchedToken as `0x${string}`, chainId);
-        if (!token) {
-          setNeedsApproval(false);
-          return;
-        }
+  const { data: usdcAllowance, refetch: refetchUsdcAllowance } = useReadContract({
+    address: USDC_ADDRESS,
+    abi: erc20Abi,
+    functionName: "allowance",
+    args: address && dripV4Addr ? [address, dripV4Addr as `0x${string}`] : undefined,
+    query: { enabled: usingSwap && !!address && !!dripV4Addr, refetchInterval: 10_000 },
+  });
 
-        const depositInWei = parseUnits(calculatedDeposit, token.decimals);
-        // Calculate total needed (deposit + platform fee of 0.5%)
-        const platformFeeBps = 50;
-        const totalNeeded = (depositInWei * BigInt(10000)) / BigInt(10000 - platformFeeBps);
+  const { data: usdcBalance } = useReadContract({
+    address: USDC_ADDRESS,
+    abi: erc20Abi,
+    functionName: "balanceOf",
+    args: address ? [address] : undefined,
+    query: { enabled: usingSwap && !!address, refetchInterval: 15_000 },
+  });
 
-        const hasAllowance = await checkTokenAllowance(watchedToken as `0x${string}`, totalNeeded);
-        setNeedsApproval(!hasAllowance);
-        
-        if (!hasAllowance) {
-          setApprovalAmount(formatUnits(totalNeeded, token.decimals));
-        }
-      } catch (error) {
-        console.error("Error checking approval:", error);
-        setNeedsApproval(false);
-      }
-    };
+  const swapInfo: SwapInfo | null = usingSwap
+    ? { usdcIn, maxUsdcIn, loading: quoteLoading, error: quoteError }
+    : null;
 
-    // Add a small delay to avoid too many calls
-    const timeoutId = setTimeout(checkApproval, 500);
-    return () => clearTimeout(timeoutId);
-  }, [watchedToken, calculatedDeposit, isConnected, address, chainId]); // Removed checkTokenAllowance from deps
+  const fundingSymbol   = usingSwap ? "USDC" : (tokenMeta?.symbol ?? "G$");
+  const fundingDecimals = usingSwap ? USDC_DECIMALS : (tokenMeta?.decimals ?? 18);
 
-  // Calculate deposit when values change
-  useEffect(() => {
-    try {
-      const token = getTokenByAddress(watchedToken as `0x${string}`, chainId);
-      if (!token) {
-        setCalculatedDeposit("0");
-        return;
-      }
+  const needsApproval = usingSwap
+    ? (maxUsdcIn > 0n && usdcAllowance !== undefined && (usdcAllowance as bigint) < maxUsdcIn)
+    : (isERC20 && depositWei > 0n && allowance !== undefined && (allowance as bigint) < depositWei);
 
-      // Calculate total amount per period from all recipients
-      const totalAmountPerPeriod = watchedRecipients.reduce((sum, recipient) => {
-        const amount = parseFloat(recipient.amountPerPeriod || "0");
-        if (isNaN(amount) || amount <= 0) return sum;
-        return sum + amount;
-      }, 0);
+  const hasInsufficientBalance = usingSwap
+    ? (usdcBalance !== undefined && maxUsdcIn > 0n && (usdcBalance as bigint) < maxUsdcIn)
+    : (isERC20 && tokenBalance !== undefined && (tokenBalance as bigint) < depositWei && depositWei > 0n);
 
-      if (totalAmountPerPeriod <= 0) {
-        setCalculatedDeposit("0");
-        return;
-      }
+  // ── Recipient input: wallet address OR email ──────────────────────────────────
+  // An email is resolved to the recipient's Privy embedded wallet (creating one
+  // on the fly if they've never signed up), so you can stream to people who
+  // don't have a wallet yet — they claim it by logging in with that email.
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const handleRecipientInput = async (index: number, value: string) => {
+    const trimmed = value.trim();
+    setRecipientInputs((p) => ({ ...p, [index]: value }));
+    inputsRef.current[index] = value;
+    const isAddr  = /^0x[a-fA-F0-9]{40}$/.test(trimmed);
+    const isEmail = EMAIL_RE.test(trimmed);
 
-      const totalPeriods = parseInt(watchedTotalPeriods || "30");
-      if (isNaN(totalPeriods) || totalPeriods <= 0) {
-        setCalculatedDeposit("0");
-        return;
-      }
-
-      // Calculate total deposit: amount per period * number of periods
-      const totalDeposit = totalAmountPerPeriod * totalPeriods;
-
-      // Format based on token decimals to avoid rounding issues
-      // Use the token's actual decimals, but ensure we don't lose precision
-      const decimals = token.decimals;
-      // For tokens with more than 6 decimals, we'll still show up to 6 for readability
-      // but the actual precision is preserved in the calculation
-      const displayDecimals = Math.min(decimals, 18);
-      const formattedDeposit = totalDeposit.toFixed(displayDecimals);
-      
-      // Ensure it's not zero
-      const depositValue = parseFloat(formattedDeposit);
-      if (isNaN(depositValue) || depositValue <= 0) {
-        setCalculatedDeposit("0");
-        return;
-      }
-
-      // For very small amounts, ensure we don't lose precision
-      // If the formatted value is 0 but the original isn't, use more precision
-      if (depositValue === 0 && totalDeposit > 0) {
-        // Use full precision for very small amounts
-        setCalculatedDeposit(totalDeposit.toFixed(decimals));
-      } else {
-        setCalculatedDeposit(formattedDeposit);
-      }
-    } catch (error) {
-      console.error("Error calculating deposit:", error);
-      setCalculatedDeposit("0");
-    }
-  }, [watchedRecipients, watchedToken, watchedTotalPeriods, chainId]);
-
-  const handleApprove = async () => {
-    if (!isConnected || !address || !watchedToken || calculatedDeposit === "0") {
-      toast.error("Please fill in all required fields");
+    if (isAddr) {
+      setValue(`recipients.${index}.address`, trimmed as `0x${string}`, { shouldValidate: true });
+      setResolvedFromEmail((p) => ({ ...p, [index]: null }));
+      setEmailError((p) => ({ ...p, [index]: false }));
+      setResolvingEmail((p) => ({ ...p, [index]: false }));
       return;
     }
+    if (isEmail) {
+      const key = trimmed.toLowerCase();
+      setResolvingEmail((p) => ({ ...p, [index]: true }));
+      setEmailError((p) => ({ ...p, [index]: false }));
 
-    try {
-      const token = getTokenByAddress(watchedToken as `0x${string}`, chainId);
-      if (!token) {
-        toast.error("Invalid token selected");
-        return;
+      let mapped = cacheRef.current[key] ?? null;
+      if (!(key in cacheRef.current)) {
+        try {
+          const res = await fetch("/api/privy/resolve-email", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: key }),
+          });
+          const data = (await res.json()) as { address?: `0x${string}` };
+          mapped = res.ok && data.address ? data.address : null;
+        } catch {
+          mapped = null;
+        }
+        cacheRef.current[key] = mapped;
       }
-
-      const depositInWei = parseUnits(calculatedDeposit, token.decimals);
-      // Calculate total needed (deposit + platform fee of 0.5%)
-      const platformFeeBps = 50;
-      const totalNeeded = (depositInWei * BigInt(10000)) / BigInt(10000 - platformFeeBps);
-
-      toast.loading("Approving token...", { id: "approve-token" });
-      
-      await approveToken(watchedToken as `0x${string}`, maxUint256); // Approve max for convenience
-      
-      toast.success("Token approved successfully!", { id: "approve-token" });
-      setNeedsApproval(false);
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to approve token", { id: "approve-token" });
+      if (inputsRef.current[index] !== value) return; // input changed while awaiting
+      setResolvingEmail((p) => ({ ...p, [index]: false }));
+      if (mapped) {
+        setValue(`recipients.${index}.address`, mapped, { shouldValidate: true });
+        setResolvedFromEmail((p) => ({ ...p, [index]: key }));
+      } else {
+        setValue(`recipients.${index}.address`, "" as any);
+        setEmailError((p) => ({ ...p, [index]: true }));
+      }
+      return;
     }
+    setValue(`recipients.${index}.address`, "" as any);
+    setResolvedFromEmail((p) => ({ ...p, [index]: null }));
+    setEmailError((p) => ({ ...p, [index]: false }));
+    setResolvingEmail((p) => ({ ...p, [index]: false }));
   };
 
-  const onSubmit = async (data: StreamFormData) => {
-    if (!isConnected || !address) {
-      toast.error("Please connect your wallet");
+  // ── Single unified action: approve (if needed) → create ───────────────────────
+  const doDepositAndStream = async (data: FormData) => {
+    if (!isConnected || !address) { toast.error("Connect your wallet"); return; }
+    if (depositWei === 0n)        { toast.error("Enter amounts above"); return; }
+    if (hasInsufficientBalance)   { toast.error("Insufficient balance"); return; }
+    if (zeroRateIndices.length)   {
+      toast.error(`Amount too small for cadence — recipient(s) ${zeroRateIndices.map(i => i + 1).join(", ")}`);
       return;
     }
 
-    // Check if approval is needed
-    if (needsApproval) {
-      toast.error("Please approve token spending first");
+    if (usingSwap && (maxUsdcIn === 0n || quoteError)) {
+      toast.error("Couldn't fetch a swap quote — try again in a moment");
       return;
     }
 
-    // Validate deposit
-    if (!calculatedDeposit || calculatedDeposit === "0" || parseFloat(calculatedDeposit) <= 0) {
-      toast.error("Invalid deposit amount. Please check recipient amounts and periods.");
-      return;
-    }
-
-    // Validate recipients have amounts
-    const hasValidRecipients = data.recipients.every(
-      (r) => r.address && r.amountPerPeriod && parseFloat(r.amountPerPeriod) > 0
-    );
-    if (!hasValidRecipients) {
-      toast.error("Please ensure all recipients have valid addresses and amounts");
-      return;
-    }
+    const sym = fundingSymbol;
+    const fundingTokenAddr = usingSwap ? USDC_ADDRESS : (data.token as `0x${string}`);
+    const willApprove = needsApproval; // snapshot before any state change
+    setDidApprove(false);
 
     try {
-      const token = getTokenByAddress(data.token as `0x${string}`, chainId);
-      if (!token) {
-        toast.error("Invalid token selected");
-        return;
+      // ── Step 1: Approve (only if needed) ──────────────────────────────────────
+      if (willApprove) {
+        setPhase("approving");
+        toast.loading(`Step 1/2 — Approve ${sym} in your wallet`, { id: "stream-flow" });
+
+        const approveHash = await approveToken(fundingTokenAddr, maxUint256);
+
+        setPhase("waitApprove");
+        toast.loading(`Step 1/2 — Waiting for ${sym} approval…`, { id: "stream-flow" });
+
+        await publicClient!.waitForTransactionReceipt({ hash: approveHash });
+        setDidApprove(true);
+
+        // Refresh allowance cache (fire-and-forget — we proceed regardless)
+        (usingSwap ? refetchUsdcAllowance() : refetchAllowance()).catch(() => {});
+
+        toast.loading("Approved! Now confirm the stream…", { id: "stream-flow" });
+        // Brief pause so the "Approved!" message is visible
+        await new Promise((r) => setTimeout(r, 800));
       }
 
-      const cadenceToSeconds: Record<CadenceOption, number> = {
-        per_minute: 60,
-        hourly: 60 * 60,
-        daily: 24 * 60 * 60,
-        weekly: 7 * 24 * 60 * 60,
-        monthly: 30 * 24 * 60 * 60,
-        quarterly: 90 * 24 * 60 * 60,
-      };
-
-      // Calculate total stream duration: period duration * number of periods
-      const periodDuration = cadenceToSeconds[data.cadence];
-      const totalPeriods = parseInt(data.totalPeriods || "1");
-      const periodSeconds = periodDuration * totalPeriods;
-      const recipients = data.recipients.map((r) => r.address as `0x${string}`);
-      const amountsPerPeriod = data.recipients.map((r) => r.amountPerPeriod);
-
-      // Validate amounts are not empty
-      if (amountsPerPeriod.some((amt) => !amt || parseFloat(amt) <= 0)) {
-        toast.error("All recipient amounts must be greater than 0");
-        return;
-      }
-
-      console.log("Creating stream with:", {
-        recipients,
-        token: data.token,
-        amountsPerPeriod,
-        periodSeconds,
-        deposit: calculatedDeposit,
-        tokenDecimals: token.decimals,
-      });
-
-      toast.loading("Creating stream...", { id: "create-stream" });
-
-      // Prepare engagement rewards parameters if enabled
-      let engagementRewardsParams: {
-        inviter: `0x${string}` | null;
-        validUntilBlock: bigint | undefined;
-        signature: `0x${string}` | undefined;
-      } = {
-        inviter: null,
-        validUntilBlock: undefined,
-        signature: undefined,
-      };
-
-      // Only include engagement rewards if SDK is ready and user is registered or needs to register
-      if (isEngagementRewardsReady && engagementRewards && address) {
-        try {
-          // Get current block number
-          const currentBlock = await getCurrentBlockNumber();
-          if (currentBlock) {
-            const validUntilBlock = currentBlock + 600n; // Valid for 600 blocks (~2 hours)
-            
-            // Check if user needs to sign (first-time registration)
-            const needsSignature = isUserRegistered === false;
-            
-            let signature: `0x${string}` = "0x";
-            if (needsSignature) {
-              toast.loading("Signing for engagement rewards...", { id: "engagement-signature" });
-              try {
-                signature = await signClaim(inviter, validUntilBlock);
-                toast.success("Signature generated", { id: "engagement-signature", duration: 2000 });
-              } catch (err) {
-                console.error("Failed to generate signature:", err);
-                toast.error("Failed to generate signature. Stream will be created without engagement rewards.", {
-                  id: "engagement-signature",
-                  duration: 5000,
-                });
-                // Continue without signature - contract will handle it
-                signature = "0x";
-              }
-            }
-
-            engagementRewardsParams = {
-              inviter,
-              validUntilBlock,
-              signature: signature !== "0x" ? signature : undefined,
-            };
-          }
-        } catch (err) {
-          console.error("Error preparing engagement rewards:", err);
-          // Continue without engagement rewards if there's an error
-        }
-      }
-
-      await createStream(
-        recipients,
-        data.token as `0x${string}`,
-        amountsPerPeriod,
-        periodSeconds,
-        calculatedDeposit,
-        data.title || "",
-        data.description || "",
-        engagementRewardsParams.inviter,
-        engagementRewardsParams.validUntilBlock,
-        engagementRewardsParams.signature
+      // ── Step 2: Create stream ─────────────────────────────────────────────────
+      setPhase("creating");
+      const stepLabel = willApprove ? "Step 2/2" : "";
+      toast.loading(
+        usingSwap
+          ? `${stepLabel} Confirm swap & plan in your wallet`
+          : `${stepLabel} Confirm your plan in your wallet`,
+        { id: "stream-flow" },
       );
 
-      // Transaction submitted - wait for confirmation
-      toast.loading("Waiting for confirmation...", { id: "create-stream" });
-    } catch (error: any) {
-      const errorMessage = error?.message || "Failed to create stream";
-      if (errorMessage.includes("Insufficient token approval")) {
-        setNeedsApproval(true);
-        toast.error(errorMessage, { id: "create-stream", duration: 5000 });
-      } else {
-        toast.error(errorMessage, { id: "create-stream" });
-      }
-    }
-  };
+      const recipients = data.recipients.map((r) => r.address as `0x${string}`);
+      const createHash = usingSwap
+        ? await createStreamWithSwap({
+            maxAmountIn: maxUsdcIn,
+            recipients,
+            flowRates,
+            totalAmount: totalAmountWei,
+            title:       data.title || "",
+            description: data.description || "",
+          })
+        : await createStream({
+            recipients,
+            token:       data.token as `0x${string}`,
+            flowRates,
+            totalAmount: totalAmountWei,
+            title:       data.title || "",
+            description: data.description || "",
+          });
 
-  const handleRecipientInput = (index: number, value: string) => {
-    setRecipientInputs((prev) => ({ ...prev, [index]: value }));
+      setPhase("waitCreate");
+      toast.loading(`${stepLabel} Setting up your plan on-chain…`, { id: "stream-flow" });
 
-    const isAddress = /^0x[a-fA-F0-9]{40}$/.test(value.trim());
-    const isPhone   = /^\+[1-9]\d{7,14}$/.test(value.trim());
+      await publicClient!.waitForTransactionReceipt({ hash: createHash });
 
-    if (isAddress) {
-      // Direct address paste – use it straight away
-      setValue(`recipients.${index}.address`, value.trim() as `0x${string}`, {
-        shouldDirty: true,
-        shouldValidate: true,
-      });
-      setResolvedFromPhone((prev) => ({ ...prev, [index]: null }));
-      setPhoneNotFound((prev) => ({ ...prev, [index]: false }));
-      return;
-    }
-
-    if (isPhone) {
-      const mapped = PHONE_ADDRESS_MAP[value.trim()];
-      if (mapped) {
-        setValue(`recipients.${index}.address`, mapped, {
-          shouldDirty: true,
-          shouldValidate: true,
-        });
-        setResolvedFromPhone((prev) => ({ ...prev, [index]: value.trim() }));
-        setPhoneNotFound((prev) => ({ ...prev, [index]: false }));
-      } else {
-        // Phone recognised as valid format but not in the map
-        setValue(`recipients.${index}.address`, "" as any, {
-          shouldDirty: true,
-          shouldValidate: false,
-        });
-        setResolvedFromPhone((prev) => ({ ...prev, [index]: null }));
-        setPhoneNotFound((prev) => ({ ...prev, [index]: true }));
-      }
-      return;
-    }
-
-    // Still typing – clear resolved state, don't touch address yet
-    setResolvedFromPhone((prev) => ({ ...prev, [index]: null }));
-    setPhoneNotFound((prev) => ({ ...prev, [index]: false }));
-  };
-
-  // Watch for transaction confirmation
-  useEffect(() => {
-  if (isConfirmed && hash) {
-      toast.success("Stream created successfully!", { id: "create-stream" });
-    setTimeout(() => {
+      refetchBalances(); // funds left the wallet into the new stream's vault
+      toast.success("Your plan is live! Redirecting…", { id: "stream-flow" });
       router.push("/streams");
-    }, 2000);
-  }
-  }, [isConfirmed, hash, router]);
+
+    } catch (e: any) {
+      const msg = e?.shortMessage || e?.message || "Transaction failed";
+      toast.error(msg, { id: "stream-flow" });
+      setPhase("idle");
+      setDidApprove(false);
+    }
+  };
+
+  const onActionClick = () => handleSubmit(doDepositAndStream)();
+
+  // ── Shared summary props ──────────────────────────────────────────────────────
+  const summaryProps = {
+    tokenMeta,
+    tokenBalance:         tokenBalance as bigint | undefined,
+    totalAmountWei,
+    depositWei,
+    estimatedEndDate,
+    needsApproval,
+    hasInsufficientBalance,
+    zeroRateIndices,
+    phase,
+    onAction:  onActionClick,
+    canSubmit: isConnected,
+    fundingSymbol,
+    fundingDecimals,
+    fundingBalance: usingSwap ? (usdcBalance as bigint | undefined) : (tokenBalance as bigint | undefined),
+    swap: swapInfo,
+  };
 
   if (!isConnected) {
     return (
-      <Card className="glass-card">
-        <CardContent className="pt-6">
-          <p className="text-center text-muted-foreground">
-            Connect your wallet to set up a payment stream.
-          </p>
-        </CardContent>
-      </Card>
+      <div className="glass-card rounded-xl border border-border p-12 text-center">
+        <p className="text-muted-foreground">Connect your wallet to set up a plan.</p>
+      </div>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-      {/* Row: basics + schedule (2 columns on desktop) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* 1. Stream basics */}
-        <Card className="glass-card">
-          <CardHeader>
-            <CardTitle>Stream basics</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Give this stream a short name and an optional description so you and your team
-              know what it&apos;s for.
-            </p>
+    <>
+      {/* ── Two-column layout ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 pb-32 lg:pb-0 items-start">
 
-            <div className="space-y-2">
-              <Label htmlFor="title">Stream name</Label>
-              <Input
-                id="title"
-                placeholder="e.g. Team Salary – Engineering"
-                maxLength={120}
-                {...register("title")}
-              />
-              {errors.title && (
-                <p className="text-sm text-destructive">{errors.title.message}</p>
-              )}
-            </div>
+        {/* ── Left: glass form card ── */}
+        <div className="glass-card rounded-xl border border-white/8 p-6 lg:p-8 space-y-8">
 
-            <div className="space-y-2">
-              <Label htmlFor="description">What is this stream for? (optional)</Label>
-              <textarea
-                id="description"
-                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                placeholder="Short note for your future self or your team…"
-                maxLength={1024}
-                {...register("description")}
-              />
-              {errors.description && (
-                <p className="text-sm text-destructive">
-                  {errors.description.message}
-                </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 3. Schedule & funding */}
-        <Card className="glass-card">
-          <CardHeader>
-            <CardTitle>Schedule &amp; funding</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="token">Payment token</Label>
-              <TokenSelector
-                value={watchedToken as `0x${string}`}
-                onValueChange={(value) => {
-                  setValue("token", value);
-                }}
-              />
-              <p className="text-xs text-muted-foreground">
-                Choose what you&apos;re streaming (CELO, cUSD, USDC…).
-              </p>
-              {errors.token && (
-                <p className="text-sm text-destructive">{errors.token.message}</p>
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="cadence">How often should it drip?</Label>
-                <select
-                  id="cadence"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  {...register("cadence")}
-                >
-                  <option value="per_minute">Every minute</option>
-                  <option value="hourly">Every hour</option>
-                  <option value="daily">Every day</option>
-                  <option value="weekly">Every week</option>
-                  <option value="monthly">Every month</option>
-                  <option value="quarterly">Every quarter</option>
-                </select>
-                {errors.cadence && (
-                  <p className="text-sm text-destructive">
-                    {errors.cadence.message}
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="totalPeriods">Number of payments</Label>
-                <Input
-                  id="totalPeriods"
-                  type="number"
-                  min="1"
-                  placeholder="e.g. 12"
-                  {...register("totalPeriods")}
-                />
-                {errors.totalPeriods && (
-                  <p className="text-sm text-destructive">
-                    {errors.totalPeriods.message}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="p-4 bg-muted rounded-lg space-y-1">
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium">You&apos;ll deposit now</span>
-                <span className="text-lg font-bold">
-                  {calculatedDeposit}{" "}
-                  {getTokenByAddress(watchedToken as `0x${string}`, chainId)?.symbol ||
-                    "CELO"}
-                </span>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Total deposit = total per period × number of payments. You can top up or stop
-                the stream later.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* 2. Recipients & amounts */}
-      <Card className="glass-card">
-        <CardHeader>
-          <CardTitle>Recipients &amp; amounts</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Add one or more wallets and how much each receives per period.
-          </p>
-
-          <div className="grid grid-cols-[minmax(0,2.5fr)_minmax(0,1.5fr)_auto] gap-4 text-xs text-muted-foreground px-1">
-            <span>Recipient address or phone number</span>
-            <span>Amount per period</span>
-            <span className="sr-only">Actions</span>
-          </div>
-
-          {fields.map((field, index) => (
-            <div
-              key={field.id}
-              className="grid grid-cols-[minmax(0,2.5fr)_minmax(0,1.5fr)_auto] gap-4 items-start"
-            >
-              <div className="space-y-1.5">
-                <Input
-                  id={`recipient-${index}`}
-                  placeholder="0x… wallet address or +2348… phone"
-                  value={recipientInputs[index] ?? ""}
-                  onChange={(e) => handleRecipientInput(index, e.target.value)}
-                />
-                {/* Hidden field to keep RHF in sync */}
-                <input type="hidden" {...register(`recipients.${index}.address`)} />
-
-                {/* Resolved-from-phone badge */}
-                {resolvedFromPhone[index] && (
-                  <p className="text-xs text-emerald-600 dark:text-emerald-400">
-                    ✓ Resolved from {resolvedFromPhone[index]} →{" "}
-                    <span className="font-mono">
-                      {watch(`recipients.${index}.address`).slice(0, 6)}…
-                      {watch(`recipients.${index}.address`).slice(-4)}
-                    </span>
-                  </p>
-                )}
-
-                {/* Phone not found warning */}
-                {phoneNotFound[index] && (
-                  <p className="text-xs text-amber-600 dark:text-amber-400">
-                    ⚠ No address mapping found for this number
-                  </p>
-                )}
-
-                {/* Address validation error */}
-                {errors.recipients?.[index]?.address && !resolvedFromPhone[index] && !phoneNotFound[index] && (
-                  <p className="text-sm text-destructive">
-                    {errors.recipients[index]?.address?.message}
-                  </p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Input
-                  id={`amount-${index}`}
-                  type="number"
-                  step="0.000001"
-                  placeholder="e.g. 100"
-                  {...register(`recipients.${index}.amountPerPeriod`)}
-                />
-                {errors.recipients?.[index]?.amountPerPeriod && (
-                  <p className="text-sm text-destructive">
-                    {errors.recipients[index]?.amountPerPeriod?.message}
-                  </p>
-                )}
-              </div>
-              {fields.length > 1 && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => remove(index)}
-                  className="mt-1"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
-          ))}
-
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => append({ address: "", amountPerPeriod: "" })}
-            className="w-full"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add another recipient
-          </Button>
-
-          <div className="mt-2 text-xs text-muted-foreground">
-            Total per period is calculated from all recipients above.
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Token Approval Notice */}
-      {needsApproval && watchedToken !== "0x0000000000000000000000000000000000000000" && (
-        <Card className="glass-card border-yellow-500/30 bg-yellow-500/10">
-          <CardContent className="pt-6">
-            <div className="flex items-start gap-4">
-              <div className="flex-1">
-                <h3 className="font-semibold text-yellow-600 mb-2">Token Approval Required</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Before creating a stream with {getTokenByAddress(watchedToken as `0x${string}`, chainId)?.symbol || "this token"}, 
-                  you need to approve the DripCore contract to spend your tokens.
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Required approval: {approvalAmount} {getTokenByAddress(watchedToken as `0x${string}`, chainId)?.symbol || "tokens"}
-                </p>
-              </div>
-              <Button
-                type="button"
-                onClick={handleApprove}
-                disabled={isPending || isConfirming}
-                variant="outline"
-                className="border-yellow-500 text-yellow-600 hover:bg-yellow-500/20"
-              >
-                {isPending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Approving...
-                  </>
-                ) : (
-                  "Approve Token"
-                )}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      <div className="flex gap-4">
-        <Button
-          type="submit"
-          disabled={isPending || isConfirming || needsApproval}
-          className="flex-1"
-        >
-          {isPending || isConfirming ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              {isConfirming ? "Confirming..." : "Creating..."}
-            </>
-          ) : needsApproval ? (
-            "Approve Token First"
-          ) : (
-            "Create Stream"
+          {/* Tx progress indicator — shown while a tx is in flight */}
+          {phase !== "idle" && (
+            <TxProgressPill phase={phase} sym={tokenMeta?.symbol ?? "token"} />
           )}
-        </Button>
+
+          {/* Pre-fill banner — shown when opened via QR/share link */}
+          {prefillRecipient.match(/^0x[a-fA-F0-9]{40}$/) && (
+            <div className="flex items-start gap-3 rounded-xl bg-primary/8 border border-primary/20 px-4 py-3">
+              <span className="text-lg">📩</span>
+              <div>
+                <p className="text-sm font-medium text-primary">Payment request</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Someone sent you this link to request a plan. Their address has been pre-filled as a bucket —
+                  just set the amount and start.
+                </p>
+                <p className="font-mono text-xs text-foreground/60 mt-1">
+                  {prefillRecipient.slice(0, 8)}…{prefillRecipient.slice(-6)}
+                </p>
+              </div>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit(doDepositAndStream)} className="space-y-8">
+
+            {/* ─ 1. Details ─ */}
+            <div>
+              <SectionHeader icon={Coins} title="About this plan" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="title" className="text-sm font-medium">Plan name</Label>
+                  <Input
+                    id="title" placeholder="e.g. Monthly savings, Rent, Send to Mum"
+                    maxLength={120} className="bg-background/60"
+                    {...register("title")}
+                  />
+                  {errors.title && <p className="text-xs text-destructive">{errors.title.message}</p>}
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="description" className="text-sm font-medium">
+                    Description <span className="font-normal text-muted-foreground">(optional)</span>
+                  </Label>
+                  <Input
+                    id="description" placeholder="What is this for?"
+                    maxLength={200} className="bg-background/60"
+                    {...register("description")}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* ─ 2. Token & schedule ─ */}
+            <div>
+              <SectionHeader icon={Calendar} title="Schedule" />
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">Token</Label>
+                  <TokenSelector
+                    value={watchedToken as `0x${string}`}
+                    onValueChange={(v) => setValue("token", v)}
+                  />
+                  {errors.token && <p className="text-xs text-destructive">{errors.token.message}</p>}
+                  {isERC20 && tokenBalance !== undefined && (
+                    <p className={`text-xs ${hasInsufficientBalance ? "text-red-400" : "text-muted-foreground"}`}>
+                      Balance:{" "}
+                      <span className="font-medium tabular-nums">
+                        {parseFloat(formatUnits(tokenBalance as bigint, tokenMeta?.decimals ?? 18)).toFixed(4)}
+                      </span>{" "}
+                      {tokenMeta?.symbol}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">Pay every</Label>
+                  <select
+                    className="flex h-10 w-full rounded-md border border-input bg-background/60 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    {...register("cadence")}
+                  >
+                    {(Object.entries(CADENCE_LABEL) as [CadenceKey, string][]).map(([v, l]) => (
+                      <option key={v} value={v}>{l}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="totalPeriods" className="text-sm font-medium">How many times</Label>
+                  <Input
+                    id="totalPeriods" type="number" min="1" placeholder="12"
+                    className="bg-background/60"
+                    {...register("totalPeriods")}
+                  />
+                  {errors.totalPeriods && <p className="text-xs text-destructive">{errors.totalPeriods.message}</p>}
+                  {!errors.totalPeriods && watchedPeriods && parseInt(watchedPeriods) > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {parseInt(watchedPeriods)} × {CADENCE_LABEL[watchedCadence].toLowerCase()} = {humanDuration(watchedCadence, parseInt(watchedPeriods))}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {estimatedEndDate && totalFlowRateWei > 0n && (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Plan ends{" "}
+                  <span className="text-foreground font-medium">{fmtDateFull(estimatedEndDate)}</span>
+                  {" "}— then stops automatically and any unused safety buffer is returned.
+                </p>
+              )}
+
+              {/* ─ Pay with ─ recipients always receive G$; pick how you fund it ─ */}
+              <div className="mt-5 space-y-2">
+                <Label className="text-sm font-medium">Pay with</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFundWith("GD")}
+                    className={`flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                      fundWith === "GD"
+                        ? "border-primary/60 bg-primary/10"
+                        : "border-border bg-background/40 hover:border-border/80"
+                    }`}
+                  >
+                    <Wallet className={`h-4 w-4 shrink-0 ${fundWith === "GD" ? "text-primary" : "text-muted-foreground"}`} />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium leading-tight">G$ balance</p>
+                      <p className="text-[11px] text-muted-foreground leading-tight">Fund directly</p>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFundWith("USDC")}
+                    className={`flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                      fundWith === "USDC"
+                        ? "border-primary/60 bg-primary/10"
+                        : "border-border bg-background/40 hover:border-border/80"
+                    }`}
+                  >
+                    <Repeat className={`h-4 w-4 shrink-0 ${fundWith === "USDC" ? "text-primary" : "text-muted-foreground"}`} />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium leading-tight">USDC</p>
+                      <p className="text-[11px] text-muted-foreground leading-tight">Auto-swap to G$</p>
+                    </div>
+                  </button>
+                </div>
+                {usingSwap && (
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    Your recipients still receive <span className="font-medium text-foreground">G$</span>.
+                    We swap your USDC to G$ on Uniswap at stream creation and refund any unused USDC.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* ─ 3. Recipients ─ */}
+            <div>
+              <SectionHeader icon={Users} title="Buckets — where the money goes" />
+
+              <div className="space-y-2">
+                {/* Column labels */}
+                <div className="hidden sm:grid sm:grid-cols-[1fr_180px_32px] gap-3 px-1">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Address or email
+                  </p>
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Amount / {CADENCE_SHORT[watchedCadence]}
+                  </p>
+                  <span />
+                </div>
+
+                {fields.map((field, index) => (
+                  <div
+                    key={field.id}
+                    className="grid grid-cols-1 sm:grid-cols-[1fr_180px_32px] gap-3 items-start p-3 rounded-lg border border-border/50 bg-background/30"
+                  >
+                    {/* Address / email */}
+                    <div className="space-y-1">
+                      <Input
+                        placeholder="0x… wallet or name@email.com"
+                        value={recipientInputs[index] ?? ""}
+                        onChange={(e) => handleRecipientInput(index, e.target.value)}
+                        className="bg-background/60"
+                      />
+                      <input type="hidden" {...register(`recipients.${index}.address`)} />
+                      {resolvingEmail[index] && (
+                        <p className="text-[11px] text-blue-400 flex items-center gap-1">
+                          <Loader2 className="h-3 w-3 animate-spin" /> Setting up wallet…
+                        </p>
+                      )}
+                      {resolvedFromEmail[index] && (
+                        <p className="text-[11px] text-emerald-500">
+                          ✓ {resolvedFromEmail[index]} →{" "}
+                          <span className="font-mono">
+                            {watchAll.recipients[index]?.address?.slice(0, 6)}…
+                            {watchAll.recipients[index]?.address?.slice(-4)}
+                          </span>
+                        </p>
+                      )}
+                      {emailError[index] && (
+                        <p className="text-[11px] text-amber-400">⚠ Couldn’t set up a wallet for that email</p>
+                      )}
+                      {/* Self-send warning */}
+                      {watchAll.recipients[index]?.address &&
+                       address &&
+                       watchAll.recipients[index].address.toLowerCase() === address.toLowerCase() && (
+                        <p className="text-[11px] text-amber-400">⚠ This is your own address — are you sure?</p>
+                      )}
+                      {errors.recipients?.[index]?.address && !resolvedFromEmail[index] && !emailError[index] && (
+                        <p className="text-[11px] text-destructive">{errors.recipients[index]?.address?.message}</p>
+                      )}
+                    </div>
+
+                    {/* Amount */}
+                    <div className="space-y-1">
+                      <div className="relative">
+                        <Input
+                          type="number" step="0.000001" placeholder="0.00"
+                          className="bg-background/60 pr-16"
+                          {...register(`recipients.${index}.amountPerPeriod`)}
+                        />
+                        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-medium">
+                          {tokenMeta?.symbol ?? "tkn"}/{CADENCE_SHORT[watchedCadence]}
+                        </span>
+                      </div>
+                      {flowRates[index] === 0n
+                        && watchAll.recipients[index]?.amountPerPeriod
+                        && parseFloat(watchAll.recipients[index].amountPerPeriod) > 0 && (
+                        <p className="text-[11px] text-red-400">Amount too small for this cadence — try a larger value</p>
+                      )}
+                      {errors.recipients?.[index]?.amountPerPeriod && (
+                        <p className="text-[11px] text-destructive">{errors.recipients[index]?.amountPerPeriod?.message}</p>
+                      )}
+                    </div>
+
+                    {/* Remove */}
+                    <button
+                      type="button"
+                      onClick={() => remove(index)}
+                      disabled={fields.length === 1}
+                      className="flex items-center justify-center w-8 h-8 mt-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-25 disabled:pointer-events-none"
+                      aria-label="Remove bucket"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+
+                <button
+                  type="button"
+                  onClick={() => append({ address: "", amountPerPeriod: "" })}
+                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors px-1 py-1.5"
+                >
+                  <Plus className="h-4 w-4" /> Add another bucket
+                </button>
+              </div>
+            </div>
+
+          </form>
+        </div>
+
+        {/* ── Right: sticky summary ── */}
+        <div className="hidden lg:block">
+          <div className="sticky top-24">
+            <SummaryCard {...summaryProps} />
+          </div>
+        </div>
       </div>
-    </form>
+
+      {/* ── Mobile bottom bar ── */}
+      <MobileBottomBar {...summaryProps} />
+    </>
   );
 }
-

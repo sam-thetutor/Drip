@@ -436,7 +436,7 @@ export function useDrip() {
       if (error?.message) {
         throw error;
       }
-      throw new Error("Failed to initiate withdrawal. Please check that MetaMask is open and try again.");
+      throw new Error("Failed to initiate withdrawal. Please check that your wallet is open and try again.");
     }
   };
 

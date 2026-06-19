@@ -5,8 +5,16 @@ const nextConfig = {
   swcMinify: true,
   // Enable experimental features for better performance
   experimental: {
-    // Optimize package imports
-    optimizePackageImports: ['lucide-react', '@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu'],
+    // Optimize package imports — strips barrel files so dev only compiles the
+    // icons/components/charts actually used instead of each whole package.
+    optimizePackageImports: [
+      'lucide-react',
+      '@radix-ui/react-dialog',
+      '@radix-ui/react-dropdown-menu',
+      '@radix-ui/react-select',
+      '@radix-ui/react-tabs',
+      'recharts',
+    ],
     // Keep these packages external so Node can resolve runtime deps used by ODIS.
     serverComponentsExternalPackages: [
       '@celo/identity',
@@ -15,13 +23,20 @@ const nextConfig = {
       '@celo/poprf',
     ],
   },
-  // Compiler optimizations
-  compiler: {
-    // Remove console logs in production
-    removeConsole: process.env.NODE_ENV === 'production' ? {
-      exclude: ['error', 'warn'],
-    } : false,
-  },
+  // Compiler optimizations.
+  // Turbopack (dev) doesn't support `compiler.removeConsole`, so only apply it
+  // for the webpack production build (`next build`). TURBOPACK is set by
+  // `next dev --turbo`.
+  ...(process.env.TURBOPACK
+    ? {}
+    : {
+        compiler: {
+          removeConsole:
+            process.env.NODE_ENV === 'production'
+              ? { exclude: ['error', 'warn'] }
+              : false,
+        },
+      }),
   webpack: (config) => {
     config.externals.push('pino-pretty', 'lokijs', 'encoding')
 
@@ -33,7 +48,7 @@ const nextConfig = {
       tls: false,
     };
 
-    // Metamask SDK pulls in RN async storage; not needed for web builds
+    // Privy / WalletConnect pull in RN async storage; not needed for web builds
     config.resolve.alias = {
       ...config.resolve.alias,
       "@react-native-async-storage/async-storage": false,

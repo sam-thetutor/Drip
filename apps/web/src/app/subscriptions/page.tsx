@@ -22,15 +22,15 @@ export default function SubscriptionsPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold mb-2">Subscriptions</h1>
+            <h1 className="text-3xl font-bold mb-2">Bills</h1>
             <p className="text-muted-foreground">
-              Manage your recurring payment subscriptions.
+              Recurring payments that run themselves.
             </p>
           </div>
           <Button asChild>
             <Link href="/subscriptions/create">
               <Plus className="h-4 w-4 mr-2" />
-              Create Subscription
+              Set up a bill
             </Link>
           </Button>
         </div>
@@ -38,28 +38,28 @@ export default function SubscriptionsPage() {
         {!isConnected || !address ? (
           <div className="glass-card rounded-lg p-8 text-center">
             <p className="text-muted-foreground">
-              Connect your wallet to view your subscriptions.
+              Connect your wallet to view your bills.
             </p>
           </div>
         ) : isLoading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             <span className="ml-2 text-muted-foreground">
-              Loading subscriptions...
+              Loading bills...
             </span>
           </div>
         ) : error ? (
           <div className="glass-card rounded-lg p-8 text-center">
             <p className="text-destructive">
-              Error loading subscriptions: {error.message}
+              Error loading bills: {error.message}
             </p>
           </div>
         ) : !hasSubscriptions ? (
           <div className="glass-card rounded-lg p-8 text-center">
-            <p className="text-muted-foreground">No subscriptions yet</p>
+            <p className="text-muted-foreground">No bills set up yet</p>
             <Button asChild variant="outline" className="mt-4">
               <Link href="/subscriptions/create">
-                Create your first subscription
+                Set up your first bill
               </Link>
             </Button>
           </div>

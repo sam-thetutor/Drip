@@ -3,6 +3,7 @@
 import { useAccount } from "wagmi";
 import { useRecipientBalance } from "@/lib/contracts";
 import { useDrip } from "@/lib/contracts";
+import { useRefetchBalances } from "@/lib/contracts/hooks/useRefetchBalances";
 import { useEngagementRewards } from "@/lib/gooddollar/hooks/useEngagementRewards";
 import { formatTokenAmount } from "@/lib/utils/format";
 import { useState, useEffect } from "react";
@@ -32,6 +33,7 @@ export function WithdrawModal({ streamId, recipient, token, onClose }: WithdrawM
   const chainId = useChainId();
   const { balance, isLoading: balanceLoading, refetch: refetchBalance } = useRecipientBalance(streamId, recipient);
   const { withdrawFromStream, isPending, isConfirming, isConfirmed, hash, error } = useDrip();
+  const refetchBalances = useRefetchBalances();
   const { 
     engagementRewards, 
     isReady: isEngagementRewardsReady, 
@@ -58,7 +60,7 @@ export function WithdrawModal({ streamId, recipient, token, onClose }: WithdrawM
   const maxAmount = (typeof balance === 'bigint' ? balance : 0n);
   const formattedMax = formatTokenAmount(maxAmount, tokenInfo.decimals);
 
-  // Watch for transaction hash (MetaMask should open when hash is set)
+  // Watch for transaction hash (wallet should open when hash is set)
   useEffect(() => {
     if (hash && hasSubmitted) {
       toast.loading("Waiting for confirmation...", { id: "withdraw" });
@@ -70,6 +72,7 @@ export function WithdrawModal({ streamId, recipient, token, onClose }: WithdrawM
     if (hasSubmitted && isConfirmed) {
       toast.success("Withdrawal successful!", { id: "withdraw" });
       setHasSubmitted(false);
+      refetchBalances(); // withdrawn funds landed in the wallet
       // Refetch balance after withdrawal to show updated balance
       // Add a small delay to ensure the transaction is fully processed on-chain
       setTimeout(() => {
@@ -81,13 +84,13 @@ export function WithdrawModal({ streamId, recipient, token, onClose }: WithdrawM
         }, 1000);
       }, 2000);
     }
-  }, [isConfirmed, hasSubmitted, onClose, refetchBalance]);
+  }, [isConfirmed, hasSubmitted, onClose, refetchBalance, refetchBalances]);
 
   // Handle errors from the hook
   useEffect(() => {
     if (error && hasSubmitted) {
       console.error("Transaction error:", error);
-      const errorMessage = (error as Error)?.message || (error as any)?.shortMessage || "Failed to withdraw. Please check that MetaMask is open and try again.";
+      const errorMessage = (error as Error)?.message || (error as any)?.shortMessage || "Failed to withdraw. Please check that your wallet is open and try again.";
       toast.error(errorMessage, { id: "withdraw", duration: 5000 });
       setHasSubmitted(false);
     }
@@ -105,7 +108,7 @@ export function WithdrawModal({ streamId, recipient, token, onClose }: WithdrawM
     }
 
     try {
-      toast.loading("Opening MetaMask...", { id: "withdraw" });
+      toast.loading("Opening wallet...", { id: "withdraw" });
       setHasSubmitted(true);
       
       // Prepare engagement rewards parameters if enabled
@@ -160,8 +163,8 @@ export function WithdrawModal({ streamId, recipient, token, onClose }: WithdrawM
       }
       
       // Always withdraw all available balance
-      // writeContract should trigger MetaMask popup
-      // If MetaMask doesn't open, writeContract will throw an error
+      // writeContract should trigger the wallet confirmation
+      // If the wallet doesn't open, writeContract will throw an error
       await withdrawFromStream(
         streamId,
         recipient,
@@ -177,7 +180,7 @@ export function WithdrawModal({ streamId, recipient, token, onClose }: WithdrawM
         error?.reason || 
         error?.shortMessage || 
         (error?.cause && typeof error.cause === 'object' && error.cause?.message) ||
-        "Failed to withdraw. Please check that MetaMask is open and your wallet is connected.";
+        "Failed to withdraw. Please check that your wallet is open and connected.";
       toast.error(errorMessage, { id: "withdraw", duration: 5000 });
       setHasSubmitted(false);
     }

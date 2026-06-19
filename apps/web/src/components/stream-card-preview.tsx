@@ -13,25 +13,24 @@ interface StreamCardPreviewProps {
   token: string;
   startTime: bigint;
   endTime: bigint;
-  status: number; // 0=Pending 1=Active 2=Paused 3=Cancelled 4=Completed
+  status: number; // DripV4 enum: 0=Active 1=Paused 2=Completed 3=Cancelled
   title?: string;
   userRole?: "sender" | "recipient" | "both";
 }
 
+// DripV4 StreamStatus: Active=0 Paused=1 Completed=2 Cancelled=3
 const STATUS_LABEL: Record<number, string> = {
-  0: "Pending",
-  1: "Active",
-  2: "Paused",
+  0: "Active",
+  1: "Paused",
+  2: "Completed",
   3: "Cancelled",
-  4: "Completed",
 };
 
 const STATUS_COLOR: Record<number, string> = {
-  0: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
-  1: "bg-green-500/10 text-green-500 border-green-500/20",
-  2: "bg-orange-500/10 text-orange-500 border-orange-500/20",
+  0: "bg-green-500/10 text-green-500 border-green-500/20",
+  1: "bg-orange-500/10 text-orange-500 border-orange-500/20",
+  2: "bg-muted/40 text-muted-foreground border-border",
   3: "bg-red-500/10 text-red-500 border-red-500/20",
-  4: "bg-muted/40 text-muted-foreground border-border",
 };
 
 export function StreamCardPreview({
@@ -79,13 +78,13 @@ export function StreamCardPreview({
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="font-semibold truncate leading-tight">
-              {title || `Stream #${streamId.toString()}`}
+              {title || `Plan #${streamId.toString()}`}
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
               #{streamId.toString()}
             </p>
           </div>
-          <div className="flex items-center gap-1.5 flex-shrink-0">
+          <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap justify-end">
             {/* Role badge */}
             {userRole === "sender" && (
               <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
@@ -109,20 +108,22 @@ export function StreamCardPreview({
         {/* Stats row */}
         <div className="flex items-center justify-between text-sm">
           <div>
-            <p className="text-xs text-muted-foreground mb-0.5">Recipients</p>
+            <p className="text-xs text-muted-foreground mb-0.5">Buckets</p>
             <p className="font-semibold">
               {recipients.length} · {symbol}
             </p>
           </div>
-          {(status === 1 || status === 2) && (
+          {/* Active or Paused — show time remaining */}
+          {(status === 0 || status === 1) && (
             <div className="text-right">
               <p className="text-xs text-muted-foreground mb-0.5">
-                {status === 2 ? "Paused — time left" : "Ends in"}
+                {status === 1 ? "Paused — time left" : "Ends in"}
               </p>
               <p className="font-semibold tabular-nums">{timeRemaining}</p>
             </div>
           )}
-          {(status === 3 || status === 4) && (
+          {/* Completed or Cancelled — show sender */}
+          {(status === 2 || status === 3) && (
             <div className="text-right">
               <p className="text-xs text-muted-foreground mb-0.5">From</p>
               <p className="font-mono text-xs">{formatAddr(sender)}</p>
@@ -131,15 +132,15 @@ export function StreamCardPreview({
         </div>
 
         {/* Active pulse dot */}
-        {status === 1 && (
+        {status === 0 && (
           <div className="flex items-center gap-1.5 text-xs text-green-500">
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse flex-shrink-0" />
-            <span>Streaming live</span>
+            <span>Flowing live</span>
           </div>
         )}
 
         {/* Progress bar */}
-        {(status === 1 || status === 2) && (
+        {(status === 0 || status === 1) && (
           <div className="w-full h-1.5 bg-muted/30 rounded-full overflow-hidden">
             <div
               className="h-full bg-gradient-to-r from-primary to-primary/60 transition-all duration-300"

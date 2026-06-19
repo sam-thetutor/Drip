@@ -82,6 +82,9 @@ export const CONTRACT_ADDRESSES = {
     DripStaking: "0x8deF81b277590Be389bB4B3b7137c8554F93992a" as `0x${string}`,
     DripCoreSuperfluid: "0x5530975fDe062FE6706298fF3945E3d1a17A310a" as `0x${string}`, // same proxy
     DripStakingV2: "0x5530975fDe062FE6706298fF3945E3d1a17A310a" as `0x${string}`, // same proxy
+    // DripV5 vault-model architecture with atomic topUp + USDC swap (deployed June 2026)
+    DripV4: "0x998FD618ae5854370c5c599E9Cb5a84bf3C02617" as `0x${string}`,
+    StreamVaultImpl: "0x9Bb3690E14D50C6870B99eF0Cc28C6d373849b98" as `0x${string}`,
   },
   [CELO_SEPOLIA_ID]: {
     DripCore: "0xfAaB5005f7844eC5499cF258F52dE29EDc74aa31" as `0x${string}`,
@@ -140,7 +143,7 @@ export function getEngagementRewardsAddress(
  */
 export function getContractAddress(
   chainId: number,
-  contractName: "DripCore" | "SubscriptionManager" | "DripStaking" | "DripCoreSuperfluid" | "DripStakingV2"
+  contractName: "DripCore" | "SubscriptionManager" | "DripStaking" | "DripCoreSuperfluid" | "DripStakingV2" | "DripV4" | "StreamVaultImpl"
 ): `0x${string}` | null {
   const addresses = CONTRACT_ADDRESSES[chainId as keyof typeof CONTRACT_ADDRESSES];
   if (!addresses) return null;

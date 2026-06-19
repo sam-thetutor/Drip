@@ -22,7 +22,9 @@ interface TokenSelectorProps {
 
 export function TokenSelector({ value, onValueChange, disabled }: TokenSelectorProps) {
   const chainId = useChainId();
-  const tokens = TOKENS_BY_NETWORK[chainId] || TOKENS_BY_NETWORK[CELO_SEPOLIA_ID];
+  const allTokens = TOKENS_BY_NETWORK[chainId] || TOKENS_BY_NETWORK[CELO_SEPOLIA_ID];
+  // Only show G$ in the stream creator — other tokens are hidden
+  const tokens = allTokens.filter((t) => t.symbol === "G$");
 
   const selectedToken = tokens.find((t) => t.address === value);
 
