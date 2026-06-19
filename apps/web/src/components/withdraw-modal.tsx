@@ -3,6 +3,7 @@
 import { useAccount } from "wagmi";
 import { useRecipientBalance } from "@/lib/contracts";
 import { useDrip } from "@/lib/contracts";
+import { useRefetchBalances } from "@/lib/contracts/hooks/useRefetchBalances";
 import { useEngagementRewards } from "@/lib/gooddollar/hooks/useEngagementRewards";
 import { formatTokenAmount } from "@/lib/utils/format";
 import { useState, useEffect } from "react";
@@ -32,6 +33,7 @@ export function WithdrawModal({ streamId, recipient, token, onClose }: WithdrawM
   const chainId = useChainId();
   const { balance, isLoading: balanceLoading, refetch: refetchBalance } = useRecipientBalance(streamId, recipient);
   const { withdrawFromStream, isPending, isConfirming, isConfirmed, hash, error } = useDrip();
+  const refetchBalances = useRefetchBalances();
   const { 
     engagementRewards, 
     isReady: isEngagementRewardsReady, 
@@ -70,6 +72,7 @@ export function WithdrawModal({ streamId, recipient, token, onClose }: WithdrawM
     if (hasSubmitted && isConfirmed) {
       toast.success("Withdrawal successful!", { id: "withdraw" });
       setHasSubmitted(false);
+      refetchBalances(); // withdrawn funds landed in the wallet
       // Refetch balance after withdrawal to show updated balance
       // Add a small delay to ensure the transaction is fully processed on-chain
       setTimeout(() => {
@@ -81,7 +84,7 @@ export function WithdrawModal({ streamId, recipient, token, onClose }: WithdrawM
         }, 1000);
       }, 2000);
     }
-  }, [isConfirmed, hasSubmitted, onClose, refetchBalance]);
+  }, [isConfirmed, hasSubmitted, onClose, refetchBalance, refetchBalances]);
 
   // Handle errors from the hook
   useEffect(() => {

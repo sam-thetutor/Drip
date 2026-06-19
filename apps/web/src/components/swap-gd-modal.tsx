@@ -13,7 +13,6 @@ import {
   ArrowRight,
   Loader2,
   CheckCircle2,
-  AlertTriangle,
   RefreshCw,
   ArrowDownLeft,
 } from "lucide-react";
@@ -21,6 +20,7 @@ import { parseUnits, formatUnits } from "viem";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getTokenAddressBySymbol } from "@/lib/tokens/config";
+import { useRefetchBalances } from "@/lib/contracts/hooks/useRefetchBalances";
 
 // ─── Uniswap V3 on Celo Mainnet ──────────────────────────────────────────────
 // Verified on-chain Jun 2026:
@@ -115,6 +115,7 @@ export function SwapGdModal({ address, onClose, onSwapSuccess }: SwapGdModalProp
   });
 
   const { writeContractAsync } = useWriteContract();
+  const refetchBalances = useRefetchBalances();
 
   const { isSuccess: approveConfirmed } = useWaitForTransactionReceipt({
     hash: approveHash, query: { enabled: !!approveHash },
@@ -153,7 +154,6 @@ export function SwapGdModal({ address, onClose, onSwapSuccess }: SwapGdModalProp
   // amountOutMinimum = live quote minus 1% slippage
   const amountOutMin        = quoteWei > 0n ? quoteWei - (quoteWei * SLIPPAGE_BPS) / 10_000n : 0n;
 
-  const belowMin    = quoteUsdc > 0 && quoteUsdc < 1;
   const needsApprove = allowance !== undefined && amountInWei > 0n && allowance < amountInWei;
 
   // Implied per-token price for display
@@ -197,8 +197,11 @@ export function SwapGdModal({ address, onClose, onSwapSuccess }: SwapGdModalProp
   }, [approveConfirmed, step, refetchAllowance]);
 
   useEffect(() => {
-    if (swapConfirmed && step === "swapping") setStep("done");
-  }, [swapConfirmed, step]);
+    if (swapConfirmed && step === "swapping") {
+      setStep("done");
+      refetchBalances(); // G$ spent + USDC received — refresh wallet balances
+    }
+  }, [swapConfirmed, step, refetchBalances]);
 
   const maxGd = () => { if (gdBalance) setGdInput(formatUnits(gdBalance.value, GD_DECIMALS)); };
 
@@ -310,17 +313,6 @@ export function SwapGdModal({ address, onClose, onSwapSuccess }: SwapGdModalProp
                       <span>1 G$ ≈ ${impliedPrice} · 1% slippage</span>
                     </div>
                   )}
-                </div>
-              )}
-
-              {/* Fonbnk min warning (chained flow only) */}
-              {gdNum > 0 && belowMin && onSwapSuccess && !quoteLoading && (
-                <div className="flex items-start gap-2 rounded-xl bg-yellow-500/10 border border-yellow-500/20 px-4 py-3 text-xs text-yellow-400">
-                  <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
-                  <span>
-                    You&apos;ll receive ≈{quoteUsdcStr} USDC — below Fonbnk&apos;s $1 minimum.
-                    You can still swap, but you won&apos;t be able to cash out immediately.
-                  </span>
                 </div>
               )}
 
