@@ -7,6 +7,7 @@ import * as z from "zod";
 import { useAccount, useChainId, useReadContract, usePublicClient } from "wagmi";
 import { erc20Abi, parseUnits, formatUnits, maxUint256 } from "viem";
 import { useCreateDripV4Stream, useUsdcSwapQuote } from "@/lib/contracts/hooks/useDripV4";
+import { useRefetchBalances } from "@/lib/contracts/hooks/useRefetchBalances";
 import { getContractAddress } from "@/lib/contracts/config";
 import { TokenSelector, getTokenByAddress } from "@/components/token-selector";
 import { Button } from "@/components/ui/button";
@@ -18,8 +19,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { usePhoneMapping } from "@/lib/contracts";
-import { hashPhoneE164 } from "@/lib/phone/hash";
 import { useSearchParams } from "next/navigation";
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
@@ -460,6 +459,7 @@ export function CreateStreamForm() {
   const prefillRecipient = searchParams.get("recipient") ?? "";
 
   const { approveToken, createStream, createStreamWithSwap } = useCreateDripV4Stream();
+  const refetchBalances = useRefetchBalances();
 
   // Single phase state drives all UI
   const [phase,         setPhase]         = useState<TxPhase>("idle");
@@ -472,12 +472,11 @@ export function CreateStreamForm() {
   const [recipientInputs,   setRecipientInputs]   = useState<Record<number, string>>(
     prefillRecipient ? { 0: prefillRecipient } : {}
   );
-  const [resolvedFromPhone, setResolvedFromPhone] = useState<Record<number, string | null>>({});
-  const [phoneNotFound,     setPhoneNotFound]     = useState<Record<number, boolean>>({});
-  const [resolvingPhone,    setResolvingPhone]     = useState<Record<number, boolean>>({});
+  const [resolvedFromEmail, setResolvedFromEmail] = useState<Record<number, string | null>>({});
+  const [emailError,        setEmailError]        = useState<Record<number, boolean>>({});
+  const [resolvingEmail,    setResolvingEmail]    = useState<Record<number, boolean>>({});
   const inputsRef = useRef<Record<number, string>>({});
   const cacheRef  = useRef<Record<string, `0x${string}` | null>>({});
-  const { resolveAddressByPhoneHash } = usePhoneMapping();
 
   const {
     register, control, handleSubmit, watch, setValue,
@@ -604,43 +603,60 @@ export function CreateStreamForm() {
     ? (usdcBalance !== undefined && maxUsdcIn > 0n && (usdcBalance as bigint) < maxUsdcIn)
     : (isERC20 && tokenBalance !== undefined && (tokenBalance as bigint) < depositWei && depositWei > 0n);
 
-  // ── Phone lookup ──────────────────────────────────────────────────────────────
+  // ── Recipient input: wallet address OR email ──────────────────────────────────
+  // An email is resolved to the recipient's Privy embedded wallet (creating one
+  // on the fly if they've never signed up), so you can stream to people who
+  // don't have a wallet yet — they claim it by logging in with that email.
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const handleRecipientInput = async (index: number, value: string) => {
+    const trimmed = value.trim();
     setRecipientInputs((p) => ({ ...p, [index]: value }));
     inputsRef.current[index] = value;
-    const isAddr  = /^0x[a-fA-F0-9]{40}$/.test(value.trim());
-    const isPhone = /^\+[1-9]\d{7,14}$/.test(value.trim());
+    const isAddr  = /^0x[a-fA-F0-9]{40}$/.test(trimmed);
+    const isEmail = EMAIL_RE.test(trimmed);
 
     if (isAddr) {
-      setValue(`recipients.${index}.address`, value.trim() as `0x${string}`, { shouldValidate: true });
-      setResolvedFromPhone((p) => ({ ...p, [index]: null }));
-      setPhoneNotFound((p) => ({ ...p, [index]: false }));
-      setResolvingPhone((p) => ({ ...p, [index]: false }));
+      setValue(`recipients.${index}.address`, trimmed as `0x${string}`, { shouldValidate: true });
+      setResolvedFromEmail((p) => ({ ...p, [index]: null }));
+      setEmailError((p) => ({ ...p, [index]: false }));
+      setResolvingEmail((p) => ({ ...p, [index]: false }));
       return;
     }
-    if (isPhone) {
-      const hashed = hashPhoneE164(value.trim());
-      if (!hashed) { setPhoneNotFound((p) => ({ ...p, [index]: true })); return; }
-      setResolvingPhone((p) => ({ ...p, [index]: true }));
-      setPhoneNotFound((p) => ({ ...p, [index]: false }));
-      const key = hashed.hash.toLowerCase();
+    if (isEmail) {
+      const key = trimmed.toLowerCase();
+      setResolvingEmail((p) => ({ ...p, [index]: true }));
+      setEmailError((p) => ({ ...p, [index]: false }));
+
       let mapped = cacheRef.current[key] ?? null;
-      if (!(key in cacheRef.current)) { mapped = await resolveAddressByPhoneHash(hashed.hash); cacheRef.current[key] = mapped; }
-      if (inputsRef.current[index] !== value) return;
-      setResolvingPhone((p) => ({ ...p, [index]: false }));
+      if (!(key in cacheRef.current)) {
+        try {
+          const res = await fetch("/api/privy/resolve-email", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: key }),
+          });
+          const data = (await res.json()) as { address?: `0x${string}` };
+          mapped = res.ok && data.address ? data.address : null;
+        } catch {
+          mapped = null;
+        }
+        cacheRef.current[key] = mapped;
+      }
+      if (inputsRef.current[index] !== value) return; // input changed while awaiting
+      setResolvingEmail((p) => ({ ...p, [index]: false }));
       if (mapped) {
         setValue(`recipients.${index}.address`, mapped, { shouldValidate: true });
-        setResolvedFromPhone((p) => ({ ...p, [index]: hashed.normalized }));
+        setResolvedFromEmail((p) => ({ ...p, [index]: key }));
       } else {
         setValue(`recipients.${index}.address`, "" as any);
-        setPhoneNotFound((p) => ({ ...p, [index]: true }));
+        setEmailError((p) => ({ ...p, [index]: true }));
       }
       return;
     }
     setValue(`recipients.${index}.address`, "" as any);
-    setResolvedFromPhone((p) => ({ ...p, [index]: null }));
-    setPhoneNotFound((p) => ({ ...p, [index]: false }));
-    setResolvingPhone((p) => ({ ...p, [index]: false }));
+    setResolvedFromEmail((p) => ({ ...p, [index]: null }));
+    setEmailError((p) => ({ ...p, [index]: false }));
+    setResolvingEmail((p) => ({ ...p, [index]: false }));
   };
 
   // ── Single unified action: approve (if needed) → create ───────────────────────
@@ -719,6 +735,7 @@ export function CreateStreamForm() {
 
       await publicClient!.waitForTransactionReceipt({ hash: createHash });
 
+      refetchBalances(); // funds left the wallet into the new stream's vault
       toast.success("Your plan is live! Redirecting…", { id: "stream-flow" });
       router.push("/streams");
 
@@ -927,7 +944,7 @@ export function CreateStreamForm() {
                 {/* Column labels */}
                 <div className="hidden sm:grid sm:grid-cols-[1fr_180px_32px] gap-3 px-1">
                   <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Address or phone
+                    Address or email
                   </p>
                   <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                     Amount / {CADENCE_SHORT[watchedCadence]}
@@ -940,31 +957,31 @@ export function CreateStreamForm() {
                     key={field.id}
                     className="grid grid-cols-1 sm:grid-cols-[1fr_180px_32px] gap-3 items-start p-3 rounded-lg border border-border/50 bg-background/30"
                   >
-                    {/* Address / phone */}
+                    {/* Address / email */}
                     <div className="space-y-1">
                       <Input
-                        placeholder="0x… wallet or +234… phone"
+                        placeholder="0x… wallet or name@email.com"
                         value={recipientInputs[index] ?? ""}
                         onChange={(e) => handleRecipientInput(index, e.target.value)}
                         className="bg-background/60"
                       />
                       <input type="hidden" {...register(`recipients.${index}.address`)} />
-                      {resolvingPhone[index] && (
+                      {resolvingEmail[index] && (
                         <p className="text-[11px] text-blue-400 flex items-center gap-1">
-                          <Loader2 className="h-3 w-3 animate-spin" /> Resolving on-chain…
+                          <Loader2 className="h-3 w-3 animate-spin" /> Setting up wallet…
                         </p>
                       )}
-                      {resolvedFromPhone[index] && (
+                      {resolvedFromEmail[index] && (
                         <p className="text-[11px] text-emerald-500">
-                          ✓ {resolvedFromPhone[index]} →{" "}
+                          ✓ {resolvedFromEmail[index]} →{" "}
                           <span className="font-mono">
                             {watchAll.recipients[index]?.address?.slice(0, 6)}…
                             {watchAll.recipients[index]?.address?.slice(-4)}
                           </span>
                         </p>
                       )}
-                      {phoneNotFound[index] && (
-                        <p className="text-[11px] text-amber-400">⚠ No address mapping found</p>
+                      {emailError[index] && (
+                        <p className="text-[11px] text-amber-400">⚠ Couldn’t set up a wallet for that email</p>
                       )}
                       {/* Self-send warning */}
                       {watchAll.recipients[index]?.address &&
@@ -972,7 +989,7 @@ export function CreateStreamForm() {
                        watchAll.recipients[index].address.toLowerCase() === address.toLowerCase() && (
                         <p className="text-[11px] text-amber-400">⚠ This is your own address — are you sure?</p>
                       )}
-                      {errors.recipients?.[index]?.address && !resolvedFromPhone[index] && !phoneNotFound[index] && (
+                      {errors.recipients?.[index]?.address && !resolvedFromEmail[index] && !emailError[index] && (
                         <p className="text-[11px] text-destructive">{errors.recipients[index]?.address?.message}</p>
                       )}
                     </div>

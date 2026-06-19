@@ -4,7 +4,8 @@ import { useAccount, useChainId, useReadContract, useWriteContract, useWaitForTr
 import { getContractAddress } from "../config";
 import { SUBSCRIPTION_MANAGER_ABI } from "../abis";
 import { parseEther, parseUnits } from "viem";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
+import { useRefetchBalances } from "./useRefetchBalances";
 
 /**
  * Subscription cadence types
@@ -26,6 +27,11 @@ export function useSubscription() {
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({
     hash,
   });
+
+  // Any confirmed subscription action (create / deposit / cancel) moves funds
+  // in or out of the wallet — refresh balances immediately.
+  const refetchBalances = useRefetchBalances();
+  useEffect(() => { if (isConfirmed) refetchBalances(); }, [isConfirmed, refetchBalances]);
 
   const contractAddress = useMemo(() => {
     return getContractAddress(chainId, "SubscriptionManager");

@@ -13,7 +13,7 @@
  * StreamStatus enum:  Active=0  Paused=1  Completed=2  Cancelled=3
  */
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import {
   useChainId,
   useReadContract,
@@ -24,6 +24,7 @@ import {
 import { erc20Abi } from "viem";
 import { DRIP_V4_ABI } from "../abis";
 import { getContractAddress } from "../config";
+import { useRefetchBalances } from "./useRefetchBalances";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -699,7 +700,12 @@ export function useCancelStream() {
     });
   }, [addr, writeContractAsync]);
 
-  const { isLoading: isConfirming } = useWaitForTransactionReceipt({ hash });
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  // Cancelling refunds the stream's remaining balance to the wallet.
+  const refetchBalances = useRefetchBalances();
+  useEffect(() => { if (isSuccess) refetchBalances(); }, [isSuccess, refetchBalances]);
+
   return { cancelStream, isPending: isPending || isConfirming };
 }
 
@@ -742,7 +748,12 @@ export function useTopUpStream() {
     });
   }, [addr, writeContractAsync]);
 
-  const { isLoading: isConfirming } = useWaitForTransactionReceipt({ hash });
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  // Topping up pulls the token from the wallet into the vault.
+  const refetchBalances = useRefetchBalances();
+  useEffect(() => { if (isSuccess) refetchBalances(); }, [isSuccess, refetchBalances]);
+
   return { topUp, isPending: isPending || isConfirming };
 }
 
