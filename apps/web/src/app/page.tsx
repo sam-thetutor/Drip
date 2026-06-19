@@ -181,13 +181,6 @@ export default function HomePage() {
                     </p>
                   </div>
                 </div>
-
-                <div className="mt-auto pt-4">
-                  <div className="h-px w-full bg-gradient-to-r from-transparent via-green/70 to-transparent" />
-                  <p className="mt-3 text-xs tracking-[0.08em] text-foreground/60">
-                    Powered by Superfluid on Celo Mainnet
-                  </p>
-                </div>
               </div>
             </div>
             <div className="absolute -right-6 -bottom-8 h-24 w-24 rounded-full bg-gradient-to-br from-green/60 to-teal/60 blur-[60px]"></div>
