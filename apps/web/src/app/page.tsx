@@ -188,6 +188,110 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Manifesto — why we built Drip */}
+      <section className="page-container relative z-10 pb-20">
+        <div className="mx-auto w-full max-w-5xl space-y-10">
+          <div className="space-y-4 text-center">
+            <p className="text-xs font-semibold uppercase tracking-[0.4em] text-foreground/60">
+              Why we built Drip
+            </p>
+            <h2 className="mx-auto max-w-3xl text-3xl font-bold leading-[1.15] text-white sm:text-4xl">
+              Money has places to be.{" "}
+              <span className="text-green">Getting it there shouldn’t be manual.</span>
+            </h2>
+            <p className="mx-auto max-w-2xl text-sm leading-relaxed text-foreground/75 sm:text-base">
+              Every cycle, the same choreography: rent and bills, savings and
+              goals, the family you support, the people who work for you, the
+              subscriptions that keep things running. Each needs a different
+              amount, on a different schedule — and doing it all by hand, on time,
+              every time, is a job nobody actually has time for.
+            </p>
+          </div>
+
+          {/* Grounding stats */}
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="hero-card card-glow space-y-1 text-center">
+              <p className="text-4xl font-black leading-none text-green">62%</p>
+              <p className="text-sm leading-relaxed text-foreground/70">
+                of people don’t have enough set aside to cover three months of
+                expenses.
+              </p>
+            </div>
+            <div className="hero-card card-glow space-y-1 text-center">
+              <p className="text-4xl font-black leading-none text-green">1 in 10</p>
+              <p className="text-sm leading-relaxed text-foreground/70">
+                couldn’t go a single week between paychecks without coming up
+                short.
+              </p>
+            </div>
+            <div className="hero-card card-glow space-y-1 text-center">
+              <p className="text-4xl font-black leading-none text-green">90%+</p>
+              <p className="text-sm leading-relaxed text-foreground/70">
+                follow through when money moves automatically — far more than
+                when it’s left to memory.
+              </p>
+            </div>
+          </div>
+
+          {/* The belief */}
+          <div className="mx-auto max-w-3xl space-y-5">
+            <p className="text-base leading-relaxed text-foreground/80">
+              The problem isn’t that people are careless — it’s that we’re wired
+              to value today over tomorrow. Economists call it{" "}
+              <span className="font-medium text-white">present bias</span>, and it
+              quietly sabotages anything that has to happen later: the transfer
+              you meant to make, the worker you meant to pay, the goal you meant
+              to fund. The more obligations money has to be split across, the more
+              cracks it slips through.
+            </p>
+            <p className="text-base leading-relaxed text-foreground/80">
+              Spreadsheets, reminders and manual transfers all lean on the things
+              that run out fastest: attention and willpower. The research is blunt
+              about what actually works — when money moves{" "}
+              <span className="font-medium text-white">by default</span>, almost
+              everyone follows through. So we stopped asking people to be more
+              disciplined, and started making allocation automatic.
+            </p>
+
+            <div className="space-y-3 rounded-2xl border border-green/20 bg-green/[0.04] p-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-green">
+                What we believe
+              </p>
+              <ul className="space-y-3 text-sm leading-relaxed text-foreground/80 sm:text-base">
+                <li>
+                  <span className="font-medium text-white">
+                    Money should arrive already allocated
+                  </span>{" "}
+                  — split across bills, savings, people and goals the moment it
+                  lands, not whenever you remember.
+                </li>
+                <li>
+                  <span className="font-medium text-white">
+                    Paying others should be as effortless as paying yourself
+                  </span>{" "}
+                  — a worker every week, a team every month, a subscription every
+                  cycle: set once, never chased again.
+                </li>
+                <li>
+                  <span className="font-medium text-white">
+                    Automation should be yours to control
+                  </span>{" "}
+                  — pausable, adjustable, and provable on-chain, never a black box.
+                </li>
+              </ul>
+            </div>
+
+            <p className="text-base leading-relaxed text-foreground/80">
+              Drip turns a plan you set once into money that moves on its own —
+              whether you’re budgeting your own income across buckets, paying the
+              people who work for you on time, or running recurring payouts and
+              subscriptions. One plan, every obligation handled —{" "}
+              <span className="font-medium text-white">allocation on autopilot.</span>
+            </p>
+          </div>
+        </div>
+      </section>
+
       <section className="page-container relative z-10 pb-20">
         <div className="mx-auto w-full max-w-6xl space-y-8">
           <div className="space-y-3 text-center">

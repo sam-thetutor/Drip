@@ -528,6 +528,17 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
     ? BigInt(Math.floor(Date.now() / 1000) + remaining)
     : stream.endTime;
 
+  // Amount that has actually flowed out so far = what was set aside minus
+  // what's still in the vault. (The deposit buffer cancels out, so this is the
+  // net streamed to recipients.) Keeps the three money cards consistent:
+  //   Set aside = Streamed so far + Left to flow.
+  const streamedSoFar =
+    stream.vaultBalance !== undefined
+      ? (stream.depositAmount > stream.vaultBalance
+          ? stream.depositAmount - stream.vaultBalance
+          : 0n)
+      : undefined;
+
   const fmtToken = (wei: bigint) =>
     `${parseFloat(formatUnits(wei, decimals)).toFixed(4)} ${symbol}`;
 
@@ -660,15 +671,19 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
                 <PlusCircle className="h-4 w-4 mr-2" /> Add money
               </Button>
 
-              <Button
-                variant="outline"
-                onClick={handleRefreshEndTime}
-                disabled={anyActionPending}
-                title="Recalculate end time from current vault balance"
-              >
-                {refreshing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-                Refresh End Time
-              </Button>
+              {/* Hidden for now — end time is refreshed automatically in code
+                  (atomic top-up + keeper), so the manual button is redundant. */}
+              {false && (
+                <Button
+                  variant="outline"
+                  onClick={handleRefreshEndTime}
+                  disabled={anyActionPending}
+                  title="Recalculate end time from current vault balance"
+                >
+                  {refreshing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+                  Refresh End Time
+                </Button>
+              )}
 
               <Button
                 variant="destructive"
@@ -721,8 +736,10 @@ export function StreamDetailsView({ streamId }: StreamDetailsViewProps) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
         <Card className="glass-card">
           <CardContent className="pt-4 md:pt-6 px-3 md:px-6">
-            <p className="text-xl md:text-2xl font-bold">{fmtToken(stream.totalAmount)}</p>
-            <p className="text-xs md:text-sm text-muted-foreground mt-1">Plan amount</p>
+            <p className="text-xl md:text-2xl font-bold">
+              {streamedSoFar !== undefined ? fmtToken(streamedSoFar) : "—"}
+            </p>
+            <p className="text-xs md:text-sm text-muted-foreground mt-1">Streamed so far</p>
           </CardContent>
         </Card>
         <Card className="glass-card">
