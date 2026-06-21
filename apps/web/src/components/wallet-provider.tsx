@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { PrivyProvider, usePrivy } from "@privy-io/react-auth";
+import { PrivyProvider } from "@privy-io/react-auth";
 import { WagmiProvider, createConfig } from "@privy-io/wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { http, useAccount, useDisconnect } from "wagmi";
+import { http } from "wagmi";
 import { celo, celoAlfajores } from "wagmi/chains";
 import { defineChain } from "viem";
 import { liskMainnet } from "@/lib/contracts/config";
@@ -66,36 +65,6 @@ const queryClient = new QueryClient({
   },
 });
 
-/**
- * Drops any wagmi connection that isn't backed by a Privy session. This clears
- * stale wallet connections (e.g. a MetaMask connection persisted in
- * localStorage from before the Privy migration) that wagmi auto-reconnects on
- * load, so the UI never shows "connected" while Privy is logged out.
- */
-function WalletReconciler() {
-  const { ready, authenticated } = usePrivy();
-  const { isConnected } = useAccount();
-  const { disconnect } = useDisconnect();
-  const didInit = useRef(false);
-
-  useEffect(() => {
-    // Run ONLY once, on the first render where Privy is ready. Clearing a stale
-    // pre-migration connection is a load-time concern. Reacting to later state
-    // changes would disconnect an external wallet mid-login: during a MetaMask
-    // login wagmi reports `isConnected` before Privy finishes the SIWE signature
-    // (so `authenticated` is still false), and a reactive disconnect here would
-    // tear the wallet down before the signature completes, breaking the login.
-    if (ready && !didInit.current) {
-      didInit.current = true;
-      if (!authenticated && isConnected) {
-        disconnect();
-      }
-    }
-  }, [ready, authenticated, isConnected, disconnect]);
-
-  return null;
-}
-
 export function WalletProvider({ children }: { children: React.ReactNode }) {
   return (
     <PrivyProvider
@@ -130,7 +99,6 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     >
       <QueryClientProvider client={queryClient}>
         <WagmiProvider config={wagmiConfig}>
-          <WalletReconciler />
           {children}
         </WagmiProvider>
       </QueryClientProvider>
