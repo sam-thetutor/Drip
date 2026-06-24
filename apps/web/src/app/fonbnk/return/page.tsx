@@ -27,15 +27,26 @@ function ReturnContent() {
   const failReason = params.get("failReason")        ?? null;
 
   const [cannotClose, setCannotClose] = useState(false);
+  // No opener means we got here via a full same-tab redirect (in-app browsers
+  // like MetaMask's WebView, where popups are unsupported). In that case there's
+  // nothing to postMessage/close — show a "Back to Drip" link instead.
+  const [sameTab, setSameTab] = useState(false);
 
   useEffect(() => {
+    const hasOpener = typeof window !== "undefined" && !!window.opener && window.opener !== window;
+
+    if (!hasOpener) {
+      setSameTab(true);
+      return;
+    }
+
     try {
-      window.opener?.postMessage(
+      window.opener.postMessage(
         { type: "drip:fonbnk-return", action, status, orderId, amount, txHash, network, failReason },
         window.location.origin,
       );
     } catch {
-      // opener may be null if opened without JS
+      // opener may be inaccessible — fall through to manual close
     }
 
     const t = setTimeout(() => {
@@ -64,13 +75,21 @@ function ReturnContent() {
         <p className="text-sm text-muted-foreground">
           {ok
             ? (isOfframp
-                ? "Mobile money is on its way. You can close this window."
-                : "Funds will land in your wallet shortly. You can close this window.")
+                ? `Mobile money is on its way.${sameTab ? "" : " You can close this window."}`
+                : `Funds will land in your wallet shortly.${sameTab ? "" : " You can close this window."}`)
             : failReason
-              ? `Reason: ${failReason}. Close this window and try again.`
-              : "Close this window and try again."}
+              ? `Reason: ${failReason}.${sameTab ? " You can try again." : " Close this window and try again."}`
+              : sameTab ? "Please try again." : "Close this window and try again."}
         </p>
-        {cannotClose && (
+        {sameTab && (
+          <a
+            href="/dashboard"
+            className="inline-flex items-center justify-center rounded-lg bg-green-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-green-600"
+          >
+            Back to Drip
+          </a>
+        )}
+        {cannotClose && !sameTab && (
           <p className="text-xs text-muted-foreground">
             You can close this tab manually.
           </p>

@@ -1,0 +1,60 @@
+<svg width="1500" height="1500" viewBox="0 0 1500 1500" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bbg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0c1a2b"/>
+      <stop offset="0.6" stop-color="#0a1626"/>
+      <stop offset="1" stop-color="#08121f"/>
+    </linearGradient>
+    <linearGradient id="bdrop" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#34e3a8"/>
+      <stop offset="0.55" stop-color="#10b981"/>
+      <stop offset="1" stop-color="#0a8f63"/>
+    </linearGradient>
+    <radialGradient id="bglow" cx="0.18" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#10b981" stop-opacity="0.32"/>
+      <stop offset="1" stop-color="#10b981" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="stream" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#10b981" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#10b981" stop-opacity="0.08"/>
+    </linearGradient>
+  </defs>
+
+  <!-- full square background so qlmanage does no padding -->
+  <rect width="1500" height="1500" fill="url(#bbg)"/>
+
+  <!-- all banner content lives in the exact middle 500px band (y 500..1000) -->
+  <g transform="translate(0,500)">
+    <circle cx="250" cy="250" r="320" fill="url(#bglow)"/>
+
+    <!-- flowing streams on the right: one pool splitting into buckets -->
+    <g fill="none" stroke="url(#stream)" stroke-width="6" stroke-linecap="round" opacity="0.85">
+      <path d="M980 250 C1120 250 1140 140 1320 140"/>
+      <path d="M980 250 C1120 250 1140 250 1320 250"/>
+      <path d="M980 250 C1120 250 1140 360 1320 360"/>
+    </g>
+    <g fill="#0f2a22" stroke="#10b981" stroke-width="4">
+      <rect x="1316" y="116" width="96" height="50" rx="12"/>
+      <rect x="1316" y="226" width="96" height="50" rx="12"/>
+      <rect x="1316" y="336" width="96" height="50" rx="12"/>
+    </g>
+    <g fill="#34e3a8" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="22" font-weight="600">
+      <text x="1364" y="148" text-anchor="middle">Bills</text>
+      <text x="1364" y="258" text-anchor="middle">Family</text>
+      <text x="1364" y="368" text-anchor="middle">Save</text>
+    </g>
+
+    <!-- droplet mark -->
+    <g transform="translate(150,168) scale(0.85)">
+      <path d="M100 0 C100 0 175 88 175 142 a75 75 0 1 1 -150 0 C25 88 100 0 100 0 Z" fill="url(#bdrop)"/>
+      <ellipse cx="72" cy="128" rx="20" ry="32" fill="#ffffff" opacity="0.26" transform="rotate(-18 72 128)"/>
+    </g>
+
+    <!-- wordmark + tagline -->
+    <g font-family="'Helvetica Neue', Helvetica, Arial, sans-serif">
+      <text x="330" y="246" font-size="124" font-weight="700" fill="#ffffff" letter-spacing="-2">Drip</text>
+      <text x="336" y="308" font-size="34" font-weight="500" fill="#9fb3c8">Every dollar on autopilot</text>
+      <text x="336" y="356" font-size="23" font-weight="500" fill="#10b981">Streaming money · Celo · GoodDollar UBI</text>
+    </g>
+  </g>
+</svg>

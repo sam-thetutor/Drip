@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Smartphone, Loader2, CheckCircle2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { openFonbnkWidget } from "@/lib/fonbnk/open-widget";
 
 type TopUpStatus = "idle" | "loading" | "success" | "error";
 
@@ -27,18 +28,13 @@ export function TopUpModal({ address, onClose }: { address: string; onClose: () 
   }, []);
 
   const openWidget = useCallback(async () => {
-    // Must open popup synchronously inside the click handler so browsers allow it
-    const popup = window.open(
-      "about:blank",
-      "fonbnk",
-      "width=480,height=760,menubar=no,toolbar=no,location=yes,resizable=yes",
-    );
     setStatus("loading");
     setErrMsg("");
     try {
       const redirectUrl =
         `${window.location.origin}/fonbnk/return` +
-        `?status={status}` +
+        `?action=topup` +
+        `&status={status}` +
         `&orderId={orderId}` +
         `&amount={usdcAmount}` +
         `&transactionHash={transactionHash}` +
@@ -52,20 +48,11 @@ export function TopUpModal({ address, onClose }: { address: string; onClose: () 
         redirectUrl,
       });
 
-      const res  = await fetch(`/api/fonbnk/widget-url?${params}`);
-      const json = await res.json() as { url?: string; error?: string };
-      if (!res.ok || !json.url) throw new Error(json.error ?? "Could not get widget URL");
-
-      if (popup && !popup.closed) {
-        popup.location.href = json.url;
-        popup.focus();
-      } else {
-        // Popup was blocked — fall back to new tab
-        window.open(json.url, "_blank", "noopener,noreferrer");
-      }
+      // In MetaMask's in-app browser popups are unsupported, so this falls back
+      // to a full same-tab redirect (the return page brings the user back).
+      await openFonbnkWidget({ endpoint: "/api/fonbnk/widget-url", params, popupName: "fonbnk" });
       setStatus("idle");
     } catch (err) {
-      if (popup && !popup.closed) popup.close();
       setStatus("error");
       setErrMsg(err instanceof Error ? err.message : "Unknown error");
     }
