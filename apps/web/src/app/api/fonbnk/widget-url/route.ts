@@ -21,6 +21,8 @@ import { createHmac, randomUUID } from "crypto";
  *   currency     Optional fiat currency code (e.g. UGX, KES, NGN)
  *   country      Optional ISO country code
  *   provider     Optional MoMo carrier
+ *   freezeWallet Lock payout to `address` & skip Fonbnk's connect-wallet step
+ *                (defaults to true when an address is supplied; pass "false" to allow change)
  *   redirectUrl  Where Fonbnk redirects after order completes
  *   callbackUrl  Server-to-server webhook URL
  */
@@ -60,17 +62,21 @@ export async function GET(req: Request) {
   const provider      = searchParams.get("provider")    ?? undefined;
   const redirectUrl   = searchParams.get("redirectUrl") ?? undefined;
   const callbackUrl   = searchParams.get("callbackUrl") ?? undefined;
+  // When an address is supplied we lock it so the widget skips the
+  // "Connect Your Wallet" step (default on, can be disabled with freezeWallet=false).
+  const freezeWallet  = (searchParams.get("freezeWallet") ?? "true") !== "false";
 
   const widgetConfig: Record<string, string> = {
-    ...(walletAddress ? { address: walletAddress, walletAddress } : {}),
-    ...(asset         ? { asset }                                  : {}),
-    ...(network       ? { network }                                : {}),
-    ...(orderAmount   ? { orderAmount }                            : {}),
-    ...(currencyCode  ? { currencyCode }                           : {}),
-    ...(country       ? { country }                                : {}),
-    ...(provider      ? { provider }                               : {}),
-    ...(redirectUrl   ? { redirectUrl }                            : {}),
-    ...(callbackUrl   ? { callbackUrl }                            : {}),
+    ...(walletAddress ? { address: walletAddress, walletAddress }     : {}),
+    ...(walletAddress && freezeWallet ? { freezeWallet: "true" }      : {}),
+    ...(asset         ? { asset }                                     : {}),
+    ...(network       ? { network }                                   : {}),
+    ...(orderAmount   ? { orderAmount }                               : {}),
+    ...(currencyCode  ? { currencyCode }                              : {}),
+    ...(country       ? { country }                                   : {}),
+    ...(provider      ? { provider }                                  : {}),
+    ...(redirectUrl   ? { redirectUrl }                               : {}),
+    ...(callbackUrl   ? { callbackUrl }                               : {}),
   };
 
   // uid must be unique per order so the signature can't be replayed

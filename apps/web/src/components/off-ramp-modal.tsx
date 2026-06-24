@@ -6,6 +6,7 @@ import { Banknote, Loader2, CheckCircle2, X, AlertTriangle, ArrowDownLeft } from
 import { Button } from "@/components/ui/button";
 import { getTokenAddressBySymbol } from "@/lib/tokens/config";
 import { formatTokenAmountWithDecimals } from "@/lib/utils/format";
+import { openFonbnkWidget } from "@/lib/fonbnk/open-widget";
 
 /** Minimum USDC (in dollars) Fonbnk accepts for off-ramp orders. */
 const FONBNK_OFFRAMP_MIN_USD = 1;
@@ -53,12 +54,6 @@ export function OffRampModal({ address, onClose }: OffRampModalProps) {
   }, []);
 
   const openWidget = useCallback(async () => {
-    // Open popup synchronously — browsers block popups opened asynchronously
-    const popup = window.open(
-      "about:blank",
-      "fonbnk-offramp",
-      "width=480,height=760,menubar=no,toolbar=no,location=yes,resizable=yes",
-    );
     setStatus("loading");
     setErrMsg("");
     try {
@@ -79,19 +74,11 @@ export function OffRampModal({ address, onClose }: OffRampModalProps) {
         redirectUrl,
       });
 
-      const res  = await fetch(`/api/fonbnk/offramp-url?${params}`);
-      const json = await res.json() as { url?: string; error?: string };
-      if (!res.ok || !json.url) throw new Error(json.error ?? "Could not get off-ramp URL");
-
-      if (popup && !popup.closed) {
-        popup.location.href = json.url;
-        popup.focus();
-      } else {
-        window.open(json.url, "_blank", "noopener,noreferrer");
-      }
+      // In MetaMask's in-app browser popups are unsupported, so this falls back
+      // to a full same-tab redirect (the return page brings the user back).
+      await openFonbnkWidget({ endpoint: "/api/fonbnk/offramp-url", params, popupName: "fonbnk-offramp" });
       setStatus("idle");
     } catch (err) {
-      if (popup && !popup.closed) popup.close();
       setStatus("error");
       setErrMsg(err instanceof Error ? err.message : "Unknown error");
     }
